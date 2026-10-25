@@ -54,6 +54,7 @@ export function LoginPage() {
       </section>
       <section className="login-form-wrap">
         <form className="login-form" onSubmit={submit}>
+          <img className="login-mobile-logo" src="/logo.jpeg" alt="Idly Tiffin House" />
           <div>
             <h1>Sign in</h1>
             <p className="muted" style={{ marginTop: 6 }}>

@@ -11,6 +11,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  ChevronUp,
   CircleCheck,
   CloudOff,
   FileText,
@@ -22,6 +23,7 @@ import {
   TriangleAlert,
   UserRound,
   UtensilsCrossed,
+  X,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -147,6 +149,8 @@ export function BillingPage() {
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [done, setDone] = useState<TransactionDTO | null>(null);
+  // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
+  const [billOpen, setBillOpen] = useState(false);
   const keyRef = useRef<{ draftId: string; key: string } | null>(null);
 
   const activeCategoryIds = useMemo(() => new Set((categories.data ?? []).map((c) => c.id)), [categories.data]);
@@ -218,6 +222,7 @@ export function BillingPage() {
   const finishDone = () => {
     setDone(null);
     setPayment(null);
+    setBillOpen(false);
     if (draft?.type === 'TABLE') {
       navigate(`/tables?table=${draft.tableId}`);
     } else {
@@ -226,6 +231,7 @@ export function BillingPage() {
   };
 
   const hasItems = (local?.items.length ?? 0) > 0;
+  const itemCount = local?.items.reduce((a, i) => a + i.quantity, 0) ?? 0;
   const hasUnavailable = local?.items.some((i) => i.unavailable) ?? false;
   const showBreakdown = Boolean(totals && (totals.discountAmount > 0 || totals.taxes.length > 0));
 
@@ -294,7 +300,17 @@ export function BillingPage() {
         )}
       </section>
 
-      <aside className="bill-panel" aria-label="Current bill">
+      <button type="button" className="bill-mobile-bar" onClick={() => setBillOpen(true)} aria-label="View bill">
+        <span className="count">
+          {itemCount} item{itemCount === 1 ? '' : 's'}
+        </span>
+        <span className="total num">{formatMoney(totals?.grandTotal ?? 0)}</span>
+        <span className="view">
+          View Bill <ChevronUp size={18} />
+        </span>
+      </button>
+
+      <aside className={cx('bill-panel', billOpen && 'mobile-open')} aria-label="Current bill">
         <div className="bill-head">
           {draft?.type === 'TABLE' && (
             <div className="bill-context">
@@ -313,6 +329,9 @@ export function BillingPage() {
           <div className="bill-title">
             Customer Name
             <SyncStatus state={state} />
+            <button type="button" className="icon-btn close-red bill-close-mobile" onClick={() => setBillOpen(false)} aria-label="Close bill" title="Back to food">
+              <X />
+            </button>
           </div>
           <div className="input-icon">
             <UserRound />

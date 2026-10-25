@@ -405,6 +405,28 @@ export function TransactionsView({
                   </tbody>
                 </table>
               </div>
+              {/* Phones: one card per bill instead of a wide table */}
+              <ul className="tx-cards">
+                {list.data!.data.map((t) => (
+                  <li key={t.id}>
+                    <button type="button" className={cx('tx-card', t.id === selectedId && 'selected')} onClick={() => setSelectedId(t.id)}>
+                      <span className="tx-card-top">
+                        <span className="bill-no">#{t.billNumber}</span>
+                        <span className="tx-card-total num">{formatMoney(t.grandTotal)}</span>
+                      </span>
+                      <span className="tx-card-meta">
+                        {formatDate(t.finalizedAt)} · {formatTime(t.finalizedAt)} · {t.itemCount} item{t.itemCount === 1 ? '' : 's'}
+                        {showBranch && ` · ${t.branchSnapshot.name}`}
+                      </span>
+                      <span className="tx-card-badges">
+                        <TableBadge label={t.tableLabel} />
+                        <PaymentBadge method={t.paymentMethod} />
+                        <TxStatusBadge status={t.status} />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
               <Pagination meta={list.data!.meta} onPage={setPage} />
             </>
           )}

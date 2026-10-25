@@ -255,6 +255,7 @@ a {
   line-height: 1.2;
 }
 .user-role {
+  display: block;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
@@ -2384,20 +2385,449 @@ a {
     display: none;
   }
 }
-@media (max-width: 800px) {
-  .billing,
-  .tx-layout,
+/* Phone-only elements – hidden on larger screens */
+.tx-cards,
+.nav-toggle,
+.topbar-logo,
+.bottom-nav,
+.nav-backdrop,
+.bill-mobile-bar,
+.bill-close-mobile,
+.login-mobile-logo {
+  display: none;
+}
+
+/* ============ Phones ============ */
+@media (max-width: 768px) {
+  :root {
+    --topbar-height: 56px;
+    --page-padding: 14px;
+    --bottom-nav-height: 62px;
+  }
+  body {
+    font-size: 0.875rem;
+  }
+
+  /* Shell: top bar, content, optional bottom tab bar; the sidebar becomes a drawer. */
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--topbar-height) 1fr;
+    height: 100dvh;
+  }
+  .app.has-bottom-nav {
+    grid-template-rows: var(--topbar-height) 1fr var(--bottom-nav-height);
+  }
+  .brand {
+    display: none;
+  }
+  .topbar {
+    grid-column: 1;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .nav-toggle {
+    display: inline-grid;
+  }
+  .topbar-logo {
+    display: block;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .search input {
+    height: 38px;
+    padding-left: 38px;
+    font-size: 0.85rem;
+  }
+  .search svg {
+    left: 12px;
+    width: 16px;
+    height: 16px;
+  }
+  .topbar-extra,
+  .sync-pill span.sync-text {
+    display: none;
+  }
+  .user-button {
+    padding: 4px;
+    gap: 2px;
+  }
+  .avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .menu-popover {
+    position: fixed;
+    top: calc(var(--topbar-height) + 4px);
+    right: 8px;
+    left: 8px;
+    min-width: 0;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(280px, 82vw);
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease-out;
+    box-shadow: var(--shadow-modal);
+    padding-top: 18px;
+  }
+  .sidebar.open {
+    transform: none;
+  }
+  .nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgb(15 20 15 / 0.42);
+    z-index: 55;
+  }
+  .nav-link {
+    justify-content: flex-start;
+    padding: 12px 14px;
+  }
+  .nav-link span,
+  .sidebar-footer {
+    display: inline;
+  }
   .content {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .bottom-nav {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    grid-row: 3;
+    grid-column: 1;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 50;
+  }
+  .bottom-nav-link {
+    display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--color-text-muted);
+    font-size: 0.7rem;
+    font-weight: 600;
   }
-  .bill-panel,
+  .bottom-nav-link svg {
+    width: 22px;
+    height: 22px;
+  }
+  .bottom-nav-link.active {
+    color: var(--color-primary);
+  }
+  .bottom-nav-link.active svg {
+    background: var(--color-primary-soft);
+    border-radius: 999px;
+    padding: 2px 14px;
+    width: 52px;
+    box-sizing: content-box;
+  }
+
+  /* Pages */
+  .page {
+    padding: 14px var(--page-padding) 24px;
+  }
+  .page-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .page-title {
+    font-size: 1.35rem;
+  }
+  .page-subtitle {
+    font-size: 0.8rem;
+  }
+  .page-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .page-actions .btn,
+  .page-actions .select {
+    flex: 1 1 auto;
+  }
+  .btn-lg {
+    height: 42px;
+    font-size: 0.9rem;
+  }
+  .chip {
+    height: 34px;
+    padding: 0 12px;
+    font-size: 0.82rem;
+  }
+  .chips {
+    gap: 8px;
+  }
+  .legend {
+    gap: 12px;
+    font-size: 0.78rem;
+  }
+  .filters {
+    gap: 8px;
+  }
+  .filters .chip.outline {
+    height: 34px;
+  }
+  .filters .select {
+    flex: 1 1 140px;
+    width: auto !important;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat {
+    padding: 12px;
+  }
+  .stat-value {
+    font-size: 1.2rem;
+  }
+  .chart-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  .chart-card {
+    padding: 14px;
+  }
+  .data-table {
+    font-size: 0.8rem;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 9px 10px;
+    white-space: nowrap;
+  }
+  .tx-layout .data-table-wrap {
+    display: none;
+  }
+  .tx-cards {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .tx-card {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 0;
+    border-bottom: 1px solid var(--color-border);
+    background: none;
+    text-align: left;
+  }
+  .tx-card.selected {
+    background: #f8faf6;
+    box-shadow: inset 3px 0 0 var(--color-primary);
+  }
+  .tx-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.95rem;
+  }
+  .tx-card-total {
+    font-weight: 800;
+    font-size: 1.05rem;
+  }
+  .tx-card-meta {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+  }
+  .tx-card-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pagination {
+    flex-wrap: wrap;
+  }
+  .pagination .pages {
+    margin-left: 0;
+  }
+
+  /* Side panels and the bill open full screen */
+  .tx-layout,
+  .billing {
+    flex-direction: column;
+  }
   .side-panel {
+    position: fixed;
+    inset: 0;
     width: auto;
-    margin: 0 12px 12px;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+    z-index: 70;
   }
-  .page,
+  .side-panel-header {
+    padding: 14px 14px 8px;
+  }
+  .side-panel-title {
+    font-size: 1.2rem;
+  }
+  .side-panel-body {
+    padding: 6px 14px 20px;
+  }
+  .side-panel-footer {
+    padding: 12px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  /* New Bill */
   .billing-main {
-    overflow: visible;
+    padding: 12px 12px calc(84px + env(safe-area-inset-bottom));
+  }
+  .food-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .food-card .food-media {
+    margin: 6px 6px 0;
+  }
+  .food-card .food-body {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 10px 10px;
+  }
+  .food-card .btn {
+    margin-left: 0;
+    width: 100%;
+    height: 34px;
+  }
+  .food-name,
+  .food-price {
+    font-size: 0.88rem;
+  }
+  .bill-panel {
+    display: none;
+  }
+  .bill-panel.mobile-open {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    width: auto;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+    z-index: 70;
+  }
+  .bill-close-mobile {
+    display: inline-grid;
+    margin-left: 6px;
+  }
+  .bill-foot {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+  .bill-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    height: 56px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: var(--radius-lg);
+    background: var(--color-primary);
+    color: #fff;
+    box-shadow: var(--shadow-modal);
+    z-index: 45;
+    font-weight: 700;
+  }
+  .has-bottom-nav .bill-mobile-bar {
+    bottom: calc(var(--bottom-nav-height) + 8px + env(safe-area-inset-bottom));
+  }
+  .bill-mobile-bar .count {
+    background: rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+  .bill-mobile-bar .total {
+    font-size: 1.1rem;
+  }
+  .bill-mobile-bar .view {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Tables & menu */
+  .tables-grid,
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .table-card {
+    padding: 10px 8px 12px;
+  }
+  .table-illus {
+    width: 82px;
+    height: 72px;
+  }
+  .status-pill {
+    height: 28px;
+    font-size: 0.8rem;
+  }
+  .group-amount {
+    font-size: 1.1rem;
+  }
+  .cat-picker {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .menu-card-body .food-name,
+  .menu-card-body .food-price {
+    font-size: 0.88rem;
+  }
+
+  /* Login */
+  .login-form-wrap {
+    padding: 24px 16px;
+    align-items: start;
+  }
+  .login-mobile-logo {
+    display: block;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    margin: 0 auto 4px;
+  }
+  .login-form h1 {
+    font-size: 1.6rem;
+  }
+  .demo-logins-buttons {
+    grid-template-columns: 1fr;
+  }
+  .modal {
+    padding: 18px;
+  }
+  .toasts {
+    left: 10px;
+    right: 10px;
+    bottom: calc(var(--bottom-nav-height, 0px) + 12px);
+    max-width: none;
   }
 }

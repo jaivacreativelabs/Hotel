@@ -10,6 +10,7 @@ import {
   History,
   KeyRound,
   LogOut,
+  Menu as MenuIcon,
   MonitorPlay,
   Search,
   Store,
@@ -18,7 +19,7 @@ import {
   Utensils,
 } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
 import { Loading } from '../components/ui';
 import { ChangePasswordModal } from '../pages/auth/ChangePasswordModal';
@@ -58,7 +59,11 @@ function SyncIndicator() {
   if (failing > 0) {
     return (
       <span className="sync-pill error" title="Some bill changes could not be saved yet. They are kept and retried automatically.">
-        <CloudOff size={16} /> {failing} bill{failing > 1 ? 's' : ''} not saved – retrying
+        <CloudOff size={16} /> {failing}
+        <span className="sync-text">
+          {' '}
+          bill{failing > 1 ? 's' : ''} not saved – retrying
+        </span>
       </span>
     );
   }
@@ -89,7 +94,7 @@ function UserMenu() {
         </span>
         <span>
           <span className="user-name">{user.name}</span>
-          <span className="user-role" style={{ display: 'block' }}>
+          <span className="user-role">
             {roleText}
           </span>
         </span>
@@ -153,9 +158,14 @@ export function AppLayout() {
   const { user } = useAuth();
   const { placeholder, query, setQuery, extra } = useTopbar();
   const nav = user?.role === 'SUPER_ADMIN' ? ADMIN_NAV : RESTAURANT_NAV;
+  // Phones: Restaurant Admins get a bottom tab bar (4 pages); the Super Admin a slide-in menu.
+  const bottomNav = nav === RESTAURANT_NAV;
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+  useEffect(() => setNavOpen(false), [location.pathname]);
 
   return (
-    <div className="app">
+    <div className={cx('app', bottomNav && 'has-bottom-nav')}>
       <div className="brand">
         <img src="/logo.jpeg" alt="" />
         <div>
@@ -164,6 +174,12 @@ export function AppLayout() {
         </div>
       </div>
       <header className="topbar">
+        {!bottomNav && (
+          <button className="icon-btn plain nav-toggle" onClick={() => setNavOpen((o) => !o)} aria-label="Open menu" aria-expanded={navOpen}>
+            <MenuIcon />
+          </button>
+        )}
+        <img className="topbar-logo" src="/logo.jpeg" alt="Tiffin House" />
         {placeholder ? (
           <div className="search">
             <Search />
@@ -176,7 +192,7 @@ export function AppLayout() {
         <SyncIndicator />
         <UserMenu />
       </header>
-      <nav className="sidebar" aria-label="Main">
+      <nav className={cx('sidebar', navOpen && 'open')} aria-label="Main">
         {nav.map(({ to, label, icon: Icon, primary, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => cx('nav-link', primary && 'primary', isActive && 'active')}>
             <Icon />
@@ -185,11 +201,22 @@ export function AppLayout() {
         ))}
         <div className="sidebar-footer">Fresh starts. Good days.</div>
       </nav>
+      {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <main className="content">
         <Suspense fallback={<Loading />}>
           <Outlet />
         </Suspense>
       </main>
+      {bottomNav && (
+        <nav className="bottom-nav" aria-label="Main">
+          {nav.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} className={({ isActive }) => cx('bottom-nav-link', isActive && 'active')}>
+              <Icon />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      )}
     </div>
   );
 }
