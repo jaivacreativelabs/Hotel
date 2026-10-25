@@ -155,7 +155,20 @@ export function DailyReportPage() {
               {preview.isFetching ? <Spinner /> : <RefreshCw size={15} />} Refresh
             </button>
           </div>
-          {preview.isLoading ? <Loading label="Building preview…" /> : <iframe title="Daily report email preview" srcDoc={preview.data?.html ?? ''} sandbox="" />}
+          {preview.isLoading ? (
+            <Loading label="Building preview…" />
+          ) : (
+            // Scripts stay blocked; same-origin only lets us read the height to show the whole email.
+            <iframe
+              title="Daily report email preview"
+              srcDoc={preview.data?.html ?? ''}
+              sandbox="allow-same-origin"
+              onLoad={(e) => {
+                const doc = e.currentTarget.contentDocument;
+                if (doc) e.currentTarget.style.height = `${doc.documentElement.scrollHeight}px`;
+              }}
+            />
+          )}
         </div>
       </div>
     </div>

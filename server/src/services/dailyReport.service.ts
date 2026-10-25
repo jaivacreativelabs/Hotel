@@ -18,6 +18,25 @@ import { longDate, renderDailyReportHtml, renderDailyReportText } from './dailyR
 
 const SETTINGS_ID = 'daily';
 
+export interface PaymentTotal {
+  method: PaymentMethod;
+  sales: number;
+  bills: number;
+}
+export interface ItemTotal {
+  name: string;
+  quantity: number;
+  sales: number;
+}
+export interface BranchReport {
+  restaurantName: string;
+  branchName: string;
+  sales: number;
+  bills: number;
+  payments: PaymentTotal[];
+  items: ItemTotal[];
+}
+
 export interface DailyReport {
   date: string;
   asOf: Date;
@@ -25,9 +44,9 @@ export interface DailyReport {
   billCount: number;
   averageBill: number;
   taxTotal: number;
-  payments: { method: PaymentMethod; sales: number; bills: number }[];
-  items: { name: string; quantity: number; sales: number }[];
-  branches: { restaurantName: string; branchName: string; sales: number; bills: number }[];
+  payments: PaymentTotal[];
+  /** Every active branch (also those without bills today), highest sale first. */
+  branches: BranchReport[];
   voided: { bills: number; amount: number };
   refunded: { bills: number; amount: number };
 }
@@ -38,40 +57,79 @@ interface Bucket {
   bills: number;
 }
 
+const byMethod = (rows: { method: string; sales: number; bills: number }[]): PaymentTotal[] =>
+  PAYMENT_METHODS.map((method) => {
+    const p = rows.find((x) => x.method === method);
+    return { method, sales: p?.sales ?? 0, bills: p?.bills ?? 0 };
+  });
+
 /** Collects the report for `date` (YYYY-MM-DD in APP_TIMEZONE) from completed bills. */
 export async function buildDailyReport(date: string, asOf = new Date()): Promise<DailyReport> {
   const { start, end } = dayRange(date, date, env.APP_TIMEZONE);
   const sum = { sales: { $sum: '$grandTotal' }, bills: { $sum: 1 } };
+  const paid = { $match: { status: 'COMPLETED' } };
   const [f] = await TransactionModel.aggregate<{
     summary: { sales: number; bills: number; tax: number }[];
-    payments: Bucket[];
-    items: { _id: Types.ObjectId; name: string; quantity: number; sales: number }[];
-    branches: (Bucket & { restaurantId: Types.ObjectId })[];
+    payments: { _id: { b: Types.ObjectId; m: string }; sales: number; bills: number }[];
+    items: { _id: { b: Types.ObjectId }; name: string; quantity: number; sales: number }[];
+    branches: (Bucket & { _id: Types.ObjectId })[];
     excluded: Bucket[];
   }>([
     { $match: { finalizedAt: { $gte: start, $lt: end } } },
     {
       $facet: {
-        summary: [{ $match: { status: 'COMPLETED' } }, { $group: { _id: null, ...sum, tax: { $sum: '$taxTotal' } } }],
-        payments: [{ $match: { status: 'COMPLETED' } }, { $group: { _id: '$paymentMethod', ...sum } }],
+        summary: [paid, { $group: { _id: null, ...sum, tax: { $sum: '$taxTotal' } } }],
+        payments: [paid, { $group: { _id: { b: '$branchId', m: '$paymentMethod' }, ...sum } }],
         items: [
-          { $match: { status: 'COMPLETED' } },
+          paid,
           { $unwind: '$items' },
-          { $group: { _id: '$items.menuItemId', name: { $last: '$items.name' }, quantity: { $sum: '$items.quantity' }, sales: { $sum: '$items.lineTotal' } } },
+          {
+            $group: {
+              _id: { b: '$branchId', i: '$items.menuItemId' },
+              name: { $last: '$items.name' },
+              quantity: { $sum: '$items.quantity' },
+              sales: { $sum: '$items.lineTotal' },
+            },
+          },
           { $sort: { sales: -1, quantity: -1, name: 1 } },
         ],
-        branches: [{ $match: { status: 'COMPLETED' } }, { $group: { _id: '$branchId', restaurantId: { $first: '$restaurantId' }, ...sum } }, { $sort: { sales: -1 } }],
+        branches: [paid, { $group: { _id: '$branchId', ...sum } }],
         excluded: [{ $match: { status: { $ne: 'COMPLETED' } } }, { $group: { _id: '$status', ...sum } }],
       },
     },
   ]);
 
-  const [restaurants, branches] = await Promise.all([
-    RestaurantModel.find({ _id: { $in: f.branches.map((b) => b.restaurantId) } }).select('name').lean<{ _id: Types.ObjectId; name: string }[]>(),
-    BranchModel.find({ _id: { $in: f.branches.map((b) => b._id) } }).select('name').lean<{ _id: Types.ObjectId; name: string }[]>(),
-  ]);
+  // Active branches of active restaurants are always listed, so a branch with no bills stands out.
+  const activeRestaurants = await RestaurantModel.find({ status: 'ACTIVE' }).select('_id').lean<{ _id: Types.ObjectId }[]>();
+  const branchDocs = await BranchModel.find({
+    $or: [{ _id: { $in: f.branches.map((b) => b._id) } }, { status: 'ACTIVE', restaurantId: { $in: activeRestaurants.map((r) => r._id) } }],
+  })
+    .select('name restaurantId')
+    .lean<{ _id: Types.ObjectId; name: string; restaurantId: Types.ObjectId }[]>();
+  const restaurants = await RestaurantModel.find({ _id: { $in: branchDocs.map((b) => b.restaurantId) } })
+    .select('name')
+    .lean<{ _id: Types.ObjectId; name: string }[]>();
   const rName = new Map(restaurants.map((r) => [String(r._id), r.name]));
-  const bName = new Map(branches.map((b) => [String(b._id), b.name]));
+
+  const branchReports = branchDocs.map((b): BranchReport => {
+    const key = String(b._id);
+    const total = f.branches.find((x) => String(x._id) === key);
+    return {
+      restaurantName: rName.get(String(b.restaurantId)) ?? 'Unknown',
+      branchName: b.name,
+      sales: total?.sales ?? 0,
+      bills: total?.bills ?? 0,
+      payments: byMethod(f.payments.filter((p) => String(p._id.b) === key).map((p) => ({ method: p._id.m, sales: p.sales, bills: p.bills }))),
+      items: f.items.filter((i) => String(i._id.b) === key).map((i) => ({ name: i.name, quantity: i.quantity, sales: i.sales })),
+    };
+  });
+  branchReports.sort((a, b) => b.sales - a.sales || a.restaurantName.localeCompare(b.restaurantName) || a.branchName.localeCompare(b.branchName));
+
+  const totals = new Map<string, { sales: number; bills: number }>();
+  for (const p of f.payments) {
+    const t = totals.get(p._id.m) ?? { sales: 0, bills: 0 };
+    totals.set(p._id.m, { sales: t.sales + p.sales, bills: t.bills + p.bills });
+  }
   const s = f.summary[0] ?? { sales: 0, bills: 0, tax: 0 };
   const excluded = (status: string) => {
     const e = f.excluded.find((x) => x._id === status);
@@ -85,17 +143,8 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     billCount: s.bills,
     averageBill: s.bills ? Math.round(s.sales / s.bills) : 0,
     taxTotal: s.tax,
-    payments: PAYMENT_METHODS.map((method) => {
-      const p = f.payments.find((x) => x._id === method);
-      return { method, sales: p?.sales ?? 0, bills: p?.bills ?? 0 };
-    }),
-    items: f.items.map((i) => ({ name: i.name, quantity: i.quantity, sales: i.sales })),
-    branches: f.branches.map((b) => ({
-      restaurantName: rName.get(String(b.restaurantId)) ?? 'Unknown',
-      branchName: bName.get(String(b._id)) ?? 'Unknown',
-      sales: b.sales,
-      bills: b.bills,
-    })),
+    payments: byMethod([...totals].map(([method, t]) => ({ method, ...t }))),
+    branches: branchReports,
     voided: excluded('VOIDED'),
     refunded: excluded('REFUNDED'),
   };

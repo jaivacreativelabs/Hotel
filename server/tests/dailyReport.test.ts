@@ -45,13 +45,28 @@ describe('daily report contents', () => {
       { method: 'UPI', sales: 8000, bills: 2 },
       { method: 'CARD', sales: 0, bills: 0 },
     ]);
-    expect(r.items.map((i) => [i.name, i.quantity, i.sales])).toEqual([
-      ['Idly', 3, 9000],
+    expect(r.voided).toEqual({ bills: 1, amount: 8000 });
+  });
+
+  it('breaks the day down branch by branch, listing branches without bills too', async () => {
+    const r = await buildDailyReport(today());
+    const [a1, a2, ...rest] = r.branches;
+    expect([a1.branchName, a1.sales, a1.bills]).toEqual(['Branch A1', 13500, 2]);
+    expect(a1.payments).toEqual([
+      { method: 'CASH', sales: 8500, bills: 1 },
+      { method: 'UPI', sales: 5000, bills: 1 },
+      { method: 'CARD', sales: 0, bills: 0 },
+    ]);
+    expect(a1.items.map((i) => [i.name, i.quantity, i.sales])).toEqual([
+      ['Idly', 2, 6000],
       ['Dosa', 1, 5000],
       ['Coffee', 1, 2500],
     ]);
-    expect(r.branches.map((b) => b.sales)).toEqual([13500, 3000]);
-    expect(r.voided).toEqual({ bills: 1, amount: 8000 });
+    expect([a2.branchName, a2.sales]).toEqual(['Branch A2', 3000]);
+    expect(a2.items).toEqual([{ name: 'Idly', quantity: 1, sales: 3000 }]);
+    expect(rest.length).toBeGreaterThan(0);
+    expect(rest.every((b) => b.sales === 0 && b.items.length === 0)).toBe(true);
+    expect(rest.map((b) => b.branchName)).toContain('Branch B1');
   });
 
   it('renders a preview for the Super Admin only', async () => {

@@ -4,7 +4,7 @@
  */
 import { formatMoney, type PaymentMethod } from '@rb/shared';
 import { env } from '../config/env.js';
-import type { DailyReport } from './dailyReport.service.js';
+import type { BranchReport, DailyReport, ItemTotal, PaymentTotal } from './dailyReport.service.js';
 
 /** "2026-10-25" → "Sun, 25 Oct 2026" */
 export function longDate(date: string): string {
@@ -55,13 +55,15 @@ function stat(label: string, value: string, align: 'left' | 'center' | 'right'):
   </td>`;
 }
 
+function paymentBar(payments: PaymentTotal[], total: number): string {
+  const paid = payments.filter((p) => p.sales > 0);
+  if (!paid.length) return '';
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-radius:5px;overflow:hidden;"><tr>${paid
+    .map((p) => `<td width="${Math.max(pct(p.sales, total), 1)}%" style="height:10px;line-height:10px;font-size:0;background:${PAYMENT_COLOUR[p.method]};">&nbsp;</td>`)
+    .join('')}</tr></table>`;
+}
+
 function paymentSection(r: DailyReport): string {
-  const paid = r.payments.filter((p) => p.sales > 0);
-  const bar = paid.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-radius:5px;overflow:hidden;"><tr>${paid
-        .map((p) => `<td width="${Math.max(pct(p.sales, r.totalSales), 1)}%" style="height:10px;line-height:10px;font-size:0;background:${PAYMENT_COLOUR[p.method]};">&nbsp;</td>`)
-        .join('')}</tr></table>`
-    : '';
   const rows = r.payments
     .map(
       (p, i) => `<tr>
@@ -75,62 +77,83 @@ function paymentSection(r: DailyReport): string {
       </tr>`,
     )
     .join('');
-  return `${sectionTitle('Payment split')}
+  return `${sectionTitle(r.branches.length > 1 ? 'Payment split – all branches' : 'Payment split')}
   <tr><td style="padding:0 24px;">
-    ${bar}
+    ${paymentBar(r.payments, r.totalSales)}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">${rows}</table>
   </td></tr>`;
 }
 
-function itemsSection(r: DailyReport): string {
-  const qty = r.items.reduce((a, i) => a + i.quantity, 0);
-  const cell = (i: number) => `padding:10px 12px;${i ? `border-top:1px solid ${C.border};` : ''}`;
-  const rows = r.items
-    .map(
-      (it, i) => `<tr>
-        <td style="${cell(i)}font:400 14px/20px ${FONT};color:${C.text};">${esc(it.name)}</td>
-        <td align="center" width="60" style="${cell(i)}font:400 14px/20px ${FONT};color:${C.muted};">${it.quantity}</td>
-        <td align="right" width="110" style="${cell(i)}font:500 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(it.sales)}</td>
-      </tr>`,
-    )
-    .join('');
-  return `${sectionTitle('Item-wise sale', `${r.items.length} item${r.items.length === 1 ? '' : 's'} · ${qty} sold`)}
-  <tr><td style="padding:0 24px;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:8px;border-collapse:separate;">
-      <tr style="background:${C.surfaceMuted};">
-        <td style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Item</td>
-        <td align="center" style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Qty</td>
-        <td align="right" style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Amount</td>
-      </tr>
-      ${rows}
-      <tr style="background:${C.primarySoft};">
-        <td style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">Total</td>
-        <td align="center" style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">${qty}</td>
-        <td align="right" style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.primary};white-space:nowrap;">${formatMoney(r.items.reduce((a, i) => a + i.sales, 0))}</td>
-      </tr>
-    </table>
-    ${
-      r.taxTotal || r.items.reduce((a, i) => a + i.sales, 0) !== r.totalSales
-        ? `<div style="font:400 12px/18px ${FONT};color:${C.subtle};padding-top:6px;">Item amounts are before discount and tax.</div>`
-        : ''
-    }
-  </td></tr>`;
-}
-
-function branchSection(r: DailyReport): string {
-  if (r.branches.length < 2) return '';
+/** One line per branch: what each branch made today. */
+function branchSummary(r: DailyReport): string {
   const rows = r.branches
     .map(
       (b, i) => `<tr>
-        <td style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 14px/20px ${FONT};color:${C.text};">${esc(b.branchName)}
+        <td style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:500 14px/20px ${FONT};color:${C.text};">${esc(b.branchName)}
           <div style="font:400 12px/16px ${FONT};color:${C.muted};">${esc(b.restaurantName)}</div></td>
-        <td align="right" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">${b.bills} bill${b.bills === 1 ? '' : 's'}</td>
-        <td align="right" width="110" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(b.sales)}</td>
+        <td align="right" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">${
+          b.bills ? `${b.bills} bill${b.bills === 1 ? '' : 's'}` : 'No bills'
+        }</td>
+        <td align="right" width="110" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${b.bills ? C.text : C.subtle};white-space:nowrap;">${formatMoney(b.sales)}</td>
       </tr>`,
     )
     .join('');
-  return `${sectionTitle('Branch-wise sale')}
+  return `${sectionTitle('Branch-wise sale', `${r.branches.length} branch${r.branches.length === 1 ? '' : 'es'}`)}
   <tr><td style="padding:0 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>`;
+}
+
+function branchPayments(b: BranchReport): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr>${b.payments
+    .map(
+      (p, i) => `<td width="33%" align="${i === 0 ? 'left' : i === 2 ? 'right' : 'center'}" style="padding:4px 0;">
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};white-space:nowrap;"><span style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${PAYMENT_COLOUR[p.method]};margin-right:6px;"></span>${PAYMENT_NAME[p.method]}</div>
+        <div style="font:600 15px/22px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(p.sales)}</div>
+      </td>`,
+    )
+    .join('')}</tr></table>`;
+}
+
+function itemTable(items: ItemTotal[]): string {
+  const qty = items.reduce((a, i) => a + i.quantity, 0);
+  const cell = (i: number) => `padding:9px 12px;${i ? `border-top:1px solid ${C.border};` : ''}`;
+  const rows = items
+    .map(
+      (it, i) => `<tr>
+        <td style="${cell(i)}font:400 14px/20px ${FONT};color:${C.text};">${esc(it.name)}</td>
+        <td align="center" width="56" style="${cell(i)}font:400 14px/20px ${FONT};color:${C.muted};">${it.quantity}</td>
+        <td align="right" width="100" style="${cell(i)}font:500 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(it.sales)}</td>
+      </tr>`,
+    )
+    .join('');
+  const head = (label: string, align: string) =>
+    `<td align="${align}" style="padding:8px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">${label}</td>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;border:1px solid ${C.border};border-radius:8px;border-collapse:separate;">
+      <tr style="background:${C.surfaceMuted};">${head('Item', 'left')}${head('Qty', 'center')}${head('Amount', 'right')}</tr>
+      ${rows}
+      <tr style="background:${C.primarySoft};">
+        <td style="padding:9px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">Total</td>
+        <td align="center" style="padding:9px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">${qty}</td>
+        <td align="right" style="padding:9px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.primary};white-space:nowrap;">${formatMoney(items.reduce((a, i) => a + i.sales, 0))}</td>
+      </tr>
+    </table>`;
+}
+
+/** Full detail of one branch: its total, payment split and item-wise sale. */
+function branchDetail(b: BranchReport): string {
+  return `<tr><td style="padding:24px 24px 0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.primarySoft};border-radius:8px;"><tr>
+      <td style="padding:12px 14px;">
+        <div style="font:700 15px/20px ${FONT};color:${C.text};">${esc(b.branchName)}</div>
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};">${esc(b.restaurantName)}</div>
+      </td>
+      <td align="right" style="padding:12px 14px;">
+        <div style="font:700 18px/24px ${FONT};color:${C.primary};white-space:nowrap;">${formatMoney(b.sales)}</div>
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};white-space:nowrap;">${b.bills} bill${b.bills === 1 ? '' : 's'}</div>
+      </td>
+    </tr></table>
+    ${branchPayments(b)}
+    ${itemTable(b.items)}
+  </td></tr>`;
 }
 
 function notCountedNote(r: DailyReport): string {
@@ -191,13 +214,15 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   ${
     empty
       ? `<tr><td style="padding:28px 24px 4px 24px;font:400 14px/20px ${FONT};color:${C.muted};">No bills were made today.</td></tr>`
-      : `${paymentSection(r)}${itemsSection(r)}${branchSection(r)}`
+      : paymentSection(r)
   }
+  ${r.branches.length ? branchSummary(r) : ''}
   ${notCountedNote(r)}
+  ${r.branches.filter((b) => b.bills > 0).map(branchDetail).join('')}
 
   <tr><td style="padding:28px 24px 26px 24px;">
     <div style="border-top:1px solid ${C.border};padding-top:16px;font:400 12px/18px ${FONT};color:${C.subtle};">
-      Paid bills only. Amounts include tax. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
+      Paid bills only. Totals include tax; item amounts are before discount and tax. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
       To change who gets this email, open Super Admin &rsaquo; Daily Report.
     </div>
   </td></tr>
@@ -221,10 +246,17 @@ export function renderDailyReportText(r: DailyReport): string {
     'Payment split',
     ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, `${formatMoney(p.sales)}  (${p.bills} bills)`)),
     '',
-    'Item-wise sale',
-    ...r.items.map((i) => line(`  ${i.name} x${i.quantity}`, formatMoney(i.sales))),
+    'Branch-wise sale',
+    ...r.branches.map((b) => line(`  ${b.branchName} (${b.restaurantName})`, `${formatMoney(b.sales)}  (${b.bills} bills)`)),
   ];
-  if (r.branches.length > 1) out.push('', 'Branch-wise sale', ...r.branches.map((b) => line(`  ${b.branchName}`, `${formatMoney(b.sales)}  (${b.bills} bills)`)));
   if (r.voided.bills || r.refunded.bills) out.push('', `Not counted: ${r.voided.bills} voided, ${r.refunded.bills} refunded.`);
+  for (const b of r.branches.filter((x) => x.bills > 0)) {
+    out.push(
+      '',
+      `${b.branchName} – ${formatMoney(b.sales)} (${b.bills} bills)`,
+      ...b.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, formatMoney(p.sales))),
+      ...b.items.map((i) => line(`  ${i.name} x${i.quantity}`, formatMoney(i.sales))),
+    );
+  }
   return out.join('\n');
 }
