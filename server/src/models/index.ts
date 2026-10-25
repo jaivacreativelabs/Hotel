@@ -3,6 +3,7 @@ export * from './Branch.js';
 export * from './Category.js';
 export * from './Counter.js';
 export * from './Draft.js';
+export * from './MenuImage.js';
 export * from './MenuItem.js';
 export * from './Restaurant.js';
 export * from './Table.js';

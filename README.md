@@ -111,7 +111,35 @@ dialog. Printing reads the stored bill and never creates a new one.
 
 ## Deployment
 
-**Single server (simplest):**
+**Vercel (this repository is set up for it – `vercel.json` + `api/index.js`):**
+
+Vercel serves the built React app as static files and runs the Express API as one serverless
+function (`/api/*` and `/uploads/*`). Menu photos are stored in MongoDB (`IMAGE_STORAGE=mongo`),
+because Vercel has no persistent disk.
+
+1. In the Vercel project: **Settings → General → Root Directory** must be the repository root
+   (empty), Framework Preset *Other*. Build/output settings come from `vercel.json`.
+2. **Settings → Environment Variables** (Production and Preview):
+
+   | Name | Value |
+   |---|---|
+   | `NODE_ENV` | `production` |
+   | `MONGODB_URI` | your Atlas connection string (the `mongodb+srv://…` form works on Vercel) |
+   | `JWT_SECRET` | a new long random secret (do not reuse the development one) |
+   | `APP_TIMEZONE` | `Asia/Kolkata` |
+   | `TRUST_PROXY` | `1` |
+   | `IMAGE_STORAGE` | `mongo` |
+
+3. **MongoDB Atlas → Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`)** –
+   Vercel functions do not have fixed IP addresses. Keep the database user's password strong.
+4. Push to the connected branch; Vercel builds and deploys automatically.
+5. Photos uploaded earlier to a local `server/uploads` folder can be copied into MongoDB with
+   `npm run images:migrate` (run locally with the production `MONGODB_URI`).
+
+Notes: the login rate limit is kept in memory per function instance, so it is weaker on serverless
+than on a single server; the first request after idle time is slower (cold start + DB connect).
+
+**Single server:**
 
 1. `npm ci && npm run build`
 2. Set environment variables (see `.env.example`): `NODE_ENV=production`, `MONGODB_URI`, `JWT_SECRET`,
@@ -121,9 +149,9 @@ dialog. Printing reads the stored bill and never creates a new one.
    `Secure` in production, so HTTPS is required.
 5. Run `npm run setup:superadmin` once against the production database.
 
-**Uploads:** menu images are written to `server/uploads` (or `UPLOAD_DIR`). Use a persistent disk or
-replace `server/src/services/storage.service.ts` with an object-storage driver (S3, GCS, Cloudinary);
-only `saveImage()` needs to change.
+**Photos:** stored in MongoDB by default (`IMAGE_STORAGE=mongo`). With `IMAGE_STORAGE=local` they are
+written to `server/uploads` (or `UPLOAD_DIR`), which needs a persistent disk. Object storage (S3, GCS,
+Cloudinary) can be added as another driver in `server/src/services/storage.service.ts`.
 
 **Backups:** enable Atlas backups; transactions and audit logs are the financial record.
 

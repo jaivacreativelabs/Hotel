@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { apiNotFound, errorHandler } from './middleware/error.js';
 import { createApiRouter } from './routes/index.js';
+import { loadStoredImage } from './services/storage.service.js';
 
 export function createApp(): express.Express {
   const app = express();
@@ -39,6 +40,16 @@ export function createApp(): express.Express {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'");
       next();
+    },
+    async (req, res, next) => {
+      // Photos stored in MongoDB; anything else falls through to the disk.
+      const m = /^\/menu\/([^/]+)$/.exec(req.path);
+      if (req.method !== 'GET' || !m) return next();
+      const image = await loadStoredImage(m[1]);
+      if (!image) return next();
+      res.setHeader('Content-Type', image.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // names are never reused
+      res.send(image.data);
     },
     express.static(env.UPLOAD_DIR, { dotfiles: 'deny', index: false, maxAge: '7d' }),
     apiNotFound,

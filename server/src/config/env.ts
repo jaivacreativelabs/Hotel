@@ -33,6 +33,8 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   APP_TIMEZONE: z.string().default('Asia/Kolkata'),
   UPLOAD_DIR: z.string().default(path.join(serverRoot, 'uploads')),
+  // mongo: photos stored in MongoDB (works on serverless hosts); local: files in UPLOAD_DIR
+  IMAGE_STORAGE: z.enum(['mongo', 'local']).default('mongo'),
   COOKIE_SECURE: bool(isProd),
   SERVE_CLIENT: bool(false),
   CLIENT_DIST: z.string().default(path.join(repoRoot, 'client', 'dist')),

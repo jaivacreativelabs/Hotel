@@ -11,7 +11,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "setup:superadmin": "tsx src/scripts/setupSuperAdmin.ts",
-    "seed:demo": "tsx src/scripts/seedDemo.ts"
+    "seed:demo": "tsx src/scripts/seedDemo.ts",
+    "images:migrate": "tsx src/scripts/migrateImages.ts"
   },
   "dependencies": {
     "@rb/shared": "1.0.0",
