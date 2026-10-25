@@ -1,9 +1,11 @@
 import {
   calculateBill,
+  kitchenPending,
   parsePercentToBps,
   parseRupeesToPaise,
   type DiscountInput,
   type DraftDTO,
+  type KitchenQty,
   type MenuItemDTO,
   type PaymentMethod,
   type TransactionDTO,
@@ -30,6 +32,7 @@ import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodG
 import { BillDoneModal, PaymentButtons } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
+import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { api, ApiError, errorMessage } from '../../services/api';
 import { useCategories, useMenuItems } from '../../services/queries';
 import { useAuth } from '../../store/auth';
@@ -185,6 +188,18 @@ export function BillingView({
     mutate((b) => addItemToBill(b, item));
   };
   const setQty = (id: string, quantity: number) => mutate((b) => setBillQuantity(b, id, quantity));
+
+  // Kitchen Display: send the order before payment so the kitchen can start (the bill sends the rest).
+  const kitchen = useSendToKitchen();
+  const [sentNow, setSentNow] = useState<{ draftId: string; sent: KitchenQty[] } | null>(null);
+  const kitchenSent = (sentNow && sentNow.draftId === draft?.id ? sentNow.sent : draft?.kitchenSent) ?? [];
+  const toKitchen = kitchenPending(local?.items ?? [], kitchenSent);
+  const sendToKitchen = async () => {
+    if (!sync || !draft) return;
+    const most = new Map(kitchenSent.map((s) => [s.menuItemId, s.quantity]));
+    for (const l of local?.items ?? []) most.set(l.menuItemId, Math.max(most.get(l.menuItemId) ?? 0, l.quantity));
+    if (await kitchen.send(draft.id, sync)) setSentNow({ draftId: draft.id, sent: [...most].map(([menuItemId, quantity]) => ({ menuItemId, quantity })) });
+  };
 
   const generate = async () => {
     if (!sync || !payment) return;
@@ -383,6 +398,7 @@ export function BillingView({
             <span>Total</span>
             <span>{formatMoney(totals?.grandTotal ?? 0)}</span>
           </div>
+          {activeBranch!.kitchenDisplay && editable && hasItems && <KitchenSendButton pending={toKitchen} sending={kitchen.sending} onSend={() => void sendToKitchen()} />}
           <PaymentButtons value={payment} onChange={setPayment} disabled={!editable || busy} />
           <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || busy || hasUnavailable}>
             {busy ? <Spinner /> : <FileText />} Generate Bill

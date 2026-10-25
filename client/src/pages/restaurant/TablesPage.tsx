@@ -2,11 +2,14 @@ import {
   calculateBill,
   LIMITS,
   TABLE_SHAPES,
+  kitchenPending,
   type DraftDTO,
+  type KitchenQty,
   type KitchenTicketDTO,
   type TableDTO,
   type TableGroupSummaryDTO,
   type TableShape,
+  type TablesResponseDTO,
   type TableStatus,
   type TransactionDTO,
 } from '@rb/shared';
@@ -27,6 +30,7 @@ import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
+import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { useDraftSync } from '../../hooks/useDraftSync';
 
 const ALL_FLOORS = '__all__';
@@ -205,10 +209,12 @@ function ActiveGroupCard({
   onDone,
   onGenerate,
   onDelete,
+  onSent,
 }: {
   group: TableGroupSummaryDTO;
   index: number;
   branchId: string;
+  onSent: () => void;
   onDone: () => void;
   onGenerate: (liveTotal: number) => void;
   onDelete: () => void;
@@ -222,6 +228,19 @@ function ActiveGroupCard({
   const total = totals?.grandTotal ?? group.grandTotal;
   const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
   const setQty = (id: string, quantity: number) => sync?.update((b) => setBillQuantity(b, id, quantity));
+  const { send, sending } = useSendToKitchen();
+  // What the kitchen already has; updated here after sending (the draft itself is not reloaded).
+  const [sentNow, setSentNow] = useState<KitchenQty[] | null>(null);
+  const sent = sentNow ?? state.draft?.kitchenSent ?? [];
+  const pending = kitchenPending(lines, sent);
+  const sendToKitchen = async () => {
+    const most = new Map(sent.map((s) => [s.menuItemId, s.quantity]));
+    for (const l of lines) most.set(l.menuItemId, Math.max(most.get(l.menuItemId) ?? 0, l.quantity));
+    if (await send(group.draftId, sync)) {
+      setSentNow([...most].map(([menuItemId, quantity]) => ({ menuItemId, quantity })));
+      onSent();
+    }
+  };
 
   return (
     <div className="group-card active" aria-label={`Adding food to ${group.groupName}`}>
@@ -284,6 +303,7 @@ function ActiveGroupCard({
           <FileText /> Generate Bill
         </button>
       </div>
+      {activeBranch!.kitchenDisplay && lines.length > 0 && <KitchenSendButton pending={pending} sending={sending} onSend={() => void sendToKitchen()} />}
     </div>
   );
 }
@@ -328,13 +348,17 @@ function GroupCard({
   onAddItems,
   onGenerate,
   onDelete,
+  onSent,
 }: {
   group: TableGroupSummaryDTO;
   index: number;
   onAddItems: () => void;
   onGenerate: () => void;
   onDelete: () => void;
+  onSent: () => void;
 }) {
+  const { activeBranch } = useAuth();
+  const { send, sending } = useSendToKitchen();
   const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
   const extra = group.lineCount - group.previewItems.slice(0, 2).length;
   return (
@@ -376,6 +400,9 @@ function GroupCard({
           <FileText /> Generate Bill
         </button>
       </div>
+      {activeBranch!.kitchenDisplay && group.itemCount > 0 && (
+        <KitchenSendButton pending={group.kitchenPending} sending={sending} onSend={() => void send(group.draftId).then((ok) => ok && onSent())} />
+      )}
     </div>
   );
 }
@@ -447,6 +474,16 @@ function TableDetail({
   const [done, setDone] = useState<TransactionDTO | null>(null);
   const free = Math.max(0, table.seats - table.seatsUsed);
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
+  // Show "All items sent" straight away; the refresh then brings the server's numbers.
+  const markSent = (draftId: string) => {
+    queryClient.setQueryData<TablesResponseDTO>(tableKeys.list(branchId), (data) =>
+      data && {
+        ...data,
+        tables: data.tables.map((t) => ({ ...t, groups: t.groups.map((g) => (g.draftId === draftId ? { ...g, kitchenPending: 0 } : g)) })),
+      },
+    );
+    void refresh();
+  };
 
   const createGroup = async (guestCount: number, groupName: string, openBill: boolean) => {
     setBusy(true);
@@ -560,6 +597,7 @@ function TableDetail({
             index={i}
             branchId={branchId}
             onDone={onExitOrder}
+            onSent={() => void refresh()}
             onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
             onDelete={() => setDeleting(g)}
           />
@@ -571,6 +609,7 @@ function TableDetail({
             onAddItems={() => onOrder(g.draftId)}
             onGenerate={() => setPaying(g)}
             onDelete={() => setDeleting(g)}
+            onSent={() => markSent(g.draftId)}
           />
         ),
       )}

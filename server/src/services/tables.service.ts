@@ -1,5 +1,5 @@
 import type { Types } from 'mongoose';
-import type { TableCreateInput, TableDTO, TableOccupancy, TablesResponseDTO } from '@rb/shared';
+import { kitchenPending, type TableCreateInput, type TableDTO, type TableOccupancy, type TablesResponseDTO } from '@rb/shared';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchScope } from '../middleware/scope.js';
 import { DraftModel, TableModel, type Draft, type Table } from '../models/index.js';
@@ -9,6 +9,8 @@ import { audit } from './audit.service.js';
 
 type TableLean = Table & { _id: Types.ObjectId };
 type DraftLean = Draft & { _id: Types.ObjectId };
+
+const sentQty = (rows: { menuItemId: Types.ObjectId; quantity: number }[]) => rows.map((r) => ({ menuItemId: String(r.menuItemId), quantity: r.quantity }));
 
 export function occupancyOf(table: Pick<Table, 'seats' | 'status'>, seatsUsed: number): TableOccupancy {
   if (table.status === 'RESERVED' && seatsUsed === 0) return 'RESERVED';
@@ -29,6 +31,7 @@ export function toTableDTO(t: TableLean, drafts: DraftLean[]): TableDTO {
       grandTotal: d.totals?.grandTotal ?? 0,
       previewItems: d.items.slice(0, 4).map((i) => ({ name: i.name, imageUrl: i.imageUrl ?? null })),
       version: d.version,
+      kitchenPending: kitchenPending(sentQty(d.items), sentQty(d.kitchenSent ?? [])),
     }));
   const seatsUsed = drafts.reduce((a, d) => a + d.guestCount, 0);
   return {

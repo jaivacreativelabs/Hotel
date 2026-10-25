@@ -158,6 +158,7 @@ export function toDraftDTO(d: WithId<Draft>, tableLabel = ''): DraftDTO {
     status: d.status,
     version: d.version,
     transactionId: d.transactionId ? String(d.transactionId) : null,
+    kitchenSent: (d.kitchenSent ?? []).map((s) => ({ menuItemId: String(s.menuItemId), quantity: s.quantity })),
     updatedAt: iso(d.updatedAt) ?? '',
     updatedByName: d.updatedByName ?? '',
   };

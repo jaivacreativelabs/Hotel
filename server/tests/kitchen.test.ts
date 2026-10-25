@@ -60,7 +60,14 @@ describe('sending orders', () => {
   it('sends only what was added since the last ticket', async () => {
     group = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: w.tables.t1, guestCount: 2, groupName: 'Ravi' }), 201);
     group = await save(w.adminA1, group, [{ menuItemId: w.items.idly, quantity: 2 }]);
+    const pending = async () => {
+      const { tables } = ok<{ tables: { groups: { draftId: string; kitchenPending: number }[] }[] }>(await w.adminA1.get('/api/v1/tables'));
+      return tables.flatMap((t) => t.groups).find((g) => g.draftId === group.id)?.kitchenPending;
+    };
+    expect(await pending()).toBe(2);
     const t1 = ok<Ticket>(await w.adminA1.post(`/api/v1/bills/${group.id}/kitchen`));
+    expect(await pending()).toBe(0);
+    expect(ok<{ kitchenSent: unknown[] }>(await w.adminA1.get(`/api/v1/bills/${group.id}`)).kitchenSent).toEqual([{ menuItemId: w.items.idly, quantity: 2 }]);
     expect(t1.number).toMatch(/^\d{8}-0001$/);
     expect([t1.type, t1.tableLabel, t1.groupName, t1.status]).toEqual(['TABLE', 'T1', 'Ravi', 'NEW']);
     expect(lines(t1)).toEqual([['Idly', 2]]);

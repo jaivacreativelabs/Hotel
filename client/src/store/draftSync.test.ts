@@ -21,6 +21,7 @@ function draft(version: number, items: [string, number][] = []): DraftDTO {
     status: 'ACTIVE',
     version,
     transactionId: null,
+    kitchenSent: [],
     updatedAt: '',
     updatedByName: '',
   };

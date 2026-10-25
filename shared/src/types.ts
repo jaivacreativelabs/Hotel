@@ -193,6 +193,8 @@ export interface DraftDTO {
   status: DraftStatus;
   version: number;
   transactionId: string | null;
+  /** most ever sent to the kitchen per dish */
+  kitchenSent: { menuItemId: string; quantity: number }[];
   updatedAt: string;
   updatedByName: string;
 }
@@ -208,6 +210,8 @@ export interface TableGroupSummaryDTO {
   grandTotal: number;
   previewItems: { name: string; imageUrl: string | null }[];
   version: number;
+  /** portions added since the last kitchen ticket (0 when the branch has nothing left to send) */
+  kitchenPending: number;
 }
 
 export interface TableDTO {

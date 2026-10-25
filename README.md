@@ -108,8 +108,11 @@ Optional per branch: **Super Admin → Restaurants → (restaurant) → Branches
 When it is on, that branch's admin gets a **Kitchen** page with three columns – **New → Preparing →
 Ready** – that refreshes every few seconds (open it on a kitchen tablet or TV).
 
-- At a table, tapping **Done** after adding food sends the newly added items as one ticket.
-- **Generate Bill** sends anything not sent yet; a counter (New Bill) order goes to the kitchen in full.
+- Every table group (and the New Bill panel) shows a yellow **Send to Kitchen (N new)** button while it
+  has food the kitchen has not seen; it turns into “All items sent to the kitchen” afterwards. Only the
+  newly added items go, as one ticket.
+- Tapping **Done** after adding food at a table sends them too, and **Generate Bill** sends anything
+  not sent yet (a counter bill goes to the kitchen in full).
 - Each ticket shows the table and group (or *Takeaway*), how long it has waited (amber after 10 min,
   red after 20), a star for priority and a print button for an 80 mm kitchen slip.
 - **Served** on a Ready ticket takes it off the board. Deleting an order cancels tickets the kitchen
