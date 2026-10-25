@@ -147,8 +147,17 @@ export function createApiRouter(): Router {
   billsRouter.get('/:id', ops.getDraft);
   billsRouter.put('/:id', ops.updateDraft);
   billsRouter.post('/:id/finalize', ops.finalizeDraft);
+  billsRouter.post('/:id/kitchen', ops.sendToKitchen);
   billsRouter.delete('/:id', ops.deleteDraft);
   api.use('/bills', billsRouter);
+
+  const kitchenRouter = Router();
+  kitchenRouter.use(authenticate, requireBranchScope);
+  kitchenRouter.get('/tickets', ops.kitchenBoard);
+  kitchenRouter.get('/tickets/:id', ops.kitchenTicket);
+  kitchenRouter.post('/tickets/:id/advance', ops.advanceKitchenTicket);
+  kitchenRouter.post('/tickets/:id/priority', ops.kitchenTicketPriority);
+  api.use('/kitchen', kitchenRouter);
 
   // ---- Transactions (role-filtered in the service) ----
   const txRouter = Router();

@@ -1,0 +1,153 @@
+import { beforeAll, describe, expect, it } from 'vitest';
+import { KitchenTicketModel } from '../src/models/index.js';
+import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
+
+useTestDatabase();
+
+interface Draft {
+  id: string;
+  version: number;
+}
+interface Ticket {
+  id: string;
+  number: string;
+  type: string;
+  tableLabel: string;
+  groupName: string;
+  status: string;
+  priority: boolean;
+  items: { name: string; quantity: number }[];
+}
+
+let w: World;
+const lines = (t: Ticket) => t.items.map((i) => [i.name, i.quantity]);
+
+async function save(c: Client, d: Draft, items: { menuItemId: string; quantity: number }[]) {
+  return ok<Draft>(await c.put(`/api/v1/bills/${d.id}`, { version: d.version, items }));
+}
+async function finalize(c: Client, d: Draft, paymentMethod = 'CASH') {
+  return c.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod, idempotencyKey: key() });
+}
+const board = async (c: Client) => ok<Ticket[]>(await c.get('/api/v1/kitchen/tickets'));
+
+beforeAll(async () => {
+  w = await buildWorld();
+});
+
+describe('kitchen display is per branch and off by default', () => {
+  it('does nothing until the Super Admin switches it on', async () => {
+    const res = await w.adminA1.get('/api/v1/kitchen/tickets');
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('KITCHEN_OFF');
+    let d = ok<Draft>(await w.adminA1.get('/api/v1/bills/counter'));
+    d = await save(w.adminA1, d, [{ menuItemId: w.items.idly, quantity: 1 }]);
+    expect((await finalize(w.adminA1, d)).status).toBe(201);
+    expect(await KitchenTicketModel.countDocuments()).toBe(0);
+
+    expect((await w.adminA1.patch(`/api/v1/admin/branches/${w.branchA1}`, { kitchenDisplay: true })).status).toBe(403);
+    const b = ok<{ kitchenDisplay: boolean }>(await w.sa.patch(`/api/v1/admin/branches/${w.branchA1}`, { kitchenDisplay: true }));
+    expect(b.kitchenDisplay).toBe(true);
+    const me = ok<{ branches: { id: string; kitchenDisplay: boolean }[] }>(await w.adminA1.get('/api/v1/auth/me'));
+    expect(me.branches[0].kitchenDisplay).toBe(true);
+    expect(await board(w.adminA1)).toEqual([]);
+  });
+});
+
+describe('sending orders', () => {
+  let group: Draft;
+
+  it('sends only what was added since the last ticket', async () => {
+    group = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: w.tables.t1, guestCount: 2, groupName: 'Ravi' }), 201);
+    group = await save(w.adminA1, group, [{ menuItemId: w.items.idly, quantity: 2 }]);
+    const t1 = ok<Ticket>(await w.adminA1.post(`/api/v1/bills/${group.id}/kitchen`));
+    expect(t1.number).toMatch(/^\d{8}-0001$/);
+    expect([t1.type, t1.tableLabel, t1.groupName, t1.status]).toEqual(['TABLE', 'T1', 'Ravi', 'NEW']);
+    expect(lines(t1)).toEqual([['Idly', 2]]);
+    expect(ok(await w.adminA1.post(`/api/v1/bills/${group.id}/kitchen`))).toBeNull();
+
+    group = await save(w.adminA1, group, [
+      { menuItemId: w.items.idly, quantity: 3 },
+      { menuItemId: w.items.coffee, quantity: 1 },
+    ]);
+    const t2 = ok<Ticket>(await w.adminA1.post(`/api/v1/bills/${group.id}/kitchen`));
+    expect(t2.number).toMatch(/-0002$/);
+    expect(lines(t2)).toEqual([
+      ['Idly', 1],
+      ['Coffee', 1],
+    ]);
+  });
+
+  it('never re-sends food after a quantity goes down and up again', async () => {
+    group = await save(w.adminA1, group, [{ menuItemId: w.items.idly, quantity: 1 }]);
+    group = await save(w.adminA1, group, [{ menuItemId: w.items.idly, quantity: 3 }]);
+    expect(ok(await w.adminA1.post(`/api/v1/bills/${group.id}/kitchen`))).toBeNull();
+  });
+
+  it('generating the bill sends whatever is left', async () => {
+    group = await save(w.adminA1, group, [
+      { menuItemId: w.items.idly, quantity: 3 },
+      { menuItemId: w.items.dosa, quantity: 1 },
+    ]);
+    expect((await finalize(w.adminA1, group)).status).toBe(201);
+    const tickets = await board(w.adminA1);
+    expect(tickets.map(lines)).toEqual([[['Idly', 2]], [['Idly', 1], ['Coffee', 1]], [['Dosa', 1]]]);
+  });
+
+  it('a counter bill goes to the kitchen in full', async () => {
+    let d = ok<Draft>(await w.adminA1.get('/api/v1/bills/counter'));
+    d = await save(w.adminA1, d, [
+      { menuItemId: w.items.vada, quantity: 2 },
+      { menuItemId: w.items.juice, quantity: 1 },
+    ]);
+    expect((await finalize(w.adminA1, d, 'UPI')).status).toBe(201);
+    const last = (await board(w.adminA1)).at(-1)!;
+    expect([last.type, last.tableLabel]).toEqual(['COUNTER', '']);
+    expect(lines(last)).toEqual([
+      ['Vada', 2],
+      ['Fresh Juice', 1],
+    ]);
+  });
+
+  it('deleting an order cancels tickets the kitchen has not accepted', async () => {
+    let g = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: w.tables.t2, guestCount: 1 }), 201);
+    g = await save(w.adminA1, g, [{ menuItemId: w.items.biryani, quantity: 1 }]);
+    const t = ok<Ticket>(await w.adminA1.post(`/api/v1/bills/${g.id}/kitchen`));
+    expect((await w.adminA1.delete(`/api/v1/bills/${g.id}?version=${g.version}`)).status).toBe(204);
+    expect((await board(w.adminA1)).some((x) => x.id === t.id)).toBe(false);
+    expect((await KitchenTicketModel.findById(t.id).lean())?.status).toBe('CANCELLED');
+  });
+});
+
+describe('the pipeline', () => {
+  it('moves New → Accepted → Preparing → Ready → Served, one step at a time', async () => {
+    const [t] = await board(w.adminA1);
+    const step = (from: string) => w.adminA1.post(`/api/v1/kitchen/tickets/${t.id}/advance`, { from });
+    expect(ok<Ticket>(await step('NEW')).status).toBe('ACCEPTED');
+    const stale = await step('NEW');
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.details.current.status).toBe('ACCEPTED');
+    expect(ok<Ticket>(await step('ACCEPTED')).status).toBe('PREPARING');
+    expect(ok<Ticket>(await step('PREPARING')).status).toBe('READY');
+    expect(ok<Ticket>(await step('READY')).status).toBe('SERVED');
+    expect((await board(w.adminA1)).some((x) => x.id === t.id)).toBe(false);
+    expect((await step('SERVED')).status).toBe(409);
+    // The printed slip still works once it has left the board.
+    expect(ok<Ticket>(await w.adminA1.get(`/api/v1/kitchen/tickets/${t.id}`)).number).toBe(t.number);
+  });
+
+  it('priority tickets come first', async () => {
+    const tickets = await board(w.adminA1);
+    const last = tickets.at(-1)!;
+    expect(ok<Ticket>(await w.adminA1.post(`/api/v1/kitchen/tickets/${last.id}/priority`, { priority: true })).priority).toBe(true);
+    expect((await board(w.adminA1))[0].id).toBe(last.id);
+  });
+
+  it('other branches cannot see or move the tickets', async () => {
+    const [t] = await board(w.adminA1);
+    expect((await w.adminA2.get(`/api/v1/kitchen/tickets/${t.id}`)).status).toBe(404);
+    expect((await w.adminA2.get('/api/v1/kitchen/tickets')).status).toBe(409); // A2 has no kitchen display
+    await w.sa.patch(`/api/v1/admin/branches/${w.branchA2}`, { kitchenDisplay: true });
+    expect(await board(w.adminA2)).toEqual([]);
+    expect((await w.adminA2.post(`/api/v1/kitchen/tickets/${t.id}/advance`, { from: t.status })).status).toBe(404);
+  });
+});

@@ -145,6 +145,18 @@ transactions count as revenue.
 Items not available in the branch cannot be added or increased (`400 ITEM_UNAVAILABLE`); a
 draft containing an item that became unavailable cannot be finalised until it is removed.
 
+## Kitchen Display – `/kitchen` (branch scoped; only when the branch has `kitchenDisplay` on, else 409 `KITCHEN_OFF`)
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/bills/:id/kitchen` | sends the order's not-yet-sent items as a new ticket; `null` when nothing is new or the branch has no Kitchen Display. Generating a bill does this automatically |
+| GET | `/kitchen/tickets` | the board: `NEW`, `ACCEPTED`, `PREPARING`, `READY` tickets, priority first, then oldest |
+| GET | `/kitchen/tickets/:id` | one ticket (kitchen slip printing; also works after it was served) |
+| POST | `/kitchen/tickets/:id/advance` | `{ from }` – one step on (READY → SERVED leaves the board). 409 `CONFLICT` with `details.current` if another screen moved it first |
+| POST | `/kitchen/tickets/:id/priority` | `{ priority: boolean }` |
+
+The Super Admin switches it on per branch with `PATCH /admin/branches/:id` `{ kitchenDisplay: true }`.
+
 ## Transactions – `/transactions` (Super Admin: all; Restaurant Admin: assigned branches)
 
 | Method | Path | Notes |

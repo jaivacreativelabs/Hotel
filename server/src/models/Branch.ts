@@ -11,6 +11,8 @@ const branchSchema = new Schema(
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
+    // Orders are sent to a Kitchen Display board for this branch (Super Admin setting)
+    kitchenDisplay: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

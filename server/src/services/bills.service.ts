@@ -31,6 +31,7 @@ import { type AppError, badRequest, conflict, notFound } from '../utils/errors.j
 import { effectiveItem, restaurantSettings, toDraftDTO, toTransactionDTO } from '../utils/serialize.js';
 import { toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
+import { cancelUnstarted, sendToKitchen } from './kitchen.service.js';
 import { seatsInUse } from './tables.service.js';
 
 type DraftLean = Draft & { _id: Types.ObjectId; updatedAt?: Date };
@@ -299,6 +300,7 @@ export async function deleteDraft(actor: AuthUser, scope: BranchScope, id: strin
     { new: true },
   ).lean<DraftLean>();
   if (!deleted) throw await staleVersion(await findDraft(scope, id));
+  await cancelUnstarted(draft._id);
   const label = await tableLabelOf(draft);
   await audit(actor, {
     action: 'DRAFT_DELETED',
@@ -335,7 +337,7 @@ export async function finalizeDraft(
   }
 
   try {
-    return await runInTransaction(async (session) => {
+    const result = await runInTransaction(async (session) => {
       const draft = await findDraft(scope, id, session);
       if (draft.status === 'FINALIZED') {
         const existing = await TransactionModel.findOne({ sourceDraftId: draft._id }).session(session ?? null).lean<TransactionLean>();
@@ -459,6 +461,12 @@ export async function finalizeDraft(
         throw err;
       }
     });
+    if (!result.replayed) {
+      // Whatever the kitchen has not seen yet goes now (the whole order for counter bills).
+      // The bill is already saved, so a kitchen problem must not fail it.
+      await sendToKitchen(actor, scope, draftId).catch((err) => console.error('[kitchen] could not send ticket:', err));
+    }
+    return result;
   } catch (err) {
     if ((err as { code?: number }).code === 11000) {
       // A concurrent request finalised the same draft – return its transaction.

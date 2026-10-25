@@ -4,6 +4,8 @@ import {
   createGroupSchema,
   draftUpdateSchema,
   finalizeSchema,
+  kitchenAdvanceSchema,
+  kitchenPrioritySchema,
   tableCreateSchema,
   tableUpdateSchema,
   transactionEditSchema,
@@ -14,6 +16,7 @@ import { env } from '../config/env.js';
 import { currentUser } from '../middleware/auth.js';
 import { getBranchScope } from '../middleware/scope.js';
 import * as bills from '../services/bills.service.js';
+import * as kitchen from '../services/kitchen.service.js';
 import * as tables from '../services/tables.service.js';
 import * as transactions from '../services/transactions.service.js';
 import { todayIn } from '../utils/dates.js';
@@ -62,6 +65,24 @@ export const deleteDraft = async (req: Request, res: Response) => {
   if (!Number.isInteger(version) || version < 0) throw badRequest('version is required');
   await bills.deleteDraft(currentUser(req), getBranchScope(req), id(req), version);
   res.status(204).end();
+};
+
+// Kitchen Display
+export const sendToKitchen = async (req: Request, res: Response) => {
+  res.json({ data: await kitchen.sendToKitchen(currentUser(req), getBranchScope(req), id(req)) });
+};
+export const kitchenBoard = async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ data: await kitchen.listBoard(getBranchScope(req)) });
+};
+export const kitchenTicket = async (req: Request, res: Response) => {
+  res.json({ data: await kitchen.getTicket(getBranchScope(req), id(req)) });
+};
+export const advanceKitchenTicket = async (req: Request, res: Response) => {
+  res.json({ data: await kitchen.advanceTicket(getBranchScope(req), id(req), parse(kitchenAdvanceSchema, req.body).from) });
+};
+export const kitchenTicketPriority = async (req: Request, res: Response) => {
+  res.json({ data: await kitchen.setTicketPriority(getBranchScope(req), id(req), parse(kitchenPrioritySchema, req.body).priority) });
 };
 
 // Transactions

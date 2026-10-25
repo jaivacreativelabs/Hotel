@@ -142,6 +142,31 @@ function SettingsTab({ restaurant }: { restaurant: RestaurantDTO }) {
   );
 }
 
+/** Turns the branch's Kitchen Display (order tickets board) on or off. */
+function KitchenSwitch({ branch }: { branch: BranchDTO }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const toggle = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await api.patch(`/admin/branches/${branch.id}`, { kitchenDisplay: on }, { branchId: null });
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success(on ? `Kitchen Display on for ${branch.name}` : `Kitchen Display off for ${branch.name}`);
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <label className="switch" title={branch.kitchenDisplay ? 'Orders go to the kitchen board' : 'No kitchen board'}>
+      <input type="checkbox" checked={branch.kitchenDisplay} disabled={busy} onChange={(e) => void toggle(e.target.checked)} aria-label={`Kitchen Display for ${branch.name}`} />
+      {branch.kitchenDisplay ? 'On' : 'Off'}
+    </label>
+  );
+}
+
 export function RestaurantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -238,6 +263,7 @@ export function RestaurantDetailPage() {
                       <th>Code</th>
                       <th>Contact</th>
                       <th>Status</th>
+                      <th>Kitchen Display</th>
                       <th className="right">Actions</th>
                     </tr>
                   </thead>
@@ -252,6 +278,9 @@ export function RestaurantDetailPage() {
                         <td data-label="Contact" className="muted">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
                         <td data-label="Status">
                           <ActiveBadge status={b.status} />
+                        </td>
+                        <td data-label="Kitchen Display">
+                          <KitchenSwitch branch={b} />
                         </td>
                         <td className="right nowrap">
                           <button className="icon-btn plain" onClick={() => navigate(`/admin/menu?restaurantId=${restaurant.id}&branchId=${b.id}`)} title="Branch menu" aria-label={`Menu of ${b.name}`}>

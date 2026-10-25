@@ -3,6 +3,7 @@ import {
   LIMITS,
   TABLE_SHAPES,
   type DraftDTO,
+  type KitchenTicketDTO,
   type TableDTO,
   type TableGroupSummaryDTO,
   type TableShape,
@@ -640,6 +641,7 @@ export function TablesPage() {
   const branchId = activeBranch!.id;
   const tables = useTables(branchId);
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('table');
   const panel = params.get('panel'); // 'add' | 'edit'
@@ -682,6 +684,17 @@ export function TablesPage() {
   };
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
   const exitOrder = () => {
+    // Kitchen Display branches: "Done" saves the order and sends what was added to the kitchen.
+    if (activeBranch!.kitchenDisplay && order && live.sync) {
+      const draftId = order;
+      live.sync
+        .flushNow()
+        .then(() => api.post<KitchenTicketDTO | null>(`/bills/${draftId}/kitchen`))
+        .then((ticket) => {
+          if (ticket) toast.success(`Sent to kitchen: ${ticket.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}`);
+        })
+        .catch((err) => toast.error(err));
+    }
     setPanelOnPhone(false);
     setPanel({ order: null });
     void refresh();

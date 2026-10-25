@@ -102,6 +102,19 @@ are enabled automatically.
 - Completed bills are never edited or deleted. Corrections use **Void** or **Refund** with a reason,
   both recorded in the audit log and excluded from sales.
 
+## Kitchen Display
+
+Optional per branch: **Super Admin → Restaurants → (restaurant) → Branches → Kitchen Display** switch.
+When it is on, that branch's admin gets a **Kitchen** page with four columns – **New → Accepted →
+Preparing → Ready** – that refreshes every few seconds (open it on a kitchen tablet or TV).
+
+- At a table, tapping **Done** after adding food sends the newly added items as one ticket.
+- **Generate Bill** sends anything not sent yet; a counter (New Bill) order goes to the kitchen in full.
+- Each ticket shows the table and group (or *Takeaway*), how long it has waited (amber after 10 min,
+  red after 20), a star for priority and a print button for an 80 mm kitchen slip.
+- **Served** on a Ready ticket takes it off the board. Deleting an order cancels tickets the kitchen
+  has not accepted yet.
+
 ## Receipt printing
 
 *Print Bill* opens a receipt page sized for **80 mm thermal printers** and calls the browser’s print

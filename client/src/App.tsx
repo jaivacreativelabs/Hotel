@@ -8,6 +8,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { BillingPage } from './pages/restaurant/BillingPage';
 import { MenuPage } from './pages/restaurant/MenuPage';
 import { PrintReceiptPage } from './pages/restaurant/PrintReceiptPage';
+import { KitchenPage, PrintKitchenTicketPage } from './pages/restaurant/KitchenPage';
 import { TablesPage } from './pages/restaurant/TablesPage';
 import { TransactionsPage } from './pages/restaurant/TransactionsPage';
 import { useAuth } from './store/auth';
@@ -63,6 +64,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/print/transactions/:id" element={<PrintReceiptPage />} />
+      <Route path="/print/kitchen/:id" element={<PrintKitchenTicketPage />} />
       <Route
         element={
           <RequireRole role="RESTAURANT_ADMIN">
@@ -74,6 +76,7 @@ export function App() {
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/tables" element={<TablesPage />} />
+        <Route path="/kitchen" element={<KitchenPage />} />
       </Route>
       <Route
         path="/admin"

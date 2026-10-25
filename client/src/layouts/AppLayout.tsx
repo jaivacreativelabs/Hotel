@@ -2,6 +2,7 @@ import {
   Building2,
   ChartColumn,
   ChartLine,
+  ChefHat,
   ChevronDown,
   CircleCheck,
   CirclePlus,
@@ -43,6 +44,8 @@ const RESTAURANT_NAV: NavItem[] = [
   { to: '/transactions', label: 'Transactions', icon: FileText },
   { to: '/tables', label: 'Tables', icon: TableIcon },
 ];
+// Shown only when the Super Admin has switched the Kitchen Display on for the branch.
+const KITCHEN_NAV: NavItem = { to: '/kitchen', label: 'Kitchen', icon: ChefHat };
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/restaurants', label: 'Restaurants', icon: Store },
@@ -157,11 +160,12 @@ function UserMenu() {
 }
 
 export function AppLayout() {
-  const { user } = useAuth();
+  const { user, activeBranch } = useAuth();
   const { placeholder, query, setQuery, extra } = useTopbar();
-  const nav = user?.role === 'SUPER_ADMIN' ? ADMIN_NAV : RESTAURANT_NAV;
-  // Phones: Restaurant Admins get a bottom tab bar (4 pages); the Super Admin a slide-in menu.
-  const bottomNav = nav === RESTAURANT_NAV;
+  const isSuper = user?.role === 'SUPER_ADMIN';
+  const nav = isSuper ? ADMIN_NAV : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
+  // Phones: Restaurant Admins get a bottom tab bar; the Super Admin a slide-in menu.
+  const bottomNav = !isSuper;
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   useEffect(() => setNavOpen(false), [location.pathname]);

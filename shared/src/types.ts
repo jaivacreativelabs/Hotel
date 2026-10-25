@@ -3,6 +3,7 @@ import type {
   DraftStatus,
   DraftType,
   ItemStatus,
+  KitchenStatus,
   PaymentMethod,
   PaymentStatus,
   RecordStatus,
@@ -98,6 +99,7 @@ export interface BranchDTO {
   phone: string;
   email: string;
   status: RecordStatus;
+  kitchenDisplay: boolean;
   createdAt: string;
 }
 
@@ -106,6 +108,8 @@ export interface BranchContextDTO {
   id: string;
   name: string;
   code: string;
+  /** The branch uses the Kitchen Display (orders are sent to the kitchen board). */
+  kitchenDisplay: boolean;
   restaurant: { id: string; name: string; settings: RestaurantSettings };
 }
 
@@ -222,6 +226,26 @@ export interface TableDTO {
 export interface TablesResponseDTO {
   tables: TableDTO[];
   floors: string[];
+}
+
+/** One order sent to the branch kitchen (a KOT). */
+export interface KitchenTicketDTO {
+  id: string;
+  /** "20261025-0001": date + running number of the day in the branch */
+  number: string;
+  branchId: string;
+  draftId: string;
+  type: DraftType;
+  /** "" for counter / takeaway orders */
+  tableLabel: string;
+  groupName: string;
+  items: { menuItemId: string; name: string; quantity: number }[];
+  status: KitchenStatus;
+  priority: boolean;
+  createdByName: string;
+  createdAt: string;
+  /** When the ticket entered its current status */
+  statusAt: string;
 }
 
 export interface TransactionItemDTO {

@@ -3118,3 +3118,180 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============ Kitchen Display ============ */
+.kds-page {
+  display: flex;
+  flex-direction: column;
+}
+.kds-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+  flex: 1;
+}
+.kds-column {
+  --kds-tone: var(--color-info);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+.kds-column.accepted {
+  --kds-tone: var(--color-accent-purple);
+}
+.kds-column.preparing {
+  --kds-tone: var(--status-partial);
+}
+.kds-column.ready {
+  --kds-tone: var(--color-success);
+}
+.kds-column-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  font-size: var(--font-size-base, 0.9375rem);
+  font-weight: 700;
+  border-bottom: 1px solid var(--color-border);
+  border-top: 3px solid var(--kds-tone);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.kds-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--kds-tone);
+}
+.kds-count {
+  margin-left: auto;
+  min-width: 26px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+.kds-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+.kds-empty {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--color-text-subtle);
+  font-size: 0.875rem;
+}
+.kds-ticket {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.kds-ticket.priority {
+  border-color: var(--color-secondary);
+  background: #fffdf2;
+  box-shadow: 0 0 0 1px var(--color-secondary) inset;
+}
+.kds-ticket-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+.kds-ticket-no {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.kds-ticket-where {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  margin-top: 2px;
+}
+.kds-star-on {
+  color: var(--color-secondary);
+  fill: var(--color-secondary);
+}
+.kds-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.kds-timer.slow {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+.kds-timer.late {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.kds-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9375rem;
+}
+.kds-ticket-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kds-ticket-actions .btn {
+  flex: 1;
+}
+.kds-ticket-actions .icon-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.kds-ticket-actions .icon-btn.active {
+  border-color: var(--color-secondary);
+  background: var(--color-secondary-soft);
+}
+@media (max-width: 1100px) {
+  .kds-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Phones: swipe between the four columns */
+@media (max-width: 768px) {
+  .kds-board {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 10px;
+    margin: 0 calc(-1 * var(--page-padding));
+    padding: 0 var(--page-padding) 8px;
+  }
+  .kds-column {
+    flex: 0 0 85%;
+    scroll-snap-align: start;
+    min-height: 360px;
+  }
+}

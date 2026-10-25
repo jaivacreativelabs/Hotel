@@ -56,6 +56,7 @@ Indexes: `{ nameKey: 1 }` unique.
 | code | string | short upper-case code, unique within the restaurant |
 | address, phone, email | string | |
 | status | `ACTIVE` \| `INACTIVE` | |
+| kitchenDisplay | boolean | Kitchen Display board on for this branch (Super Admin switch, default off) |
 
 Indexes: `{ restaurantId: 1, code: 1 }` unique, `{ restaurantId: 1, nameKey: 1 }` unique.
 
@@ -140,6 +141,25 @@ Indexes:
 - `{ branchId: 1, status: 1, type: 1 }`
 - unique partial `{ tableId: 1, groupName: 1 }` where `status = 'ACTIVE'`
 - unique partial `{ branchId: 1, ownerUserId: 1 }` where `status = 'ACTIVE' and type = 'COUNTER'`
+
+## kitchentickets (Kitchen Display / KOT)
+
+| Field | Type | Notes |
+|---|---|---|
+| restaurantId, branchId | ObjectId | |
+| number | string | `20261025-0001` – date + running number of the day per branch (`counters` key `kot:<branchId>:<yyyymmdd>`) |
+| draftId | ObjectId → drafts | the order it came from |
+| type, tableLabel, groupName | | `TABLE` / `COUNTER`; empty table label = takeaway |
+| items | `{ menuItemId, name, quantity }[]` | only what was added since the previous ticket |
+| status | `NEW` → `ACCEPTED` → `PREPARING` → `READY` → `SERVED`, or `CANCELLED` | |
+| priority | boolean | starred tickets are listed first |
+| statusAt | Date | when it entered the current status |
+| createdBy, createdByName | | |
+
+Drafts keep `kitchenSent` (the most ever sent per dish) and `kitchenRev`, so a ticket carries only new
+items and the same food is never sent twice. Deleting an order cancels its tickets that are still `NEW`.
+
+Indexes: `{ branchId: 1, status: 1, createdAt: 1 }`, `{ branchId: 1, number: 1 }` unique, `{ draftId: 1 }`.
 
 ## transactions (completed bills – immutable)
 

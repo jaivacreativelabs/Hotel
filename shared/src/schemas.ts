@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import {
   DISCOUNT_TYPES,
+  KITCHEN_STATUSES,
   LIMITS,
   PAYMENT_METHODS,
   RECORD_STATUSES,
@@ -87,8 +88,13 @@ export const branchCreateSchema = z.strictObject({
   address: optionalText(300),
   phone: optionalPhone,
   email: optionalEmail,
+  /** Kitchen Display (order tickets board) for this branch */
+  kitchenDisplay: z.boolean().optional(),
 });
 export const branchUpdateSchema = branchCreateSchema.omit({ restaurantId: true }).partial();
+
+export const kitchenAdvanceSchema = z.strictObject({ from: z.enum(KITCHEN_STATUSES) });
+export const kitchenPrioritySchema = z.strictObject({ priority: z.boolean() });
 
 // ---------- Users (Restaurant Admins only) ----------
 // Branches are fully isolated: a Restaurant Admin manages exactly one branch. Only the

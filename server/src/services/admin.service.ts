@@ -200,7 +200,10 @@ export async function updateBranch(actor: AuthUser, id: string, input: Partial<O
     entityId: b._id,
     restaurantId: b.restaurantId,
     branchId: b._id,
-    summary: `Updated branch "${b.name}"`,
+    summary:
+      Object.keys(input).length === 1 && input.kitchenDisplay !== undefined
+        ? `Kitchen Display ${input.kitchenDisplay ? 'on' : 'off'} for branch "${b.name}"`
+        : `Updated branch "${b.name}"`,
     meta: { fields: Object.keys(input) },
   });
   return toBranchDTO(b.toObject() as BranchLean);

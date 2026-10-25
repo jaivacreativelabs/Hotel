@@ -45,6 +45,13 @@ const draftSchema = new Schema(
     },
     status: { type: String, enum: DRAFT_STATUSES, default: 'ACTIVE' },
     version: { type: Number, default: 0 },
+    // Quantities already sent to the kitchen; a new ticket carries only what was added since.
+    // Kept apart from `version` so sending never conflicts with the bill being edited.
+    kitchenSent: {
+      type: [new Schema({ menuItemId: { type: Schema.Types.ObjectId, required: true }, quantity: { type: Number, required: true } }, { _id: false })],
+      default: [],
+    },
+    kitchenRev: { type: Number, default: 0 },
     transactionId: { type: Schema.Types.ObjectId, ref: 'Transaction', default: null },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
