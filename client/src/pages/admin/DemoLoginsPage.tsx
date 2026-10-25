@@ -39,14 +39,16 @@ function DemoRow({ account }: { account: AdminDemoAccountDTO }) {
           </div>
         </div>
       </td>
-      <td>
-        {account.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Restaurant Admin'}
-        <span className="cell-sub">{account.hint}</span>
+      <td data-label="Access">
+        <span>
+          {account.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Restaurant Admin'}
+          <span className="cell-sub">{account.hint}</span>
+        </span>
       </td>
-      <td>
+      <td data-label="Status">
         <ActiveBadge status={account.status} />
       </td>
-      <td>
+      <td data-label="Button label">
         <input
           className="input input-sm"
           style={{ width: 190 }}
@@ -58,7 +60,7 @@ function DemoRow({ account }: { account: AdminDemoAccountDTO }) {
           aria-label={`Button label for ${account.name}`}
         />
       </td>
-      <td className="right">
+      <td data-label="On login page" className="right">
         <label className="switch" title={account.demoEnabled ? 'Shown on the login page' : 'Hidden'}>
           <input type="checkbox" checked={account.demoEnabled} disabled={busy || account.status !== 'ACTIVE'} onChange={(e) => void save(e.target.checked)} />
           {account.demoEnabled ? 'Shown' : 'Hidden'}

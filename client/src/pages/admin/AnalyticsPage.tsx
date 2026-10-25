@@ -94,8 +94,8 @@ export function AnalyticsPage() {
                       {o.daily.map((d) => (
                         <tr key={d.key}>
                           <td>{formatDay(d.key)}</td>
-                          <td className="right num">{d.bills}</td>
-                          <td className="right num">{formatMoney(d.sales)}</td>
+                          <td data-label="Bills" className="right num">{d.bills}</td>
+                          <td data-label="Sales" className="right num">{formatMoney(d.sales)}</td>
                         </tr>
                       ))}
                     </tbody>

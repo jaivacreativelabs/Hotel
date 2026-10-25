@@ -179,7 +179,7 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
                   <strong>{u.name}</strong>
                   <span className="cell-sub">{u.email}</span>
                 </td>
-                <td>
+                <td data-label="Branch">
                   <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
                     {u.branchIds.map((id) => (
                       <span key={id} className="badge badge-primary badge-sm">
@@ -188,10 +188,10 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
                     ))}
                   </div>
                 </td>
-                <td>
+                <td data-label="Status">
                   <ActiveBadge status={u.status} />
                 </td>
-                <td className="muted nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'}</td>
+                <td data-label="Last sign-in" className="muted nowrap">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Never'}</td>
                 <td className="right nowrap">
                   <button className="icon-btn plain" onClick={() => setEditing(u)} title="Edit / reassign" aria-label={`Edit ${u.name}`}>
                     <Pencil />

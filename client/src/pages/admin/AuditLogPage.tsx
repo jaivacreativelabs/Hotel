@@ -73,14 +73,16 @@ export function AuditLogPage() {
                   {logs.data.data.map((l) => (
                     <tr key={l.id}>
                       <td className="nowrap muted">{formatDateTime(l.createdAt)}</td>
-                      <td>
-                        {l.actorName}
-                        <span className="cell-sub">{l.actorRole === 'SUPER_ADMIN' ? 'Super Admin' : l.actorRole === 'RESTAURANT_ADMIN' ? 'Restaurant Admin' : 'System'}</span>
+                      <td data-label="Who">
+                        <span>
+                          {l.actorName}
+                          <span className="cell-sub">{l.actorRole === 'SUPER_ADMIN' ? 'Super Admin' : l.actorRole === 'RESTAURANT_ADMIN' ? 'Restaurant Admin' : 'System'}</span>
+                        </span>
                       </td>
-                      <td>
+                      <td data-label="Action">
                         <span className="badge badge-gray badge-sm">{l.action.replace(/_/g, ' ').toLowerCase()}</span>
                       </td>
-                      <td>{l.summary}</td>
+                      <td data-label="Details">{l.summary}</td>
                     </tr>
                   ))}
                 </tbody>

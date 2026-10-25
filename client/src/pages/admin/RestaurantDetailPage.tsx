@@ -248,9 +248,9 @@ export function RestaurantDetailPage() {
                           <strong>{b.name}</strong>
                           <span className="cell-sub">{b.address}</span>
                         </td>
-                        <td>{b.code}</td>
-                        <td className="muted">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
-                        <td>
+                        <td data-label="Code">{b.code}</td>
+                        <td data-label="Contact" className="muted">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
+                        <td data-label="Status">
                           <ActiveBadge status={b.status} />
                         </td>
                         <td className="right nowrap">

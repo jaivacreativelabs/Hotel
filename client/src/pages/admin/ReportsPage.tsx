@@ -100,10 +100,10 @@ export function ReportsPage() {
                   overview.data.byBranch.map((b) => (
                     <tr key={b.key}>
                       <td>{b.restaurantName}</td>
-                      <td>{b.name}</td>
-                      <td className="right num">{b.bills}</td>
-                      <td className="right num">{formatMoney(b.sales)}</td>
-                      <td className="right num">{formatMoney(b.bills ? Math.round(b.sales / b.bills) : 0)}</td>
+                      <td data-label="Branch">{b.name}</td>
+                      <td data-label="Bills" className="right num">{b.bills}</td>
+                      <td data-label="Sales" className="right num">{formatMoney(b.sales)}</td>
+                      <td data-label="Average bill" className="right num">{formatMoney(b.bills ? Math.round(b.sales / b.bills) : 0)}</td>
                     </tr>
                   ))
                 )}
