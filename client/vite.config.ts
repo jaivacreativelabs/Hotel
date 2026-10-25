@@ -1,0 +1,20 @@
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
+
+const api = process.env.VITE_API_PROXY ?? 'http://localhost:4000';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    // Same-origin in development: the browser only ever talks to Vite.
+    proxy: {
+      '/api': { target: api, changeOrigin: false },
+      '/uploads': { target: api, changeOrigin: false },
+    },
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
+});

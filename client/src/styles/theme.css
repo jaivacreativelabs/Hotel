@@ -1,0 +1,79 @@
+/*
+ * Design tokens – the single place to change colours and typography.
+ * Brand colours come from the restaurant logo (green, sunflower yellow, black on white).
+ */
+:root {
+  /* Brand */
+  --color-primary: #1e7b34;
+  --color-primary-hover: #176229;
+  --color-primary-soft: #e7f3ea;
+  --color-primary-contrast: #ffffff;
+  --color-secondary: #f7c600;
+  --color-secondary-hover: #e3b500;
+  --color-secondary-soft: #fff6cc;
+  --color-secondary-contrast: #1a1d1a;
+
+  /* Surfaces & text */
+  --color-bg: #f7f8f4;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f2f4ef;
+  --color-text: #1a1d1a;
+  --color-text-muted: #667065;
+  --color-text-subtle: #8c948a;
+  --color-border: #e3e7e0;
+  --color-border-strong: #cbd2c7;
+  --color-focus: #1e7b34;
+
+  /* Feedback */
+  --color-success: #1e9e45;
+  --color-success-soft: #e8f6ec;
+  --color-danger: #d43c3c;
+  --color-danger-hover: #b92f2f;
+  --color-danger-soft: #fdecec;
+  --color-warning: #b07d00;
+  --color-warning-soft: #fff4d1;
+  --color-info: #2f6fdb;
+  --color-info-soft: #eaf1fd;
+  --color-accent-purple: #7b4fd8;
+  --color-accent-purple-soft: #f1ebfd;
+
+  /* Table status (legend: Available / Partially Occupied / Full / Reserved) */
+  --status-available: #1e9e45;
+  --status-available-soft: #ecf8ef;
+  --status-partial: #e5a800;
+  --status-partial-ink: #3d2f00;
+  --status-partial-soft: #fff6da;
+  --status-full: #dc3b3b;
+  --status-full-soft: #fdeeee;
+  --status-reserved: #8a9088;
+  --status-reserved-soft: #f0f1ef;
+
+  /* Table illustration colours */
+  --table-wood: #c98a4b;
+  --table-wood-dark: #8f5a2b;
+
+  /* Typography */
+  --font-family: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-size-xs: 0.72rem;
+  --font-size-sm: 0.8rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 0.975rem;
+  --font-size-xl: 1.2rem;
+  --font-size-2xl: 1.6rem;
+
+  /* Shape */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgb(20 30 20 / 0.06);
+  --shadow-card: 0 1px 3px rgb(20 30 20 / 0.06), 0 1px 2px rgb(20 30 20 / 0.04);
+  --shadow-panel: 0 8px 30px rgb(20 30 20 / 0.08);
+  --shadow-modal: 0 20px 50px rgb(20 30 20 / 0.2);
+
+  /* Layout */
+  --sidebar-width: 220px;
+  --topbar-height: 64px;
+  --panel-width: 360px;
+  --page-padding: 22px;
+}

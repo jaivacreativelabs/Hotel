@@ -1,0 +1,131 @@
+import type { Request, Response } from 'express';
+import {
+  analyticsQuerySchema,
+  auditQuerySchema,
+  branchCreateSchema,
+  branchUpdateSchema,
+  resetPasswordSchema,
+  restaurantCreateSchema,
+  restaurantSettingsSchema,
+  restaurantUpdateSchema,
+  salesReportQuerySchema,
+  statusSchema,
+  transactionQuerySchema,
+  userCreateSchema,
+  userUpdateSchema,
+} from '@rb/shared';
+import { currentUser } from '../middleware/auth.js';
+import { AuditLogModel } from '../models/index.js';
+import * as admin from '../services/admin.service.js';
+import * as analytics from '../services/analytics.service.js';
+import { exportTransactionsCsv } from '../services/transactions.service.js';
+import { todayIn } from '../utils/dates.js';
+import { env } from '../config/env.js';
+import { toAuditLogDTO } from '../utils/serialize.js';
+import { parse, toObjectId } from '../utils/validate.js';
+
+const id = (req: Request) => String(req.params.id);
+
+// Restaurants
+export const listRestaurants = async (req: Request, res: Response) => {
+  res.json({ data: await admin.listRestaurants(String(req.query.status ?? '')) });
+};
+export const createRestaurant = async (req: Request, res: Response) => {
+  res.status(201).json({ data: await admin.createRestaurant(currentUser(req), parse(restaurantCreateSchema, req.body)) });
+};
+export const getRestaurant = async (req: Request, res: Response) => {
+  res.json({ data: await admin.getRestaurantDetail(id(req)) });
+};
+export const updateRestaurant = async (req: Request, res: Response) => {
+  res.json({ data: await admin.updateRestaurant(currentUser(req), id(req), parse(restaurantUpdateSchema, req.body)) });
+};
+export const setRestaurantStatus = async (req: Request, res: Response) => {
+  const { status } = parse(statusSchema, req.body);
+  res.json({ data: await admin.setRestaurantStatus(currentUser(req), id(req), status) });
+};
+export const updateRestaurantSettings = async (req: Request, res: Response) => {
+  res.json({
+    data: await admin.updateRestaurantSettings(currentUser(req), id(req), parse(restaurantSettingsSchema, req.body)),
+  });
+};
+
+// Branches
+export const listBranches = async (req: Request, res: Response) => {
+  res.json({ data: await admin.listBranches(req.query.restaurantId) });
+};
+export const createBranch = async (req: Request, res: Response) => {
+  res.status(201).json({ data: await admin.createBranch(currentUser(req), parse(branchCreateSchema, req.body)) });
+};
+export const updateBranch = async (req: Request, res: Response) => {
+  res.json({ data: await admin.updateBranch(currentUser(req), id(req), parse(branchUpdateSchema, req.body)) });
+};
+export const setBranchStatus = async (req: Request, res: Response) => {
+  const { status } = parse(statusSchema, req.body);
+  res.json({ data: await admin.setBranchStatus(currentUser(req), id(req), status) });
+};
+
+// Restaurant Admin accounts
+export const listUsers = async (req: Request, res: Response) => {
+  res.json({ data: await admin.listRestaurantAdmins(req.query) });
+};
+export const createUser = async (req: Request, res: Response) => {
+  res.status(201).json({ data: await admin.createRestaurantAdmin(currentUser(req), parse(userCreateSchema, req.body)) });
+};
+export const updateUser = async (req: Request, res: Response) => {
+  res.json({ data: await admin.updateRestaurantAdmin(currentUser(req), id(req), parse(userUpdateSchema, req.body)) });
+};
+export const setUserStatus = async (req: Request, res: Response) => {
+  const { status } = parse(statusSchema, req.body);
+  res.json({ data: await admin.setRestaurantAdminStatus(currentUser(req), id(req), status) });
+};
+export const resetUserPassword = async (req: Request, res: Response) => {
+  const { password } = parse(resetPasswordSchema, req.body);
+  res.json({ data: await admin.resetRestaurantAdminPassword(currentUser(req), id(req), password) });
+};
+
+// Analytics & reports
+export const analyticsOverview = async (req: Request, res: Response) => {
+  res.json({ data: await analytics.analyticsOverview(parse(analyticsQuerySchema, req.query)) });
+};
+
+function sendCsv(res: Response, name: string, csv: string) {
+  const stamp = todayIn(env.APP_TIMEZONE);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}-${stamp}.csv"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(csv);
+}
+
+export const transactionsCsv = async (req: Request, res: Response) => {
+  const q = parse(transactionQuerySchema, req.query);
+  sendCsv(res, 'transactions', await exportTransactionsCsv(currentUser(req), q));
+};
+export const salesCsv = async (req: Request, res: Response) => {
+  const q = parse(salesReportQuerySchema, req.query);
+  sendCsv(res, `sales-${q.granularity === 'month' ? 'monthly' : 'daily'}`, await analytics.salesReportCsv(q));
+};
+export const restaurantsCsv = async (req: Request, res: Response) => {
+  sendCsv(res, 'restaurant-sales', await analytics.restaurantReportCsv(parse(analyticsQuerySchema, req.query)));
+};
+export const branchesCsv = async (req: Request, res: Response) => {
+  sendCsv(res, 'branch-sales', await analytics.branchReportCsv(parse(analyticsQuerySchema, req.query)));
+};
+
+export const auditLogs = async (req: Request, res: Response) => {
+  const q = parse(auditQuerySchema, req.query);
+  const filter: Record<string, unknown> = {};
+  if (q.restaurantId) filter.restaurantId = toObjectId(q.restaurantId, 'restaurant');
+  if (q.action) filter.action = q.action.toUpperCase();
+  const [total, rows] = await Promise.all([
+    AuditLogModel.countDocuments(filter),
+    AuditLogModel.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((q.page - 1) * q.limit)
+      .limit(q.limit)
+      .lean(),
+  ]);
+  res.json({
+    data: rows.map((r) => toAuditLogDTO(r)),
+    meta: { page: q.page, limit: q.limit, total, totalPages: Math.max(1, Math.ceil(total / q.limit)) },
+  });
+};

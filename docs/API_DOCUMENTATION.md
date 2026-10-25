@@ -1,0 +1,152 @@
+# API Documentation (v1)
+
+Base URL: `/api/v1`. All bodies are JSON unless noted. Money is integer **paise**.
+
+## Conventions
+
+**Success:** `{ "data": ..., "meta": { ... } }` (`meta` only on paginated lists).
+
+**Error:** `{ "error": { "code": "VALIDATION_ERROR", "message": "...", "details": ... } }`
+
+| Status | Code(s) |
+|---|---|
+| 400 | `VALIDATION_ERROR`, `INVALID_ID`, `BAD_REQUEST`, `ITEM_UNAVAILABLE`, `EMPTY_BILL` |
+| 401 | `UNAUTHENTICATED` |
+| 403 | `FORBIDDEN`, `CSRF` |
+| 404 | `NOT_FOUND` |
+| 409 | `CONFLICT` (stale version – `details.current` holds the latest draft), `DUPLICATE`, `SEATS_UNAVAILABLE` |
+| 413 | `FILE_TOO_LARGE` |
+| 429 | `RATE_LIMITED` |
+| 500 | `INTERNAL` (no stack traces are returned) |
+
+**Authentication:** `POST /auth/login` sets an `httpOnly`, `SameSite=Strict` cookie
+(`rb_session`, signed JWT). Every protected request reloads the user from MongoDB and
+rejects inactive users or revoked sessions (`tokenVersion`).
+
+**CSRF:** every non-GET request must send `X-Requested-With: rb-client`; when an `Origin`
+header is present it must be in `CORS_ORIGINS` / the app origin.
+
+**Branch scope:** restaurant-level endpoints take the branch from the `X-Branch-Id` header
+(or `branchId` query). Restaurant Admins must be assigned to that branch, and the branch and
+its restaurant must be active. The Super Admin may pass any branch, or `restaurantId` alone
+for the shared (restaurant-wide) menu.
+
+Unknown body fields are rejected (`.strict()` schemas), so fields such as `role`,
+`restaurantId` or `price`/`total` on bills cannot be smuggled in.
+
+## Auth – `/auth`
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| POST | `/auth/login` | public (rate limited) | `{ email, password }` → `{ user }` + cookie |
+| POST | `/auth/logout` | any | clears cookie |
+| GET | `/auth/me` | any | `{ user, branches: [{ id, name, code, restaurant: { id, name, settings } }] }` |
+| POST | `/auth/change-password` | any | `{ currentPassword, newPassword }` – revokes other sessions |
+
+## Super Admin – `/admin/*` (SUPER_ADMIN only, 403 for everyone else)
+
+### Restaurants
+| Method | Path | Body / query |
+|---|---|---|
+| GET | `/admin/restaurants` | `?status=` – includes branch counts |
+| POST | `/admin/restaurants` | `{ name, phone?, email?, address?, gstin? }` |
+| GET | `/admin/restaurants/:id` | restaurant + branches + admins |
+| PATCH | `/admin/restaurants/:id` | any of the create fields |
+| PATCH | `/admin/restaurants/:id/status` | `{ status: 'ACTIVE' \| 'INACTIVE' }` |
+| PATCH | `/admin/restaurants/:id/settings` | `{ taxes: [{ name, rateBps }], pricesIncludeTax, receiptFooter }` |
+
+### Branches
+| Method | Path | Body / query |
+|---|---|---|
+| GET | `/admin/branches` | `?restaurantId=` |
+| POST | `/admin/branches` | `{ restaurantId, name, code, address?, phone?, email? }` |
+| PATCH | `/admin/branches/:id` | `{ name?, code?, address?, phone?, email? }` |
+| PATCH | `/admin/branches/:id/status` | `{ status }` |
+
+### Restaurant Admin accounts
+| Method | Path | Body |
+|---|---|---|
+| GET | `/admin/users` | `?restaurantId=&status=` – Restaurant Admins only |
+| POST | `/admin/users` | `{ name, email, password, branchIds: [] }` – role is always `RESTAURANT_ADMIN` |
+| PATCH | `/admin/users/:id` | `{ name?, branchIds? }` (re-assignment) |
+| PATCH | `/admin/users/:id/status` | `{ status }` – deactivation revokes sessions |
+| POST | `/admin/users/:id/reset-password` | `{ password }` |
+
+Super Admin accounts cannot be read, modified or created through these endpoints.
+
+### Analytics & reports
+| Method | Path | Query |
+|---|---|---|
+| GET | `/admin/analytics/overview` | `from, to (YYYY-MM-DD), restaurantId?, branchId?` → `summary, daily, monthly, byRestaurant, byBranch, byPaymentMethod, statusBreakdown` |
+| GET | `/admin/reports/transactions.csv` | same filters as `/transactions` |
+| GET | `/admin/reports/sales.csv` | `granularity=day\|month`, `from, to, restaurantId?, branchId?` |
+| GET | `/admin/reports/restaurants.csv` | `from, to` |
+| GET | `/admin/reports/branches.csv` | `from, to, restaurantId?` |
+| GET | `/admin/audit-logs` | `page, limit, restaurantId?, action?` |
+
+Dates are interpreted in `APP_TIMEZONE` (default `Asia/Kolkata`). Only `COMPLETED`
+transactions count as revenue.
+
+## Menu – `/menu` (both roles, branch scoped)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/menu/categories` | effective categories for the scope (`includeInactive=true` for management) |
+| POST | `/menu/categories` | `{ name, icon? }` – created in the caller's scope (branch, or shared for SA without branch) |
+| PATCH | `/menu/categories/:id` | `{ name?, icon? }` – only categories owned by the scope |
+| PATCH | `/menu/categories/:id/status` | `{ status }` |
+| POST | `/menu/categories/reorder` | `{ ids: [] }` |
+| GET | `/menu/items` | `?categoryId=&q=&includeArchived=` – effective prices / availability |
+| POST | `/menu/items` | `{ categoryId, name, description?, price, taxable?, isAvailable? }` |
+| PATCH | `/menu/items/:id` | owned item: any field. Shared item in branch scope: only `price`/`isAvailable` → stored as branch override |
+| DELETE | `/menu/items/:id/override` | removes this branch's override of a shared item |
+| PATCH | `/menu/items/:id/availability` | `{ isAvailable }` (override for shared items in branch scope) |
+| POST | `/menu/items/:id/image` | `multipart/form-data`, field `image` (JPEG/PNG/WebP, ≤ 2 MB, magic bytes checked). For a shared item in branch scope this sets the branch's own photo |
+| DELETE | `/menu/items/:id/image` | removes the photo (branch scope + shared item: back to the main-menu photo) |
+| POST | `/menu/items/:id/archive` | archive (soft delete) – history keeps its snapshots |
+| POST | `/menu/items/:id/restore` | un-archive |
+
+## Tables – `/tables` (branch scoped)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/tables` | `?floor=` → tables with `seatsUsed`, `occupancy`, `groups[]` (draft summaries) and the floor list |
+| POST | `/tables` | `{ label, seats, shape, floor, status }` |
+| PATCH | `/tables/:id` | `{ label?, seats?, shape?, floor?, status? }` (seats cannot drop below seats in use) |
+| DELETE | `/tables/:id` | deactivates; rejected while the table has active groups |
+
+## Bills (drafts) – `/bills` (branch scoped)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/bills/counter` | the caller's active counter (takeaway) draft – created if missing |
+| GET | `/bills?tableId=` | active drafts of a table |
+| POST | `/bills/table-groups` | `{ tableId, guestCount, groupTag? }` → new group draft (`409 SEATS_UNAVAILABLE` if it does not fit) |
+| GET | `/bills/:id` | draft (any status) |
+| PUT | `/bills/:id` | `{ version, items: [{ menuItemId, quantity }], customerName?, discount?, guestCount?, groupTag? }` – the server looks up names/prices, recomputes totals and returns the new version; `409 CONFLICT` on a stale version |
+| POST | `/bills/:id/finalize` | `{ version, paymentMethod, idempotencyKey }` → `{ transaction }`. Repeating the call with the same key returns the same transaction |
+| DELETE | `/bills/:id?version=` | marks the draft `DELETED` (audit logged); never touches transactions |
+
+Items not available in the branch cannot be added or increased (`400 ITEM_UNAVAILABLE`); a
+draft containing an item that became unavailable cannot be finalised until it is removed.
+
+## Transactions – `/transactions` (Super Admin: all; Restaurant Admin: assigned branches)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/transactions` | `page, limit (≤100), q (bill no./table), from, to, paymentMethod, status, restaurantId?, branchId?` |
+| GET | `/transactions/:id` | full transaction with snapshots |
+| GET | `/transactions/export.csv` | same filters, scoped to the caller |
+| POST | `/transactions/:id/void` | `{ reason }` – COMPLETED → VOIDED (audit logged) |
+| POST | `/transactions/:id/refund` | `{ reason }` – COMPLETED → REFUNDED (audit logged) |
+
+Restaurant Admins always get results limited to their assigned branches; a `branchId` they
+are not assigned to returns 403.
+
+## Static files
+
+`GET /uploads/menu/<file>` – uploaded menu images (served with `nosniff` and a restrictive CSP).
+
+## Health
+
+`GET /api/v1/health` → `{ data: { status: 'ok', db: 'connected' } }`

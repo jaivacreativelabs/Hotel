@@ -1,0 +1,64 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+// Same depth from src/config and dist/config → repository root.
+export const repoRoot = path.resolve(here, '../../..');
+export const serverRoot = path.resolve(here, '../..');
+
+if (process.env.NODE_ENV !== 'test') {
+  const envFile = path.join(repoRoot, '.env');
+  // Existing environment variables win over the file.
+  if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+}
+
+const bool = (fallback: boolean) =>
+  z
+    .enum(['true', 'false', '1', '0'])
+    .optional()
+    .transform((v) => (v === undefined ? fallback : v === 'true' || v === '1'));
+
+const isProd = process.env.NODE_ENV === 'production';
+
+const schema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(4000),
+  MONGODB_URI: z
+    .string({ error: 'MONGODB_URI is required (see README → "Getting a MongoDB URL")' })
+    .min(1, 'MONGODB_URI is required (see README → "Getting a MongoDB URL")'),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  SESSION_TTL_HOURS: z.coerce.number().positive().max(24 * 30).default(12),
+  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  APP_TIMEZONE: z.string().default('Asia/Kolkata'),
+  UPLOAD_DIR: z.string().default(path.join(serverRoot, 'uploads')),
+  COOKIE_SECURE: bool(isProd),
+  SERVE_CLIENT: bool(false),
+  CLIENT_DIST: z.string().default(path.join(repoRoot, 'client', 'dist')),
+  LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+});
+
+const parsed = schema.safeParse(process.env);
+if (!parsed.success) {
+  const lines = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
+  console.error(`Invalid environment configuration:\n${lines.join('\n')}\nCopy .env.example to .env and fill it in.`);
+  process.exit(1);
+}
+
+export const env = {
+  ...parsed.data,
+  corsOrigins: parsed.data.CORS_ORIGINS.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  isProd: parsed.data.NODE_ENV === 'production',
+  isTest: parsed.data.NODE_ENV === 'test',
+};
+
+try {
+  Intl.DateTimeFormat('en-US', { timeZone: env.APP_TIMEZONE });
+} catch {
+  console.error(`APP_TIMEZONE "${env.APP_TIMEZONE}" is not a valid IANA time zone`);
+  process.exit(1);
+}

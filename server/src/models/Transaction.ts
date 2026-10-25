@@ -1,0 +1,103 @@
+import { model, Schema, type HydratedDocument, type InferSchemaType } from 'mongoose';
+import { DRAFT_TYPES, PAYMENT_METHODS, PAYMENT_STATUSES, TRANSACTION_STATUSES } from '@rb/shared';
+
+const itemSnapshotSchema = new Schema(
+  {
+    menuItemId: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true },
+    name: { type: String, required: true },
+    categoryName: { type: String, default: '' },
+    imageUrl: { type: String, default: null },
+    unitPrice: { type: Number, required: true },
+    quantity: { type: Number, required: true },
+    taxable: { type: Boolean, required: true },
+    lineTotal: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
+const transactionSchema = new Schema(
+  {
+    billNumber: { type: String, required: true },
+    restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    tableId: { type: Schema.Types.ObjectId, ref: 'Table', default: null },
+    tableLabel: { type: String, default: '' },
+    type: { type: String, enum: DRAFT_TYPES, required: true },
+    groupName: { type: String, default: '' },
+    guestCount: { type: Number, default: 0 },
+    customerName: { type: String, default: '' },
+    restaurantSnapshot: {
+      name: String,
+      address: String,
+      phone: String,
+      gstin: String,
+      receiptFooter: String,
+    },
+    branchSnapshot: { name: String, code: String, address: String, phone: String },
+    items: { type: [itemSnapshotSchema], required: true },
+    subtotal: { type: Number, required: true },
+    discount: {
+      type: new Schema({ type: { type: String }, value: Number, amount: Number }, { _id: false }),
+      default: null,
+    },
+    taxes: { type: [new Schema({ name: String, rateBps: Number, amount: Number }, { _id: false })], default: [] },
+    taxTotal: { type: Number, required: true },
+    grandTotal: { type: Number, required: true },
+    pricesIncludeTax: { type: Boolean, default: false },
+    paymentMethod: { type: String, enum: PAYMENT_METHODS, required: true },
+    paymentStatus: { type: String, enum: PAYMENT_STATUSES, default: 'PAID' },
+    status: { type: String, enum: TRANSACTION_STATUSES, default: 'COMPLETED' },
+    statusChange: {
+      type: new Schema(
+        { at: Date, by: { type: Schema.Types.ObjectId, ref: 'User' }, byName: String, reason: String },
+        { _id: false },
+      ),
+      default: null,
+    },
+    sourceDraftId: { type: Schema.Types.ObjectId, ref: 'Draft', required: true },
+    idempotencyKey: { type: String, required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    createdByName: { type: String, default: '' },
+    finalizedAt: { type: Date, required: true },
+  },
+  { timestamps: true },
+);
+
+transactionSchema.index({ branchId: 1, billNumber: 1 }, { unique: true });
+transactionSchema.index({ sourceDraftId: 1 }, { unique: true });
+transactionSchema.index({ branchId: 1, idempotencyKey: 1 }, { unique: true });
+transactionSchema.index({ branchId: 1, finalizedAt: -1 });
+transactionSchema.index({ restaurantId: 1, finalizedAt: -1 });
+transactionSchema.index({ status: 1, finalizedAt: -1 });
+
+// ---- Immutability guard: completed bills are never rewritten. ----
+const MUTABLE = new Set(['status', 'paymentStatus', 'statusChange', 'updatedAt']);
+
+function assertOnlyStatusFields(update: Record<string, unknown> | null): void {
+  if (!update) return;
+  for (const [key, value] of Object.entries(update)) {
+    if (key === '$setOnInsert') continue; // only applies to inserts (Mongoose adds createdAt here)
+    if (key.startsWith('$')) {
+      if (key !== '$set') throw new Error(`Transactions are immutable (${key})`);
+      assertOnlyStatusFields(value as Record<string, unknown>);
+    } else if (!MUTABLE.has(key.split('.')[0])) {
+      throw new Error(`Transactions are immutable (${key})`);
+    }
+  }
+}
+
+transactionSchema.pre(['updateOne', 'updateMany', 'findOneAndUpdate', 'replaceOne'], function () {
+  assertOnlyStatusFields(this.getUpdate() as Record<string, unknown> | null);
+});
+transactionSchema.pre('save', function () {
+  if (this.isNew) return;
+  const changed = this.modifiedPaths().filter((p) => !MUTABLE.has(p.split('.')[0]));
+  if (changed.length) throw new Error(`Transactions are immutable (${changed.join(', ')})`);
+});
+transactionSchema.pre(['deleteOne', 'deleteMany', 'findOneAndDelete'], function () {
+  throw new Error('Transactions cannot be deleted');
+});
+
+export type Transaction = InferSchemaType<typeof transactionSchema>;
+export type TransactionDoc = HydratedDocument<Transaction>;
+export const TransactionModel = model('Transaction', transactionSchema);

@@ -1,0 +1,34 @@
+{
+  "name": "restaurant-billing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-branch restaurant billing and management (React + Express + MongoDB)",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "npm run build -w shared && concurrently -k -n shared,server,client -c gray,green,cyan \"npm run dev -w shared\" \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w shared && npm run build -w server && npm run build -w client",
+    "start": "npm run start -w server",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "npm run build -w shared && npm run typecheck -w server && npm run typecheck -w client",
+    "test": "npm run build -w shared && npm run test -w shared && npm run test -w server && npm run test -w client",
+    "setup:superadmin": "npm run setup:superadmin -w server",
+    "seed:demo": "npm run seed:demo -w server"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.0.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.0"
+  }
+}

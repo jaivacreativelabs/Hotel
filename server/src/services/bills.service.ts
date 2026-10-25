@@ -1,0 +1,466 @@
+/**
+ * Draft (open) bills and their finalisation into immutable transactions.
+ *
+ * Integrity rules:
+ *  - Prices, names and totals are always taken from the server-side menu; the client only
+ *    sends item ids and quantities.
+ *  - Every write carries the version the client last saw (optimistic concurrency); a stale
+ *    version returns 409 with the current draft instead of overwriting someone else's change.
+ *  - Finalisation is idempotent: one transaction per draft (unique sourceDraftId) and per
+ *    idempotency key; it runs in a MongoDB transaction when available.
+ */
+import type { ClientSession, Types } from 'mongoose';
+import { calculateBill, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
+import { runInTransaction } from '../config/transaction.js';
+import type { AuthUser } from '../middleware/auth.js';
+import type { BranchScope } from '../middleware/scope.js';
+import {
+  CategoryModel,
+  DraftModel,
+  MenuItemModel,
+  nextSequence,
+  TableModel,
+  TransactionModel,
+  type Category,
+  type Draft,
+  type MenuItem,
+  type Table,
+  type Transaction,
+} from '../models/index.js';
+import { type AppError, badRequest, conflict, notFound } from '../utils/errors.js';
+import { effectiveItem, restaurantSettings, toDraftDTO, toTransactionDTO } from '../utils/serialize.js';
+import { toObjectId } from '../utils/validate.js';
+import { audit } from './audit.service.js';
+import { seatsInUse } from './tables.service.js';
+
+type DraftLean = Draft & { _id: Types.ObjectId; updatedAt?: Date };
+type TableLean = Table & { _id: Types.ObjectId };
+type TransactionLean = Transaction & { _id: Types.ObjectId };
+
+interface PricedLine {
+  menuItemId: Types.ObjectId;
+  name: string;
+  imageUrl: string | null;
+  unitPrice: number;
+  taxable: boolean;
+  quantity: number;
+  unavailable: boolean;
+  categoryName: string;
+}
+
+/** Looks up each requested item in the branch's effective menu. */
+async function priceLines(
+  scope: BranchScope,
+  requested: { menuItemId: Types.ObjectId | string; quantity: number }[],
+  session?: ClientSession,
+): Promise<PricedLine[]> {
+  if (requested.length === 0) return [];
+  const ids = requested.map((r) => toObjectId(String(r.menuItemId), 'item'));
+  const items = await MenuItemModel.find({
+    _id: { $in: ids },
+    restaurantId: scope.restaurant._id,
+    branchId: { $in: [null, scope.branch._id] },
+  })
+    .session(session ?? null)
+    .lean<(MenuItem & { _id: Types.ObjectId })[]>();
+  const cats = await CategoryModel.find({ _id: { $in: items.map((i) => i.categoryId) } })
+    .session(session ?? null)
+    .lean<(Category & { _id: Types.ObjectId })[]>();
+  const itemById = new Map(items.map((i) => [String(i._id), i]));
+  const catById = new Map(cats.map((c) => [String(c._id), c]));
+
+  return requested.map((r) => {
+    const item = itemById.get(String(r.menuItemId));
+    if (!item) throw badRequest('An item on this bill is not on this branch’s menu', 'ITEM_NOT_FOUND');
+    const eff = effectiveItem(item, scope.branch._id);
+    const cat = catById.get(String(item.categoryId));
+    const available = item.status === 'ACTIVE' && eff.isAvailable && cat?.status === 'ACTIVE';
+    return {
+      menuItemId: item._id,
+      name: item.name,
+      imageUrl: eff.imageUrl,
+      unitPrice: eff.price,
+      taxable: item.taxable,
+      quantity: r.quantity,
+      unavailable: !available,
+      categoryName: cat?.name ?? '',
+    };
+  });
+}
+
+function totalsFor(scope: BranchScope, lines: PricedLine[], discount: DraftUpdateInput['discount'] | null | undefined) {
+  const t = calculateBill(lines, restaurantSettings(scope.restaurant), discount ?? null);
+  return {
+    subtotal: t.subtotal,
+    discountAmount: t.discountAmount,
+    taxes: t.taxes,
+    taxTotal: t.taxTotal,
+    grandTotal: t.grandTotal,
+  };
+}
+
+async function tableLabelOf(draft: Pick<Draft, 'tableId'>): Promise<string> {
+  if (!draft.tableId) return '';
+  const t = await TableModel.findById(draft.tableId).select('label').lean<{ label: string }>();
+  return t?.label ?? '';
+}
+
+async function toDTO(draft: DraftLean): Promise<DraftDTO> {
+  return toDraftDTO(draft, await tableLabelOf(draft));
+}
+
+async function findDraft(scope: BranchScope, id: string, session?: ClientSession) {
+  const draft = await DraftModel.findOne({ _id: toObjectId(id, 'bill'), branchId: scope.branch._id })
+    .session(session ?? null)
+    .lean<DraftLean>();
+  if (!draft) throw notFound('Bill');
+  return draft;
+}
+
+async function staleVersion(draft: DraftLean): Promise<AppError> {
+  return conflict(
+    `This bill was changed by ${draft.updatedByName || 'another user'}. The latest version has been loaded.`,
+    'CONFLICT',
+    { current: await toDTO(draft) },
+  );
+}
+
+function assertActive(draft: DraftLean) {
+  if (draft.status === 'FINALIZED') throw conflict('This bill has already been generated', 'BILL_FINALIZED');
+  if (draft.status === 'DELETED') throw conflict('This bill was deleted', 'BILL_DELETED');
+}
+
+// ---------------- Reading / creating drafts ----------------
+
+export async function getDraft(scope: BranchScope, id: string): Promise<DraftDTO> {
+  return toDTO(await findDraft(scope, id));
+}
+
+export async function listTableDrafts(scope: BranchScope, tableId: unknown): Promise<DraftDTO[]> {
+  const id = toObjectId(tableId, 'table');
+  const table = await TableModel.findOne({ _id: id, branchId: scope.branch._id }).lean<TableLean>();
+  if (!table) throw notFound('Table');
+  const drafts = await DraftModel.find({ tableId: id, status: 'ACTIVE', type: 'TABLE' })
+    .sort({ createdAt: 1 })
+    .lean<DraftLean[]>();
+  return drafts.map((d) => toDraftDTO(d, table.label));
+}
+
+/** The admin's own takeaway/counter bill for this branch, created on first use. */
+export async function getCounterDraft(actor: AuthUser, scope: BranchScope): Promise<DraftDTO> {
+  const filter = { branchId: scope.branch._id, ownerUserId: actor._id, type: 'COUNTER', status: 'ACTIVE' };
+  let draft = await DraftModel.findOne(filter).lean<DraftLean>();
+  if (!draft) {
+    try {
+      const created = await DraftModel.create({
+        ...filter,
+        restaurantId: scope.restaurant._id,
+        createdBy: actor._id,
+        updatedBy: actor._id,
+        updatedByName: actor.name,
+      });
+      draft = created.toObject() as DraftLean;
+    } catch (err) {
+      // Two tabs raced to create it – the unique partial index kept just one.
+      if ((err as { code?: number }).code !== 11000) throw err;
+      draft = await DraftModel.findOne(filter).lean<DraftLean>();
+      if (!draft) throw err;
+    }
+  }
+  return toDTO(draft);
+}
+
+function nextGroupName(existing: string[]): string {
+  const used = new Set(existing);
+  for (let n = 1; ; n++) if (!used.has(`Group ${n}`)) return `Group ${n}`;
+}
+
+export async function createTableGroup(
+  actor: AuthUser,
+  scope: BranchScope,
+  input: { tableId: string; guestCount: number; groupTag?: string },
+): Promise<DraftDTO> {
+  const tableId = toObjectId(input.tableId, 'table');
+  const draft = await runInTransaction(async (session) => {
+    const table = await TableModel.findOne({ _id: tableId, branchId: scope.branch._id, isActive: true })
+      .session(session ?? null)
+      .lean<TableLean>();
+    if (!table) throw notFound('Table');
+    if (table.status === 'RESERVED') {
+      throw conflict('This table is reserved. Mark it available before seating guests.', 'TABLE_RESERVED');
+    }
+    const open = await DraftModel.find({ tableId, status: 'ACTIVE', type: 'TABLE' })
+      .session(session ?? null)
+      .select('groupName guestCount')
+      .lean<{ groupName: string; guestCount: number }[]>();
+    const used = open.reduce((a, d) => a + d.guestCount, 0);
+    const free = table.seats - used;
+    if (input.guestCount > free) {
+      throw conflict(
+        free > 0 ? `Only ${free} seat${free === 1 ? '' : 's'} available at ${table.label}` : `${table.label} is full`,
+        'SEATS_UNAVAILABLE',
+        { free },
+      );
+    }
+    // Claim the table version so two concurrent "add group" calls cannot both use the last seats.
+    const claimed = await TableModel.updateOne(
+      { _id: tableId, version: table.version },
+      { $inc: { version: 1 } },
+      { session },
+    );
+    if (claimed.modifiedCount !== 1) throw conflict('The table was just updated. Please try again.', 'TABLE_BUSY');
+    const [created] = await DraftModel.create(
+      [
+        {
+          restaurantId: scope.restaurant._id,
+          branchId: scope.branch._id,
+          type: 'TABLE',
+          tableId,
+          groupName: nextGroupName(open.map((d) => d.groupName)),
+          guestCount: input.guestCount,
+          groupTag: input.groupTag ?? '',
+          createdBy: actor._id,
+          updatedBy: actor._id,
+          updatedByName: actor.name,
+        },
+      ],
+      { session },
+    );
+    return { draft: created.toObject() as DraftLean, label: table.label };
+  });
+  return toDraftDTO(draft.draft, draft.label);
+}
+
+// ---------------- Updating ----------------
+
+export async function updateDraft(actor: AuthUser, scope: BranchScope, id: string, input: DraftUpdateInput): Promise<DraftDTO> {
+  const draft = await findDraft(scope, id);
+  assertActive(draft);
+  if (draft.version !== input.version) throw await staleVersion(draft);
+
+  const previousQty = new Map(draft.items.map((i) => [String(i.menuItemId), i.quantity]));
+  const lines = await priceLines(scope, input.items);
+  const blocked = lines.filter((l) => l.unavailable && l.quantity > (previousQty.get(String(l.menuItemId)) ?? 0));
+  if (blocked.length) {
+    throw badRequest(`${blocked.map((l) => l.name).join(', ')} ${blocked.length > 1 ? 'are' : 'is'} unavailable`, 'ITEM_UNAVAILABLE', {
+      menuItemIds: blocked.map((l) => String(l.menuItemId)),
+    });
+  }
+
+  if (input.guestCount !== undefined && draft.type === 'TABLE' && input.guestCount !== draft.guestCount) {
+    const table = await TableModel.findById(draft.tableId).lean<TableLean>();
+    const others = await seatsInUse(draft.tableId!, draft._id);
+    if (table && others + input.guestCount > table.seats) {
+      throw conflict(`Only ${table.seats - others} seats available at ${table.label}`, 'SEATS_UNAVAILABLE');
+    }
+  }
+
+  const discount = input.discount === undefined ? draft.discount : input.discount;
+  const set: Record<string, unknown> = {
+    items: lines.map(({ categoryName: _c, ...l }) => l),
+    totals: totalsFor(scope, lines, discount?.type ? (discount as DraftUpdateInput['discount']) : null),
+    discount: discount?.type ? discount : null,
+    updatedBy: actor._id,
+    updatedByName: actor.name,
+  };
+  if (input.customerName !== undefined) set.customerName = input.customerName;
+  if (input.groupTag !== undefined && draft.type === 'TABLE') set.groupTag = input.groupTag;
+  if (input.guestCount !== undefined && draft.type === 'TABLE') set.guestCount = input.guestCount;
+
+  const updated = await DraftModel.findOneAndUpdate(
+    { _id: draft._id, version: input.version, status: 'ACTIVE' },
+    { $set: set, $inc: { version: 1 } },
+    { new: true },
+  ).lean<DraftLean>();
+  if (!updated) {
+    const current = await findDraft(scope, id);
+    assertActive(current);
+    throw await staleVersion(current);
+  }
+  return toDTO(updated);
+}
+
+// ---------------- Deleting ----------------
+
+export async function deleteDraft(actor: AuthUser, scope: BranchScope, id: string, version: number): Promise<void> {
+  const draft = await findDraft(scope, id);
+  assertActive(draft);
+  if (draft.version !== version) throw await staleVersion(draft);
+  const deleted = await DraftModel.findOneAndUpdate(
+    { _id: draft._id, version, status: 'ACTIVE' },
+    {
+      $set: { status: 'DELETED', deletedAt: new Date(), deletedBy: actor._id, updatedBy: actor._id, updatedByName: actor.name },
+      $inc: { version: 1 },
+    },
+    { new: true },
+  ).lean<DraftLean>();
+  if (!deleted) throw await staleVersion(await findDraft(scope, id));
+  const label = await tableLabelOf(draft);
+  await audit(actor, {
+    action: 'DRAFT_DELETED',
+    entityType: 'Draft',
+    entityId: draft._id,
+    restaurantId: scope.restaurant._id,
+    branchId: scope.branch._id,
+    summary: `Deleted open bill ${label ? `${label} ${draft.groupName}` : '(counter)'} with ${draft.items.length} item(s), total ${draft.totals?.grandTotal ?? 0} paise`,
+    meta: { items: draft.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unitPrice })) },
+  });
+}
+
+// ---------------- Finalising ----------------
+
+const formatBillNumber = (seq: number) => `B${String(seq).padStart(5, '0')}`;
+
+async function existingFor(draftId: Types.ObjectId): Promise<TransactionLean | null> {
+  return TransactionModel.findOne({ sourceDraftId: draftId }).lean<TransactionLean>();
+}
+
+export async function finalizeDraft(
+  actor: AuthUser,
+  scope: BranchScope,
+  id: string,
+  input: FinalizeInput,
+): Promise<{ transaction: TransactionDTO; replayed: boolean }> {
+  const draftId = toObjectId(id, 'bill');
+
+  // Same idempotency key seen before → return the original result.
+  const byKey = await TransactionModel.findOne({ branchId: scope.branch._id, idempotencyKey: input.idempotencyKey }).lean<TransactionLean>();
+  if (byKey) {
+    if (!byKey.sourceDraftId.equals(draftId)) throw conflict('Idempotency key was used for another bill', 'IDEMPOTENCY_MISMATCH');
+    return { transaction: toTransactionDTO(byKey), replayed: true };
+  }
+
+  try {
+    return await runInTransaction(async (session) => {
+      const draft = await findDraft(scope, id, session);
+      if (draft.status === 'FINALIZED') {
+        const existing = await TransactionModel.findOne({ sourceDraftId: draft._id }).session(session ?? null).lean<TransactionLean>();
+        if (existing) return { transaction: toTransactionDTO(existing), replayed: true };
+      }
+      assertActive(draft);
+      if (draft.version !== input.version) throw await staleVersion(draft);
+      if (draft.items.length === 0) throw badRequest('Add at least one item before generating the bill', 'EMPTY_BILL');
+
+      const lines = await priceLines(scope, draft.items, session);
+      const unavailable = lines.filter((l) => l.unavailable);
+      if (unavailable.length) {
+        throw badRequest(
+          `Remove unavailable item(s) before generating the bill: ${unavailable.map((l) => l.name).join(', ')}`,
+          'ITEM_UNAVAILABLE',
+          { menuItemIds: unavailable.map((l) => String(l.menuItemId)) },
+        );
+      }
+      const settings = restaurantSettings(scope.restaurant);
+      const discount = draft.discount?.type ? { type: draft.discount.type, value: draft.discount.value ?? 0 } : null;
+      const totals = calculateBill(lines, settings, discount);
+      const now = new Date();
+      const tableLabel = await tableLabelOf(draft);
+
+      // Claim the draft first; a concurrent finaliser fails here (or on the unique index).
+      const claimed = await DraftModel.findOneAndUpdate(
+        { _id: draft._id, version: input.version, status: 'ACTIVE' },
+        {
+          $set: { status: 'FINALIZED', finalizedAt: now, updatedBy: actor._id, updatedByName: actor.name },
+          $inc: { version: 1 },
+        },
+        { new: true, session },
+      ).lean<DraftLean>();
+      if (!claimed) {
+        const current = await findDraft(scope, id, session);
+        if (current.status === 'FINALIZED') {
+          const existing = await existingFor(current._id);
+          if (existing) return { transaction: toTransactionDTO(existing), replayed: true };
+        }
+        assertActive(current);
+        throw await staleVersion(current);
+      }
+
+      try {
+        const seq = await nextSequence(`bill:${scope.branch._id}`, session);
+        const [tx] = await TransactionModel.create(
+          [
+            {
+              billNumber: formatBillNumber(seq),
+              restaurantId: scope.restaurant._id,
+              branchId: scope.branch._id,
+              tableId: draft.tableId ?? null,
+              tableLabel,
+              type: draft.type,
+              groupName: draft.groupName ?? '',
+              guestCount: draft.guestCount ?? 0,
+              customerName: draft.customerName ?? '',
+              restaurantSnapshot: {
+                name: scope.restaurant.name,
+                address: scope.restaurant.address ?? '',
+                phone: scope.restaurant.phone ?? '',
+                gstin: scope.restaurant.gstin ?? '',
+                receiptFooter: settings.receiptFooter,
+              },
+              branchSnapshot: {
+                name: scope.branch.name,
+                code: scope.branch.code,
+                address: scope.branch.address ?? '',
+                phone: scope.branch.phone ?? '',
+              },
+              items: lines.map((l, i) => ({
+                menuItemId: l.menuItemId,
+                name: l.name,
+                categoryName: l.categoryName,
+                imageUrl: l.imageUrl,
+                unitPrice: l.unitPrice,
+                quantity: l.quantity,
+                taxable: l.taxable,
+                lineTotal: totals.lineTotals[i],
+              })),
+              subtotal: totals.subtotal,
+              discount: discount ? { ...discount, amount: totals.discountAmount } : null,
+              taxes: totals.taxes,
+              taxTotal: totals.taxTotal,
+              grandTotal: totals.grandTotal,
+              pricesIncludeTax: settings.pricesIncludeTax,
+              paymentMethod: input.paymentMethod,
+              paymentStatus: 'PAID',
+              status: 'COMPLETED',
+              sourceDraftId: draft._id,
+              idempotencyKey: input.idempotencyKey,
+              createdBy: actor._id,
+              createdByName: actor.name,
+              finalizedAt: now,
+            },
+          ],
+          { session },
+        );
+        await DraftModel.updateOne({ _id: draft._id }, { $set: { transactionId: tx._id } }, { session });
+        await audit(
+          actor,
+          {
+            action: 'BILL_FINALIZED',
+            entityType: 'Transaction',
+            entityId: tx._id,
+            restaurantId: scope.restaurant._id,
+            branchId: scope.branch._id,
+            summary: `Generated bill ${tx.billNumber}${tableLabel ? ` for ${tableLabel} ${draft.groupName}` : ''} – ${tx.grandTotal} paise via ${tx.paymentMethod}`,
+          },
+          session,
+        );
+        return { transaction: toTransactionDTO(tx.toObject() as TransactionLean), replayed: false };
+      } catch (err) {
+        // Without a MongoDB transaction, undo the claim so the bill can be retried.
+        if (!session) {
+          await DraftModel.updateOne(
+            { _id: draft._id, status: 'FINALIZED', transactionId: null },
+            { $set: { status: 'ACTIVE', finalizedAt: null }, $inc: { version: -1 } },
+          );
+        }
+        throw err;
+      }
+    });
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      // A concurrent request finalised the same draft – return its transaction.
+      const existing = await existingFor(draftId);
+      if (existing) return { transaction: toTransactionDTO(existing), replayed: true };
+    }
+    throw err;
+  }
+}

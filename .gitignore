@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+server/uploads/*
+!server/uploads/.gitkeep
+server/.data/
+*.tsbuildinfo
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

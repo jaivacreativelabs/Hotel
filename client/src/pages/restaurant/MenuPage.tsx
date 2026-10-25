@@ -1,0 +1,643 @@
+import {
+  LIMITS,
+  paiseToRupeesInput,
+  parseRupeesToPaise,
+  type CategoryDTO,
+  type MenuItemDTO,
+} from '@rb/shared';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  Camera,
+  Check,
+  CirclePlus,
+  Info,
+  Layers,
+  LayoutGrid,
+  Pencil,
+  Plus,
+  Trash2,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { FoodImage } from '../../components/FoodImage';
+import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
+import { api, errorMessage } from '../../services/api';
+import { menuKeys, scopeQuery, useCategories, useMenuItems, type MenuScope } from '../../services/queries';
+import { useAuth } from '../../store/auth';
+import { useToast } from '../../store/toast';
+import { usePageSearch } from '../../store/topbar';
+import { cx, formatMoney } from '../../utils/format';
+
+const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+
+function useScopedApi(scope: MenuScope) {
+  const opts = { query: scopeQuery(scope), branchId: scope.branchId ?? null };
+  return {
+    post: <T,>(path: string, body?: unknown) => api.post<T>(path, body, opts),
+    patch: <T,>(path: string, body?: unknown) => api.patch<T>(path, body, opts),
+    del: <T,>(path: string) => api.delete<T>(path, opts),
+    upload: <T,>(path: string, form: FormData) => api.upload<T>(path, form, opts),
+  };
+}
+
+// ---------------- Inline category creation ----------------
+
+function CreateCategoryForm({ scope, onCreated, prominent }: { scope: MenuScope; onCreated: (c: CategoryDTO) => void; prominent: boolean }) {
+  const scoped = useScopedApi(scope);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [name, setName] = useState('');
+  const [icon, setIcon] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    if (!name.trim()) return setError('Enter a category name');
+    setBusy(true);
+    setError(null);
+    try {
+      const c = await scoped.post<CategoryDTO>('/menu/categories', { name: name.trim(), ...(icon.trim() && { icon: icon.trim() }) });
+      await queryClient.invalidateQueries({ queryKey: menuKeys.all });
+      toast.success(`Category “${c.name}” created`);
+      setName('');
+      setIcon('');
+      onCreated(c);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={prominent ? 'create-category-box' : 'stack'} style={prominent ? undefined : { gap: 8 }}>
+      {prominent && (
+        <div>
+          <div className="section-title" style={{ marginBottom: 4 }}>
+            Create Category
+          </div>
+          <span className="field-hint">Your menu has no categories yet. Create one (e.g. Breakfast) to start adding food.</span>
+        </div>
+      )}
+      <div className="row" style={{ alignItems: 'stretch' }}>
+        <input className="input" style={{ width: 70, textAlign: 'center', padding: 0 }} placeholder="🍽" value={icon} maxLength={4} onChange={(e) => setIcon(e.target.value)} aria-label="Category icon (emoji, optional)" />
+        <input
+          className="input"
+          placeholder="Category name"
+          value={name}
+          maxLength={50}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void create())}
+          aria-label="Category name"
+          autoFocus={prominent}
+        />
+      </div>
+      {error && <span className="field-error">{error}</span>}
+      <button type="button" className={cx('btn', prominent ? 'btn-primary' : 'btn-soft')} onClick={create} disabled={busy}>
+        {busy ? <Spinner /> : <CirclePlus />} Create Category
+      </button>
+    </div>
+  );
+}
+
+// ---------------- Add / edit item ----------------
+
+function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; item: MenuItemDTO | null; categories: CategoryDTO[]; onClose: () => void }) {
+  const scoped = useScopedApi(scope);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const isEdit = Boolean(item);
+  const sharedOnly = Boolean(item && !item.editable); // shared item seen from a branch
+  const usable = categories.filter((c) => c.status === 'ACTIVE' && (scope.branchId ? true : c.branchId === null));
+
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [name, setName] = useState(item?.name ?? '');
+  const [price, setPrice] = useState(item ? paiseToRupeesInput(item.price) : '');
+  const [description, setDescription] = useState(item?.description ?? '');
+  const [taxable, setTaxable] = useState(item?.taxable ?? true);
+  const [isAvailable, setAvailable] = useState(item?.isAvailable ?? true);
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+
+  const pickFile = (f: File | null) => {
+    if (!f) return;
+    if (!ACCEPTED.includes(f.type)) return setErrors((e) => ({ ...e, image: 'Use a JPEG, PNG or WebP image' }));
+    if (f.size > LIMITS.maxImageBytes) return setErrors((e) => ({ ...e, image: 'Image must be 2 MB or smaller' }));
+    setErrors(({ image: _i, ...rest }) => rest);
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: menuKeys.all });
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const next: Record<string, string> = {};
+    const paise = parseRupeesToPaise(price);
+    if (!sharedOnly && !categoryId) next.category = 'Select a category';
+    if (!sharedOnly && !name.trim()) next.name = 'Enter the item name';
+    if (paise === null) next.price = 'Enter a price like 30 or 49.50';
+    else if (paise > LIMITS.maxPricePaise) next.price = 'Price is too high';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    setBusy(true);
+    try {
+      let saved: MenuItemDTO;
+      if (sharedOnly) {
+        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, { price: paise, isAvailable });
+      } else {
+        const body = { categoryId, name: name.trim(), description: description.trim(), price: paise!, taxable, isAvailable };
+        saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
+      }
+      // For a shared item in a branch the server stores this as the branch's own photo.
+      if (file) {
+        const form = new FormData();
+        form.append('image', file);
+        try {
+          saved = await scoped.upload<MenuItemDTO>(`/menu/items/${saved.id}/image`, form);
+        } catch (err) {
+          toast.error(`Saved, but the photo failed: ${errorMessage(err)}`);
+        }
+      }
+      await refresh();
+      if (isEdit) {
+        toast.success(`“${saved.name}” updated`);
+        onClose();
+      } else {
+        toast.success(`“${saved.name}” added to the menu`);
+        // Keep the category for quick entry of the next item.
+        setName('');
+        setPrice('');
+        setDescription('');
+        setFile(null);
+        setPreview(null);
+      }
+    } catch (err) {
+      setErrors({ form: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetOverride = async () => {
+    try {
+      await scoped.del(`/menu/items/${item!.id}/override`);
+      await refresh();
+      toast.success('Restored the shared price and availability');
+      onClose();
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  const removeImage = async () => {
+    try {
+      await scoped.del(`/menu/items/${item!.id}/image`);
+      await refresh();
+      toast.success('Image removed');
+      onClose();
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  const archive = async () => {
+    try {
+      await scoped.post(`/menu/items/${item!.id}/archive`);
+      await refresh();
+      toast.success(`“${item!.name}” removed from the menu`);
+      onClose();
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  const noCategories = usable.length === 0;
+  const selectedCategory = usable.find((c) => c.id === categoryId);
+  const photo = preview ?? item?.imageUrl ?? null;
+  // Numbered steps help staff follow the form top to bottom.
+  let stepNo = 0;
+  const step = (children: React.ReactNode) => (
+    <span className="step-label">
+      <span className="step-no">{++stepNo}</span>
+      {children}
+    </span>
+  );
+
+  return (
+    <SidePanel title={isEdit ? 'Edit Food' : 'Add Food'} subtitle={isEdit ? item!.name : 'Photo → category → name → price'} onClose={onClose}>
+      {!isEdit && noCategories && <CreateCategoryForm scope={scope} prominent onCreated={(c) => setCategoryId(c.id)} />}
+
+      {sharedOnly && (
+        <div className="alert alert-info">
+          <Info />
+          <span>This food comes from the main menu. Here you can change its photo, price and availability for this branch only.</span>
+        </div>
+      )}
+
+      <form className={cx('stack', !isEdit && noCategories && 'form-section-disabled')} style={{ gap: 18 }} onSubmit={submit} aria-disabled={!isEdit && noCategories}>
+        {!isEdit && noCategories && <div className="section-title">Create Food</div>}
+
+        <div className="field">
+          <span className="field-label">
+            {step(<>
+              Food photo <span className="muted">(optional)</span>
+            </>)}
+          </span>
+          <label className={cx('photo-box', photo && 'has-photo')}>
+            {photo ? (
+              <>
+                <FoodImage src={photo} alt="Food photo" />
+                <span className="photo-change">
+                  <Camera size={16} /> Change photo
+                </span>
+              </>
+            ) : (
+              <span className="photo-empty">
+                <Camera />
+                <strong>Tap here to add a photo</strong>
+                <small>Take a picture or choose one</small>
+              </span>
+            )}
+            <input type="file" accept={ACCEPTED.join(',')} hidden onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+          </label>
+          {file && <span className="field-hint">New photo selected – press {isEdit ? 'Save' : 'Add Food'} to keep it.</span>}
+          {isEdit && !file && (sharedOnly ? item!.imageOverridden : item?.imageUrl) && (
+            <button type="button" className="link-btn danger" onClick={removeImage}>
+              <Trash2 size={14} /> {sharedOnly ? 'Use the main menu photo again' : 'Remove photo'}
+            </button>
+          )}
+          {errors.image && <span className="field-error">{errors.image}</span>}
+        </div>
+
+        {!sharedOnly && (
+          <div className="field">
+            <span className="field-label">
+              {step(<>Category</>)}
+            </span>
+            <div className="cat-picker" role="radiogroup" aria-label="Category">
+              {usable.map((c) => (
+                <button
+                  type="button"
+                  key={c.id}
+                  role="radio"
+                  aria-checked={categoryId === c.id}
+                  className={cx('cat-tile', categoryId === c.id && 'active')}
+                  onClick={() => setCategoryId(c.id)}
+                >
+                  {categoryId === c.id && <Check className="cat-tile-check" />}
+                  <span className="cat-tile-icon">{c.icon || '🍽️'}</span>
+                  <span className="cat-tile-name">{c.name}</span>
+                </button>
+              ))}
+              {!noCategories && (
+                <button type="button" className={cx('cat-tile cat-tile-new', showNewCategory && 'active')} onClick={() => setShowNewCategory((s) => !s)}>
+                  <span className="cat-tile-icon">{showNewCategory ? <X /> : <Plus />}</span>
+                  <span className="cat-tile-name">{showNewCategory ? 'Close' : 'New'}</span>
+                </button>
+              )}
+            </div>
+            {errors.category && <span className="field-error">{errors.category}</span>}
+            {showNewCategory && (
+              <CreateCategoryForm
+                scope={scope}
+                prominent={false}
+                onCreated={(c) => {
+                  setCategoryId(c.id);
+                  setShowNewCategory(false);
+                }}
+              />
+            )}
+          </div>
+        )}
+
+        <Field
+          label={step(
+            <>
+              Food name {selectedCategory?.icon && <span aria-hidden="true">{selectedCategory.icon}</span>}
+            </>,
+          )}
+          error={errors.name}
+        >
+          {(id) => <input id={id} className="input input-xl" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} disabled={sharedOnly} placeholder="e.g. Masala Dosa" />}
+        </Field>
+        <Field label={step(<>Price</>)} error={errors.price} hint={sharedOnly && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
+          {(id) => (
+            <div className="input-prefix">
+              <span>₹</span>
+              <input id={id} className="input input-xl" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
+            </div>
+          )}
+        </Field>
+
+        <div className="field">
+          <span className="field-label">
+            {step(<>Can customers order it now?</>)}
+          </span>
+          <div className="avail-toggle" role="radiogroup" aria-label="Availability">
+            <button type="button" role="radio" aria-checked={isAvailable} className={cx('avail-btn yes', isAvailable && 'active')} onClick={() => setAvailable(true)}>
+              <Check /> Yes, available
+            </button>
+            <button type="button" role="radio" aria-checked={!isAvailable} className={cx('avail-btn no', !isAvailable && 'active')} onClick={() => setAvailable(false)}>
+              <X /> No, sold out
+            </button>
+          </div>
+        </div>
+
+        {!sharedOnly && (
+          <details className="more-options">
+            <summary>More options (description, tax)</summary>
+            <Field label="Description">
+              {(id) => <textarea id={id} className="textarea" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />}
+            </Field>
+            <label className="switch">
+              <input type="checkbox" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} /> Apply restaurant taxes to this food
+            </label>
+          </details>
+        )}
+
+        {errors.form && <div className="alert alert-danger">{errors.form}</div>}
+        <div className="form-actions">
+          <CancelButton onClick={onClose} disabled={busy} className="btn-lg" />
+          <ConfirmButton type="submit" busy={busy} disabled={!isEdit && noCategories} label={isEdit ? 'Save' : 'Add Food'} className="btn-lg" />
+        </div>
+        {sharedOnly && item!.hasOverride && (
+          <button type="button" className="btn btn-outline btn-block" onClick={resetOverride}>
+            Use main menu price &amp; availability
+          </button>
+        )}
+        {isEdit && item!.editable && (
+          <button type="button" className="btn btn-danger-soft btn-block" onClick={() => setConfirmArchive(true)}>
+            <Trash2 /> Remove this food from the menu
+          </button>
+        )}
+      </form>
+      {confirmArchive && (
+        <ConfirmDialog
+          title={`Remove “${item!.name}”?`}
+          message="The item is archived: it disappears from the menu and billing, but past bills keep it. You can restore it later."
+          confirmLabel="Remove"
+          danger
+          onCancel={() => setConfirmArchive(false)}
+          onConfirm={archive}
+        />
+      )}
+    </SidePanel>
+  );
+}
+
+// ---------------- Category management ----------------
+
+function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => void }) {
+  const scoped = useScopedApi(scope);
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const categories = useCategories(scope, true);
+  const [editing, setEditing] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const list = categories.data ?? [];
+  const own = list.filter((c) => c.editable);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: menuKeys.all });
+
+  const run = async (fn: () => Promise<unknown>, success?: string) => {
+    try {
+      await fn();
+      await refresh();
+      if (success) toast.success(success);
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+  const move = (id: string, dir: -1 | 1) => {
+    const ids = own.map((c) => c.id);
+    const i = ids.indexOf(id);
+    const j = i + dir;
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    void run(() => scoped.post('/menu/categories/reorder', { ids }));
+  };
+
+  return (
+    <SidePanel title="Categories" subtitle="Create, rename, reorder and hide categories" onClose={onClose}>
+      <CreateCategoryForm scope={scope} prominent={list.length === 0} onCreated={() => undefined} />
+      <hr className="divider" />
+      {categories.isLoading ? (
+        <Loading />
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          {list.map((c) => {
+            const index = own.findIndex((o) => o.id === c.id);
+            return (
+              <div key={c.id} className={cx('cat-row', c.status === 'INACTIVE' && 'inactive')}>
+                {editing?.id === c.id ? (
+                  <>
+                    <input className="input input-sm" style={{ width: 54, textAlign: 'center', padding: 0 }} value={editing.icon} maxLength={4} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} aria-label="Icon" />
+                    <input className="input input-sm" value={editing.name} maxLength={50} onChange={(e) => setEditing({ ...editing, name: e.target.value })} aria-label="Name" autoFocus />
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() =>
+                        void run(() => scoped.patch(`/menu/categories/${c.id}`, { name: editing.name.trim(), icon: editing.icon.trim() }), 'Category renamed').then(() => setEditing(null))
+                      }
+                    >
+                      Save
+                    </button>
+                    <button className="icon-btn close-red" onClick={() => setEditing(null)} aria-label="Cancel">
+                      <X />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="cat-icon">{c.icon || '•'}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <strong>{c.name}</strong>
+                      {!c.editable && <span className="badge badge-gray badge-sm" style={{ marginLeft: 8 }}>Shared</span>}
+                      {c.status === 'INACTIVE' && <span className="badge badge-amber badge-sm" style={{ marginLeft: 8 }}>Hidden</span>}
+                    </span>
+                    {c.editable && (
+                      <>
+                        <button className="icon-btn plain" onClick={() => move(c.id, -1)} disabled={index <= 0} aria-label={`Move ${c.name} up`}>
+                          <ArrowUp />
+                        </button>
+                        <button className="icon-btn plain" onClick={() => move(c.id, 1)} disabled={index === own.length - 1} aria-label={`Move ${c.name} down`}>
+                          <ArrowDown />
+                        </button>
+                        <button className="icon-btn plain" onClick={() => setEditing({ id: c.id, name: c.name, icon: c.icon })} aria-label={`Rename ${c.name}`}>
+                          <Pencil />
+                        </button>
+                        <label className="switch" title={c.status === 'ACTIVE' ? 'Visible' : 'Hidden'}>
+                          <input
+                            type="checkbox"
+                            checked={c.status === 'ACTIVE'}
+                            onChange={(e) => void run(() => scoped.patch(`/menu/categories/${c.id}/status`, { status: e.target.checked ? 'ACTIVE' : 'INACTIVE' }))}
+                            aria-label={`${c.name} visible`}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SidePanel>
+  );
+}
+
+// ---------------- Page body (shared with the Super Admin) ----------------
+
+export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerExtra?: React.ReactNode }) {
+  const search = usePageSearch('Search food items...');
+  const queryClient = useQueryClient();
+  const scoped = useScopedApi(scope);
+  const toast = useToast();
+  const [showArchived, setShowArchived] = useState(false);
+  const categories = useCategories(scope, true);
+  const items = useMenuItems(scope, showArchived);
+  const [category, setCategory] = useState('all');
+  const [panel, setPanel] = useState<{ kind: 'item'; item: MenuItemDTO | null } | { kind: 'categories' } | null>(null);
+  const [archiving, setArchiving] = useState<MenuItemDTO | null>(null);
+
+  const activeCategories = (categories.data ?? []).filter((c) => c.status === 'ACTIVE');
+  const categoryIcon = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.icon])), [categories.data]);
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (items.data ?? []).filter(
+      (i) =>
+        (category === 'all' || i.categoryId === category) &&
+        (!q || i.name.toLowerCase().includes(q)) &&
+        (showArchived ? i.status === 'ARCHIVED' : i.status === 'ACTIVE'),
+    );
+  }, [items.data, category, search, showArchived]);
+
+  const run = async (fn: () => Promise<unknown>, success: string) => {
+    try {
+      await fn();
+      await queryClient.invalidateQueries({ queryKey: menuKeys.all });
+      toast.success(success);
+    } catch (err) {
+      toast.error(err);
+    }
+  };
+
+  return (
+    <>
+      <div className="page">
+        <PageHeader
+          title="Menu"
+          subtitle="Manage your food items, prices and categories"
+          actions={
+            <>
+              {headerExtra}
+              <button className="btn btn-outline btn-lg" onClick={() => setPanel({ kind: 'categories' })}>
+                <Layers /> Categories
+              </button>
+              <button className="btn btn-primary btn-lg" onClick={() => setPanel({ kind: 'item', item: null })}>
+                <CirclePlus /> Add Item
+              </button>
+            </>
+          }
+        />
+        <div className="chips" role="tablist" aria-label="Categories">
+          <button className={cx('chip', category === 'all' && 'active')} onClick={() => setCategory('all')}>
+            <LayoutGrid /> All
+          </button>
+          {activeCategories.map((c) => (
+            <button key={c.id} className={cx('chip', category === c.id && 'active')} onClick={() => setCategory(c.id)}>
+              {c.icon && <span className="chip-icon">{c.icon}</span>}
+              {c.name}
+            </button>
+          ))}
+          <button className={cx('chip', showArchived && 'active')} onClick={() => setShowArchived((s) => !s)} title="Show removed items">
+            <ArchiveRestore /> Removed
+          </button>
+        </div>
+
+        {items.isLoading || categories.isLoading ? (
+          <Loading label="Loading menu…" />
+        ) : visible.length === 0 ? (
+          <Empty icon={<UtensilsCrossed />} title={showArchived ? 'No removed items' : search ? 'No items match your search' : 'No food items yet'}>
+            {!showArchived && !search && (
+              <button className="btn btn-primary" onClick={() => setPanel({ kind: 'item', item: null })}>
+                <CirclePlus /> Add your first item
+              </button>
+            )}
+          </Empty>
+        ) : (
+          <div className="menu-grid">
+            {visible.map((item) => (
+              <div key={item.id} className={cx('menu-card', !item.isAvailable && 'unavailable', item.status === 'ARCHIVED' && 'archived')}>
+                <div className="food-media">
+                  <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
+                </div>
+                <div className="menu-card-tags">
+                  {!item.isAvailable && <span className="tag dark">Sold out</span>}
+                  {item.hasOverride && <span className="tag yellow">Branch price</span>}
+                </div>
+                <div className="menu-card-body">
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="food-name" title={item.name}>
+                      {item.name}
+                    </div>
+                    <div className="food-price">{formatMoney(item.price)}</div>
+                  </div>
+                </div>
+                <div className="menu-card-actions">
+                  {item.status === 'ARCHIVED' ? (
+                    <button className="btn btn-soft btn-sm" onClick={() => void run(() => scoped.post(`/menu/items/${item.id}/restore`), `“${item.name}” restored`)} disabled={!item.editable}>
+                      <ArchiveRestore /> Restore
+                    </button>
+                  ) : (
+                    <>
+                      <button className="btn btn-soft btn-sm" onClick={() => setPanel({ kind: 'item', item })} aria-label={`Edit ${item.name}`}>
+                        <Pencil /> Edit
+                      </button>
+                      {item.editable && (
+                        <button className="btn btn-danger-soft btn-sm" onClick={() => setArchiving(item)} aria-label={`Remove ${item.name}`}>
+                          <Trash2 /> Remove
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {panel?.kind === 'item' && (
+        <ItemPanel key={panel.item?.id ?? 'new'} scope={scope} item={panel.item} categories={categories.data ?? []} onClose={() => setPanel(null)} />
+      )}
+      {panel?.kind === 'categories' && <CategoriesPanel scope={scope} onClose={() => setPanel(null)} />}
+      {archiving && (
+        <ConfirmDialog
+          title={`Remove “${archiving.name}”?`}
+          message="The item disappears from the menu and billing. Past bills keep it, and you can restore it from “Removed”."
+          confirmLabel="Remove"
+          danger
+          onCancel={() => setArchiving(null)}
+          onConfirm={() => {
+            const it = archiving;
+            setArchiving(null);
+            void run(() => scoped.post(`/menu/items/${it.id}/archive`), `“${it.name}” removed`);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+export function MenuPage() {
+  const { activeBranch } = useAuth();
+  return <MenuManager scope={{ branchId: activeBranch!.id }} />;
+}
