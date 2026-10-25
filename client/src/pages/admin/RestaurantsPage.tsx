@@ -31,7 +31,7 @@ export function RestaurantForm({ initial, onClose, onSaved }: { initial?: Restau
       const saved = initial
         ? await api.patch<RestaurantDTO>(`/admin/restaurants/${initial.id}`, form, { branchId: null })
         : await api.post<RestaurantDTO>('/admin/restaurants', form, { branchId: null });
-      toast.success(initial ? 'Restaurant updated' : `Restaurant “${saved.name}” created`);
+      toast.success(initial ? 'Restaurant updated' : `Restaurant “${saved.name}” created with its Main Branch`);
       onSaved(saved);
     } catch (err) {
       setError(errorMessage(err));
@@ -50,6 +50,15 @@ export function RestaurantForm({ initial, onClose, onSaved }: { initial?: Restau
         <Field label="GSTIN" hint="Printed on receipts when set">
           {(id) => <input id={id} className="input" value={form.gstin} onChange={set('gstin')} maxLength={20} />}
         </Field>
+        {!initial && (
+          <div className="alert alert-info">
+            <Building2 />
+            <span>
+              A <strong>Main Branch</strong> is created automatically with these contact details. You can rename it or add more
+              branches afterwards.
+            </span>
+          </div>
+        )}
         {error && <div className="alert alert-danger">{error}</div>}
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>
           {busy ? <Spinner /> : <CirclePlus />} {initial ? 'Save Changes' : 'Create Restaurant'}

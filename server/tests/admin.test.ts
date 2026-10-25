@@ -12,7 +12,24 @@ beforeAll(async () => {
 describe('Super Admin – restaurants and branches', () => {
   it('lists restaurants with branch counts', async () => {
     const list = ok<{ name: string; branchCount: number }[]>(await w.sa.get('/api/v1/admin/restaurants'));
-    expect(list.find((r) => r.name === 'Restaurant A')?.branchCount).toBe(2);
+    // Main Branch (created automatically) + A1 + A2
+    expect(list.find((r) => r.name === 'Restaurant A')?.branchCount).toBe(3);
+  });
+
+  it('creates a Main Branch automatically with the restaurant', async () => {
+    const r = ok<{ id: string; branchCount: number; mainBranchId: string }>(
+      await w.sa.post('/api/v1/admin/restaurants', { name: 'Restaurant C', phone: '+91 99999 00000', address: 'Madurai' }),
+      201,
+    );
+    expect(r.branchCount).toBe(1);
+    const d = ok<{ branches: { id: string; name: string; code: string; phone: string; address: string; status: string }[] }>(
+      await w.sa.get(`/api/v1/admin/restaurants/${r.id}`),
+    );
+    expect(d.branches).toEqual([
+      expect.objectContaining({ id: r.mainBranchId, name: 'Main Branch', code: 'MAIN', phone: '+91 99999 00000', address: 'Madurai', status: 'ACTIVE' }),
+    ]);
+    // Ready to use straight away: an admin can be assigned to it.
+    ok(await w.sa.post('/api/v1/admin/users', { name: 'C Admin', email: 'c@test.local', password: 'Passw0rd!', branchIds: [r.mainBranchId] }), 201);
   });
 
   it('rejects duplicate restaurant names (case-insensitive)', async () => {
@@ -40,7 +57,7 @@ describe('Super Admin – restaurants and branches', () => {
 
   it('shows restaurant detail with branches and admins', async () => {
     const d = ok<{ branches: unknown[]; admins: { email: string }[] }>(await w.sa.get(`/api/v1/admin/restaurants/${w.restaurantA}`));
-    expect(d.branches).toHaveLength(2);
+    expect(d.branches).toHaveLength(3);
     expect(d.admins.map((a) => a.email).sort()).toEqual(['a1@test.local', 'a2@test.local']);
   });
 
@@ -106,7 +123,7 @@ describe('Super Admin – Restaurant Admin accounts', () => {
   });
 
   it('writes audit logs for administrative actions', async () => {
-    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(2);
+    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(3); // A, B and C
     expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_ADMIN_REASSIGNED' })).toBe(1);
     const logs = ok<unknown[]>(await w.sa.get('/api/v1/admin/audit-logs?limit=5'));
     expect(logs).toHaveLength(5);

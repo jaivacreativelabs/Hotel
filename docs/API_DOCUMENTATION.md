@@ -51,7 +51,7 @@ Unknown body fields are rejected (`.strict()` schemas), so fields such as `role`
 | Method | Path | Body / query |
 |---|---|---|
 | GET | `/admin/restaurants` | `?status=` – includes branch counts |
-| POST | `/admin/restaurants` | `{ name, phone?, email?, address?, gstin? }` |
+| POST | `/admin/restaurants` | `{ name, phone?, email?, address?, gstin? }` – also creates its **Main Branch** (code `MAIN`, same contact details) in the same transaction; returns `mainBranchId` |
 | GET | `/admin/restaurants/:id` | restaurant + branches + admins |
 | PATCH | `/admin/restaurants/:id` | any of the create fields |
 | PATCH | `/admin/restaurants/:id/status` | `{ status: 'ACTIVE' \| 'INACTIVE' }` |

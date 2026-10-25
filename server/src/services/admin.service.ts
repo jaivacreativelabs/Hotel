@@ -7,6 +7,7 @@ import type {
   RestaurantSettingsInput,
   UserCreateInput,
 } from '@rb/shared';
+import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchLean, RestaurantLean } from '../middleware/scope.js';
 import { BranchModel, RestaurantModel, UserModel } from '../models/index.js';
@@ -39,17 +40,46 @@ async function assertRestaurantNameFree(name: string, exceptId?: Types.ObjectId)
   if (clash) throw conflict('A restaurant with this name already exists', 'DUPLICATE');
 }
 
+export const MAIN_BRANCH = { name: 'Main Branch', code: 'MAIN' } as const;
+
+/**
+ * Creates a restaurant together with its "Main Branch" (code MAIN, contact details copied from
+ * the restaurant), in one transaction, so a new restaurant is ready for tables, menu and
+ * admins straight away. The branch can be renamed later.
+ */
 export async function createRestaurant(actor: AuthUser, input: RestaurantCreateInput) {
   await assertRestaurantNameFree(input.name);
-  const r = await RestaurantModel.create({ ...input, nameKey: nameKey(input.name) });
-  await audit(actor, {
-    action: 'RESTAURANT_CREATED',
-    entityType: 'Restaurant',
-    entityId: r._id,
-    restaurantId: r._id,
-    summary: `Created restaurant "${r.name}"`,
+  const { restaurant, branch } = await runInTransaction(async (session) => {
+    const [r] = await RestaurantModel.create([{ ...input, nameKey: nameKey(input.name) }], { session });
+    const [b] = await BranchModel.create(
+      [
+        {
+          restaurantId: r._id,
+          name: MAIN_BRANCH.name,
+          nameKey: nameKey(MAIN_BRANCH.name),
+          code: MAIN_BRANCH.code,
+          address: input.address ?? '',
+          phone: input.phone ?? '',
+          email: input.email ?? '',
+        },
+      ],
+      { session },
+    );
+    await audit(
+      actor,
+      {
+        action: 'RESTAURANT_CREATED',
+        entityType: 'Restaurant',
+        entityId: r._id,
+        restaurantId: r._id,
+        branchId: b._id,
+        summary: `Created restaurant "${r.name}" with its ${MAIN_BRANCH.name} (${MAIN_BRANCH.code})`,
+      },
+      session,
+    );
+    return { restaurant: r, branch: b };
   });
-  return toRestaurantDTO(r.toObject() as RestaurantLean, 0);
+  return { ...toRestaurantDTO(restaurant.toObject() as RestaurantLean, 1), mainBranchId: String(branch._id) };
 }
 
 export async function getRestaurantDetail(id: string) {
