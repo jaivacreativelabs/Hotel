@@ -94,6 +94,7 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
     price,
     isAvailable,
     imageUrl,
+    pinned: Boolean(override?.pinned),
     hasOverride: override?.price != null || override?.isAvailable != null,
     imageOverridden: override?.imageUrl != null,
   };
@@ -111,6 +112,7 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     description: item.description ?? '',
     imageUrl: eff.imageUrl,
     imageOverridden: eff.imageOverridden,
+    pinned: eff.pinned,
     price: eff.price,
     basePrice: item.price,
     taxable: item.taxable,

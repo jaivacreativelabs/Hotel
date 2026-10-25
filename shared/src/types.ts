@@ -121,6 +121,8 @@ export interface MenuItemDTO {
   imageUrl: string | null;
   /** this branch uses its own photo for a shared item */
   imageOverridden: boolean;
+  /** pinned by this branch – listed first in its menu and New Bill screen */
+  pinned: boolean;
   /** effective price for the requested scope */
   price: number;
   basePrice: number;

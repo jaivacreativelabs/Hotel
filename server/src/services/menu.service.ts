@@ -155,7 +155,8 @@ export async function listItems(
     filter.name = { $regex: escapeRegex(query.q.trim().slice(0, 50)), $options: 'i' };
   }
   const items = await MenuItemModel.find(filter).sort({ displayOrder: 1, name: 1 }).lean<MenuItemLean[]>();
-  return items.map((i) => toMenuItemDTO(i, branchOf(scope)));
+  // Pinned dishes first; Array.sort is stable, so the menu order is kept within each group.
+  return items.map((i) => toMenuItemDTO(i, branchOf(scope))).sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
 
 async function getVisibleItem(scope: Scope, id: string) {
@@ -213,21 +214,33 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
 function setOverride(
   item: InstanceType<typeof MenuItemModel>,
   branchId: Types.ObjectId,
-  patch: { price?: number; isAvailable?: boolean; imageUrl?: string },
+  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean },
 ) {
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) {
     if (patch.price !== undefined) existing.price = patch.price;
     if (patch.isAvailable !== undefined) existing.isAvailable = patch.isAvailable;
     if (patch.imageUrl !== undefined) existing.imageUrl = patch.imageUrl;
+    if (patch.pinned !== undefined) existing.pinned = patch.pinned;
   } else {
     item.branchOverrides.push({
       branchId,
       price: patch.price ?? null,
       isAvailable: patch.isAvailable ?? null,
       imageUrl: patch.imageUrl ?? null,
+      pinned: patch.pinned ?? null,
     });
   }
+}
+
+/** Pins a dish to the top of this branch's menu and New Bill screen (any dish the branch sees). */
+export async function setItemPinned(scope: Scope, id: string, pinned: boolean) {
+  const branchId = branchOf(scope);
+  if (!branchId) throw badRequest('Choose a branch to pin dishes');
+  const item = await getVisibleItem(scope, id);
+  setOverride(item, branchId, { pinned });
+  await item.save();
+  return toMenuItemDTO(item.toObject() as MenuItemLean, branchId);
 }
 
 export async function updateItem(actor: AuthUser, scope: Scope, id: string, input: MenuItemUpdateInput) {
@@ -271,7 +284,7 @@ export async function removeOverride(actor: AuthUser, scope: Scope, id: string) 
   if (!branchId) throw badRequest('Overrides exist only for branches');
   const item = await getVisibleItem(scope, id);
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
-  if (existing?.imageUrl) {
+  if (existing?.imageUrl || existing?.pinned) {
     existing.price = null;
     existing.isAvailable = null;
   } else {

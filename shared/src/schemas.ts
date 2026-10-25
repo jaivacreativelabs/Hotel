@@ -135,6 +135,7 @@ export const menuItemCreateSchema = z.strictObject({
 });
 export const menuItemUpdateSchema = menuItemCreateSchema.partial();
 export const availabilitySchema = z.strictObject({ isAvailable: z.boolean() });
+export const pinSchema = z.strictObject({ pinned: z.boolean() });
 
 // ---------- Tables ----------
 export const tableCreateSchema = z.strictObject({

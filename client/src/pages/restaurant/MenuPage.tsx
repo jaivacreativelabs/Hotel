@@ -16,6 +16,8 @@ import {
   Layers,
   LayoutGrid,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Trash2,
   UtensilsCrossed,
@@ -589,6 +591,23 @@ export function MenuManager({
                   <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
                 </div>
                 <div className="menu-card-tags">{!item.isAvailable && <span className="tag dark">Sold out</span>}</div>
+                {scope.branchId && (
+                  <button
+                    type="button"
+                    className={cx('pin-btn', item.pinned && 'pinned')}
+                    onClick={() =>
+                      void run(
+                        () => scoped.patch(`/menu/items/${item.id}/pin`, { pinned: !item.pinned }),
+                        item.pinned ? `“${item.name}” unpinned` : `“${item.name}” pinned to the top`,
+                      )
+                    }
+                    aria-pressed={item.pinned}
+                    aria-label={item.pinned ? `Unpin ${item.name}` : `Pin ${item.name} to the top`}
+                    title={item.pinned ? 'Unpin' : 'Pin to the top'}
+                  >
+                    {item.pinned ? <PinOff /> : <Pin />}
+                  </button>
+                )}
                 <div className="menu-card-body">
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="food-name" title={item.name}>

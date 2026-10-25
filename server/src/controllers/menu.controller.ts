@@ -5,6 +5,7 @@ import {
   categoryUpdateSchema,
   menuItemCreateSchema,
   menuItemUpdateSchema,
+  pinSchema,
   reorderSchema,
   statusSchema,
 } from '@rb/shared';
@@ -45,6 +46,10 @@ export const updateItem = async (req: Request, res: Response) => {
 export const setAvailability = async (req: Request, res: Response) => {
   const { isAvailable } = parse(availabilitySchema, req.body);
   res.json({ data: await menu.setItemAvailability(currentUser(req), getScope(req), id(req), isAvailable) });
+};
+export const setPinned = async (req: Request, res: Response) => {
+  const { pinned } = parse(pinSchema, req.body);
+  res.json({ data: await menu.setItemPinned(getScope(req), id(req), pinned) });
 };
 export const removeOverride = async (req: Request, res: Response) => {
   res.json({ data: await menu.removeOverride(currentUser(req), getScope(req), id(req)) });

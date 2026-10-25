@@ -17,6 +17,7 @@ import {
   FileText,
   LayoutGrid,
   Minus,
+  Pin,
   Plus,
   Tag,
   Trash2,
@@ -276,6 +277,11 @@ export function BillingPage() {
                   </div>
                   {qty ? <span className="food-qty-badge">{qty}</span> : null}
                   {!item.isAvailable && <span className="unavailable-tag">Unavailable</span>}
+                  {item.isAvailable && item.pinned && (
+                    <span className="pin-mark" title="Pinned">
+                      <Pin size={14} />
+                    </span>
+                  )}
                   <div className="food-body">
                     <div style={{ minWidth: 0 }}>
                       <div className="food-name">{item.name}</div>

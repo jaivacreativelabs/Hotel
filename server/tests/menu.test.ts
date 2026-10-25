@@ -106,6 +106,22 @@ describe('menu items', () => {
     ok(await w.adminA1.patch(`/api/v1/menu/items/${w.items.vada}/availability`, { isAvailable: true }));
   });
 
+  it('pins a dish to the top for one branch only', async () => {
+    const before = ok<(Item & { pinned: boolean })[]>(await w.adminA1.get('/api/v1/menu/items'));
+    const last = before[before.length - 1];
+    expect(last.pinned).toBe(false);
+    const pinned = ok<Item & { pinned: boolean }>(await w.adminA1.patch(`/api/v1/menu/items/${last.id}/pin`, { pinned: true }));
+    expect(pinned.pinned).toBe(true);
+    const after = ok<(Item & { pinned: boolean })[]>(await w.adminA1.get('/api/v1/menu/items'));
+    expect(after[0].id).toBe(last.id);
+    // Branch A2 keeps its own order.
+    const a2 = ok<(Item & { pinned: boolean })[]>(await w.adminA2.get('/api/v1/menu/items'));
+    expect(a2.find((i) => i.id === last.id)?.pinned ?? false).toBe(false);
+    // Pinning needs a branch (the restaurant-wide menu has none).
+    expect((await w.sa.patch(`/api/v1/menu/items/${w.items.idly}/pin?restaurantId=${w.restaurantA}`, { pinned: true })).status).toBe(400);
+    ok(await w.adminA1.patch(`/api/v1/menu/items/${last.id}/pin`, { pinned: false }));
+  });
+
   it('archives instead of deleting', async () => {
     const item = ok<Item>(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Temp', price: 100 }), 201);
     ok(await w.adminA1.post(`/api/v1/menu/items/${item.id}/archive`));

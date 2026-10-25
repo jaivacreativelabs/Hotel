@@ -105,6 +105,7 @@ transactions count as revenue.
 | PATCH | `/menu/items/:id` | owned item: any field. Shared item in branch scope: only `price`/`isAvailable` → stored as branch override |
 | DELETE | `/menu/items/:id/override` | removes this branch's override of a shared item |
 | PATCH | `/menu/items/:id/availability` | `{ isAvailable }` (override for shared items in branch scope) |
+| PATCH | `/menu/items/:id/pin` | `{ pinned }` – branch scope only; pinned dishes are listed first in that branch |
 | POST | `/menu/items/:id/image` | `multipart/form-data`, field `image` (JPEG/PNG/WebP, ≤ 2 MB, magic bytes checked). For a shared item in branch scope this sets the branch's own photo |
 | DELETE | `/menu/items/:id/image` | removes the photo (branch scope + shared item: back to the main-menu photo) |
 | POST | `/menu/items/:id/archive` | archive (soft delete) – history keeps its snapshots |
