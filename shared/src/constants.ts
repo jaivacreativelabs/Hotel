@@ -27,15 +27,14 @@ export const DRAFT_STATUSES = ['ACTIVE', 'FINALIZED', 'DELETED'] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 
 /**
- * Kitchen ticket pipeline: NEW → ACCEPTED → PREPARING → READY → SERVED (off the board).
- * CANCELLED: the order was deleted before the kitchen accepted it.
+ * Kitchen ticket pipeline: NEW → PREPARING → READY → SERVED (off the board).
+ * CANCELLED: the order was deleted before the kitchen started it.
  */
-export const KITCHEN_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const;
+export const KITCHEN_STATUSES = ['NEW', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const;
 export type KitchenStatus = (typeof KITCHEN_STATUSES)[number];
-export const KITCHEN_BOARD_STATUSES = ['NEW', 'ACCEPTED', 'PREPARING', 'READY'] as const;
+export const KITCHEN_BOARD_STATUSES = ['NEW', 'PREPARING', 'READY'] as const;
 export const KITCHEN_NEXT: Partial<Record<KitchenStatus, KitchenStatus>> = {
-  NEW: 'ACCEPTED',
-  ACCEPTED: 'PREPARING',
+  NEW: 'PREPARING',
   PREPARING: 'READY',
   READY: 'SERVED',
 };

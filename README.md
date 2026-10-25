@@ -105,15 +105,15 @@ are enabled automatically.
 ## Kitchen Display
 
 Optional per branch: **Super Admin → Restaurants → (restaurant) → Branches → Kitchen Display** switch.
-When it is on, that branch's admin gets a **Kitchen** page with four columns – **New → Accepted →
-Preparing → Ready** – that refreshes every few seconds (open it on a kitchen tablet or TV).
+When it is on, that branch's admin gets a **Kitchen** page with three columns – **New → Preparing →
+Ready** – that refreshes every few seconds (open it on a kitchen tablet or TV).
 
 - At a table, tapping **Done** after adding food sends the newly added items as one ticket.
 - **Generate Bill** sends anything not sent yet; a counter (New Bill) order goes to the kitchen in full.
 - Each ticket shows the table and group (or *Takeaway*), how long it has waited (amber after 10 min,
   red after 20), a star for priority and a print button for an 80 mm kitchen slip.
 - **Served** on a Ready ticket takes it off the board. Deleting an order cancels tickets the kitchen
-  has not accepted yet.
+  has not started yet.
 
 **Kitchen login:** Super Admin → Admins → *Add Account* → *Kitchen login*, pick the branch. That
 account opens straight to the Kitchen board and is refused everything else (bills, sales, menu,

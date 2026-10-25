@@ -136,7 +136,7 @@ export async function getTicket(scope: BranchScope, id: string): Promise<Kitchen
   return toKitchenTicketDTO(await findTicket(scope, id));
 }
 
-/** An order was deleted: tickets the kitchen has not accepted yet are cancelled. */
+/** An order was deleted: tickets the kitchen has not started yet are cancelled. */
 export async function cancelUnstarted(draftId: Types.ObjectId): Promise<void> {
   await KitchenTicketModel.updateMany({ draftId, status: 'NEW' }, { $set: { status: 'CANCELLED', statusAt: new Date() } });
 }

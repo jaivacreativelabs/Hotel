@@ -1,7 +1,7 @@
 import { model, Schema, type InferSchemaType } from 'mongoose';
 import { DRAFT_TYPES, KITCHEN_STATUSES } from '@rb/shared';
 
-/** An order sent to a branch kitchen (KOT), moved through NEW → ACCEPTED → PREPARING → READY → SERVED. */
+/** An order sent to a branch kitchen (KOT), moved through NEW → PREPARING → READY → SERVED. */
 const kitchenTicketSchema = new Schema(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },

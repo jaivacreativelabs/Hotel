@@ -3126,7 +3126,7 @@ a {
 }
 .kds-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(240px, 1fr));
   gap: 14px;
   align-items: start;
   flex: 1;
@@ -3139,9 +3139,6 @@ a {
   min-height: 420px;
   display: flex;
   flex-direction: column;
-}
-.kds-column.accepted {
-  --kds-tone: var(--color-accent-purple);
 }
 .kds-column.preparing {
   --kds-tone: var(--status-partial);
@@ -3279,7 +3276,7 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-/* Phones: swipe between the four columns */
+/* Phones: swipe between the three columns */
 @media (max-width: 768px) {
   .kds-board {
     display: flex;

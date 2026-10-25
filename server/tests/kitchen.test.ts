@@ -109,7 +109,7 @@ describe('sending orders', () => {
     ]);
   });
 
-  it('deleting an order cancels tickets the kitchen has not accepted', async () => {
+  it('deleting an order cancels tickets the kitchen has not started', async () => {
     let g = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: w.tables.t2, guestCount: 1 }), 201);
     g = await save(w.adminA1, g, [{ menuItemId: w.items.biryani, quantity: 1 }]);
     const t = ok<Ticket>(await w.adminA1.post(`/api/v1/bills/${g.id}/kitchen`));
@@ -120,14 +120,13 @@ describe('sending orders', () => {
 });
 
 describe('the pipeline', () => {
-  it('moves New → Accepted → Preparing → Ready → Served, one step at a time', async () => {
+  it('moves New → Preparing → Ready → Served, one step at a time', async () => {
     const [t] = await board(w.adminA1);
     const step = (from: string) => w.adminA1.post(`/api/v1/kitchen/tickets/${t.id}/advance`, { from });
-    expect(ok<Ticket>(await step('NEW')).status).toBe('ACCEPTED');
+    expect(ok<Ticket>(await step('NEW')).status).toBe('PREPARING');
     const stale = await step('NEW');
     expect(stale.status).toBe(409);
-    expect(stale.body.error.details.current.status).toBe('ACCEPTED');
-    expect(ok<Ticket>(await step('ACCEPTED')).status).toBe('PREPARING');
+    expect(stale.body.error.details.current.status).toBe('PREPARING');
     expect(ok<Ticket>(await step('PREPARING')).status).toBe('READY');
     expect(ok<Ticket>(await step('READY')).status).toBe('SERVED');
     expect((await board(w.adminA1)).some((x) => x.id === t.id)).toBe(false);

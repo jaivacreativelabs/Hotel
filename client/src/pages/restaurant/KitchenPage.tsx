@@ -1,5 +1,5 @@
 /**
- * Kitchen Display: live order tickets of the branch in four columns – New, Accepted, Preparing,
+ * Kitchen Display: live order tickets of the branch in three columns – New, Preparing,
  * Ready. Tickets arrive when an order is sent from a table ("Done") or a bill is generated.
  */
 import { KITCHEN_BOARD_STATUSES, type KitchenTicketDTO } from '@rb/shared';
@@ -16,8 +16,7 @@ import { cx, formatDateTime } from '../../utils/format';
 type BoardStatus = (typeof KITCHEN_BOARD_STATUSES)[number];
 
 const COLUMN: Record<BoardStatus, { title: string; action: string; tone: string }> = {
-  NEW: { title: 'New', action: 'Accept', tone: 'new' },
-  ACCEPTED: { title: 'Accepted', action: 'Start preparing', tone: 'accepted' },
+  NEW: { title: 'New', action: 'Start preparing', tone: 'new' },
   PREPARING: { title: 'Preparing', action: 'Mark ready', tone: 'preparing' },
   READY: { title: 'Ready', action: 'Served', tone: 'ready' },
 };
@@ -129,7 +128,7 @@ export function KitchenPage() {
   const tickets = board.data ?? [];
   return (
     <div className="page kds-page">
-      <PageHeader title="Kitchen Display" subtitle="Live order tickets · New → Accepted → Preparing → Ready" />
+      <PageHeader title="Kitchen Display" subtitle="Live order tickets · New → Preparing → Ready" />
       {board.isLoading ? (
         <Loading label="Loading tickets…" />
       ) : board.isError ? (

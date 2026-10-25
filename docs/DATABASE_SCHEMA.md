@@ -151,7 +151,7 @@ Indexes:
 | draftId | ObjectId → drafts | the order it came from |
 | type, tableLabel, groupName | | `TABLE` / `COUNTER`; empty table label = takeaway |
 | items | `{ menuItemId, name, quantity }[]` | only what was added since the previous ticket |
-| status | `NEW` → `ACCEPTED` → `PREPARING` → `READY` → `SERVED`, or `CANCELLED` | |
+| status | `NEW` → `PREPARING` → `READY` → `SERVED`, or `CANCELLED` | |
 | priority | boolean | starred tickets are listed first |
 | statusAt | Date | when it entered the current status |
 | createdBy, createdByName | | |

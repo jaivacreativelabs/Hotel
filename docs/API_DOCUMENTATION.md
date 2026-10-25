@@ -150,7 +150,7 @@ draft containing an item that became unavailable cannot be finalised until it is
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/bills/:id/kitchen` | sends the order's not-yet-sent items as a new ticket; `null` when nothing is new or the branch has no Kitchen Display. Generating a bill does this automatically |
-| GET | `/kitchen/tickets` | the board: `NEW`, `ACCEPTED`, `PREPARING`, `READY` tickets, priority first, then oldest |
+| GET | `/kitchen/tickets` | the board: `NEW`, `PREPARING`, `READY` tickets, priority first, then oldest |
 | GET | `/kitchen/tickets/:id` | one ticket (kitchen slip printing; also works after it was served) |
 | POST | `/kitchen/tickets/:id/advance` | `{ from }` – one step on (READY → SERVED leaves the board). 409 `CONFLICT` with `details.current` if another screen moved it first |
 | POST | `/kitchen/tickets/:id/priority` | `{ priority: boolean }` |
