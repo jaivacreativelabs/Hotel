@@ -126,7 +126,7 @@ transactions count as revenue.
 |---|---|---|
 | GET | `/bills/counter` | the caller's active counter (takeaway) draft – created if missing |
 | GET | `/bills?tableId=` | active drafts of a table |
-| POST | `/bills/table-groups` | `{ tableId, guestCount, groupTag? }` → new group draft (`409 SEATS_UNAVAILABLE` if it does not fit) |
+| POST | `/bills/table-groups` | `{ tableId, guestCount, groupName? }` → new group draft named `groupName` or "Group N" (`409 SEATS_UNAVAILABLE` if it does not fit, `409 DUPLICATE` if the name is already seated at that table) |
 | GET | `/bills/:id` | draft (any status) |
 | PUT | `/bills/:id` | `{ version, items: [{ menuItemId, quantity }], customerName?, discount?, guestCount?, groupTag? }` – the server looks up names/prices, recomputes totals and returns the new version; `409 CONFLICT` on a stale version |
 | POST | `/bills/:id/finalize` | `{ version, paymentMethod, idempotencyKey }` → `{ transaction }`. Repeating the call with the same key returns the same transaction |

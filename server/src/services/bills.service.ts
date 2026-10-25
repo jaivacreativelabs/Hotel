@@ -178,9 +178,10 @@ function nextGroupName(existing: string[]): string {
 export async function createTableGroup(
   actor: AuthUser,
   scope: BranchScope,
-  input: { tableId: string; guestCount: number; groupTag?: string },
+  input: { tableId: string; guestCount: number; groupName?: string; groupTag?: string },
 ): Promise<DraftDTO> {
   const tableId = toObjectId(input.tableId, 'table');
+  const wantedName = input.groupName?.replace(/\s+/g, ' ').trim();
   const draft = await runInTransaction(async (session) => {
     const table = await TableModel.findOne({ _id: tableId, branchId: scope.branch._id, isActive: true })
       .session(session ?? null)
@@ -195,6 +196,9 @@ export async function createTableGroup(
       .lean<{ groupName: string; guestCount: number }[]>();
     const used = open.reduce((a, d) => a + d.guestCount, 0);
     const free = table.seats - used;
+    if (wantedName && open.some((d) => d.groupName.toLowerCase() === wantedName.toLowerCase())) {
+      throw conflict(`“${wantedName}” is already seated at ${table.label}. Use another name.`, 'DUPLICATE');
+    }
     if (input.guestCount > free) {
       throw conflict(
         free > 0 ? `Only ${free} seat${free === 1 ? '' : 's'} available at ${table.label}` : `${table.label} is full`,
@@ -216,7 +220,7 @@ export async function createTableGroup(
           branchId: scope.branch._id,
           type: 'TABLE',
           tableId,
-          groupName: nextGroupName(open.map((d) => d.groupName)),
+          groupName: wantedName || nextGroupName(open.map((d) => d.groupName)),
           guestCount: input.guestCount,
           groupTag: input.groupTag ?? '',
           createdBy: actor._id,

@@ -130,6 +130,16 @@ describe('table groups and seats', () => {
     expect(last.groupName).toBe('Group 3');
   });
 
+  it('lets the admin name a group and rejects a duplicate name at the same table', async () => {
+    const t = ok<{ id: string }>(await w.adminA1.post('/api/v1/tables', { label: 'N1', seats: 6, shape: 'SQUARE', floor: 'Ground Floor' }), 201);
+    const named = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: t.id, guestCount: 2, groupName: '  Ravi   family ' }), 201);
+    expect(named.groupName).toBe('Ravi family');
+    const dup = await w.adminA1.post('/api/v1/bills/table-groups', { tableId: t.id, guestCount: 1, groupName: 'ravi FAMILY' });
+    expect(dup.status).toBe(409);
+    const unnamed = ok<Draft>(await w.adminA1.post('/api/v1/bills/table-groups', { tableId: t.id, guestCount: 1 }), 201);
+    expect(unnamed.groupName).toBe('Group 1');
+  });
+
   it('does not over-book seats under concurrent requests', async () => {
     const results = await Promise.all(
       Array.from({ length: 4 }, () => w.adminA1.post('/api/v1/bills/table-groups', { tableId: w.tables.t3, guestCount: 1 })),

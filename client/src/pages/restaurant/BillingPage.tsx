@@ -122,13 +122,27 @@ function DiscountEditor({ value, onApply }: { value: DiscountInput | null; onApp
   );
 }
 
+/** New Bill route: the counter bill, or a table group's bill when opened with ?draft=. */
 export function BillingPage() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  return <BillingView tableDraftId={params.get('draft')} onBackToTables={(tableId) => navigate(tableId ? `/tables?table=${tableId}` : '/tables')} />;
+}
+
+/**
+ * Food cards on the left, the bill on the right. Used by the New Bill page and, for a table
+ * group, inside the Tables page itself (so staff never leave the table screen).
+ */
+export function BillingView({
+  tableDraftId,
+  onBackToTables,
+}: {
+  tableDraftId: string | null;
+  onBackToTables: (tableId: string | null) => void;
+}) {
   const { activeBranch } = useAuth();
   const branchId = activeBranch!.id;
   const settings = activeBranch!.restaurant.settings;
-  const [params] = useSearchParams();
-  const tableDraftId = params.get('draft');
-  const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
   const search = usePageSearch('Search food items...');
@@ -225,7 +239,7 @@ export function BillingPage() {
     setPayment(null);
     setBillOpen(false);
     if (draft?.type === 'TABLE') {
-      navigate(`/tables?table=${draft.tableId}`);
+      onBackToTables(draft.tableId);
     } else {
       void queryClient.invalidateQueries({ queryKey: ['counter-draft', branchId] });
     }
@@ -320,15 +334,14 @@ export function BillingPage() {
         <div className="bill-head">
           {draft?.type === 'TABLE' && (
             <div className="bill-context">
-              <Link to={`/tables?table=${draft.tableId}`} className="link-btn">
+              <button type="button" className="link-btn" onClick={() => onBackToTables(draft.tableId)}>
                 <ArrowLeft size={16} /> Tables
-              </Link>
+              </button>
               <span className="badge badge-primary">
                 Table {draft.tableLabel} · {draft.groupName}
               </span>
               <span className="muted">
                 {draft.guestCount} guest{draft.guestCount === 1 ? '' : 's'}
-                {draft.groupTag ? ` · ${draft.groupTag}` : ''}
               </span>
             </div>
           )}
@@ -362,7 +375,11 @@ export function BillingPage() {
               <TriangleAlert />
               <div className="stack" style={{ gap: 6 }}>
                 <span>{state.message}</span>
-                {state.status === 'closed' && draft?.type === 'TABLE' && <Link to="/tables">Back to tables</Link>}
+                {state.status === 'closed' && draft?.type === 'TABLE' && (
+                  <button type="button" className="link-btn" onClick={() => onBackToTables(draft.tableId)}>
+                    Back to tables
+                  </button>
+                )}
                 {state.status === 'closed' && draft?.type === 'COUNTER' && (
                   <button className="link-btn" onClick={() => void queryClient.invalidateQueries({ queryKey: ['counter-draft', branchId] })}>
                     Start a new bill

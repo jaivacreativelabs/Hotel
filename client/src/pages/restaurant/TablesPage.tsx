@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { CirclePlus, FileText, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
 import { BillDoneModal, PaymentModal } from '../../components/PaymentButtons';
@@ -24,9 +24,14 @@ import { acquireDraftSync, releaseDraftSync } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
+import { BillingView } from './BillingPage';
 
 const ALL_FLOORS = '__all__';
-const GROUP_TAGS = ['Family', 'Friends', 'Couple', 'Business'];
+/** Same default naming as the server: the first free "Group N". */
+function nextGroupName(existing: string[]): string {
+  const used = new Set(existing);
+  for (let n = 1; ; n++) if (!used.has(`Group ${n}`)) return `Group ${n}`;
+}
 const GROUP_COLORS = [
   ['#fff1cc', '#e5a800'],
   ['#fde4e4', '#e04848'],
@@ -212,11 +217,6 @@ function GroupCard({
           <div className="muted">
             {group.guestCount} {group.guestCount === 1 ? 'Person' : 'People'}
           </div>
-          {group.groupTag && (
-            <span className="badge badge-blue badge-sm" style={{ marginTop: 6 }}>
-              {group.groupTag}
-            </span>
-          )}
         </div>
         <div className="group-amount num">{formatMoney(group.grandTotal)}</div>
         <button className="icon-btn plain" onClick={onDelete} aria-label={`Delete ${group.groupName}`} title="Delete this group's bill">
@@ -249,40 +249,54 @@ function GroupCard({
   );
 }
 
-function NewGroupForm({ free, busy, onCreate, onCancel }: { free: number; busy: boolean; onCreate: (guests: number, tag: string, openBill: boolean) => void; onCancel: () => void }) {
+function NewGroupForm({
+  free,
+  busy,
+  nextName,
+  onCreate,
+  onCancel,
+}: {
+  free: number;
+  busy: boolean;
+  nextName: string;
+  onCreate: (guests: number, name: string, openBill: boolean) => void;
+  onCancel: () => void;
+}) {
   const [guests, setGuests] = useState(Math.min(2, free));
-  const [tag, setTag] = useState('');
+  const [name, setName] = useState('');
   return (
     <div className="group-card">
       <div className="group-name">New group</div>
+      <Field label="Group name" hint={`Optional – left empty it is called “${nextName}”`}>
+        {(id) => <input id={id} className="input" placeholder={`e.g. ${nextName} or Ravi family`} value={name} maxLength={40} onChange={(e) => setName(e.target.value)} autoFocus />}
+      </Field>
       <div className="field">
         <span className="field-label">Guests</span>
         <Stepper label="guests" value={guests} min={1} max={free} onChange={setGuests} />
       </div>
-      <div className="field">
-        <span className="field-label">Tag (optional)</span>
-        <div className="tag-options">
-          {GROUP_TAGS.map((t) => (
-            <button type="button" key={t} className={cx('chip chip-sm', tag === t && 'active')} onClick={() => setTag(tag === t ? '' : t)}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <input className="input input-sm" placeholder="or type a tag" value={tag} maxLength={30} onChange={(e) => setTag(e.target.value)} />
-      </div>
       <div className="group-actions">
         <CancelButton onClick={onCancel} disabled={busy} />
-        <ConfirmButton onClick={() => onCreate(guests, tag.trim(), true)} busy={busy} label="Add food" />
+        <ConfirmButton onClick={() => onCreate(guests, name.trim(), true)} busy={busy} label="Add food" />
       </div>
-      <button className="link-btn" style={{ alignSelf: 'center' }} onClick={() => onCreate(guests, tag.trim(), false)} disabled={busy}>
+      <button className="link-btn" style={{ alignSelf: 'center' }} onClick={() => onCreate(guests, name.trim(), false)} disabled={busy}>
         Just seat the group
       </button>
     </div>
   );
 }
 
-function TableDetail({ table, onClose, onEdit }: { table: TableDTO; onClose: () => void; onEdit: () => void }) {
-  const navigate = useNavigate();
+function TableDetail({
+  table,
+  onClose,
+  onEdit,
+  onOrder,
+}: {
+  table: TableDTO;
+  onClose: () => void;
+  onEdit: () => void;
+  /** Shows the menu for this group's bill inside the Tables page. */
+  onOrder: (draftId: string) => void;
+}) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { activeBranch } = useAuth();
@@ -295,13 +309,13 @@ function TableDetail({ table, onClose, onEdit }: { table: TableDTO; onClose: () 
   const free = Math.max(0, table.seats - table.seatsUsed);
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
 
-  const createGroup = async (guestCount: number, groupTag: string, openBill: boolean) => {
+  const createGroup = async (guestCount: number, groupName: string, openBill: boolean) => {
     setBusy(true);
     try {
-      const d = await api.post<DraftDTO>('/bills/table-groups', { tableId: table.id, guestCount, ...(groupTag && { groupTag }) });
+      const d = await api.post<DraftDTO>('/bills/table-groups', { tableId: table.id, guestCount, ...(groupName && { groupName }) });
       setAdding(false);
       await refresh();
-      if (openBill) navigate(`/billing?draft=${d.id}`);
+      if (openBill) onOrder(d.id);
       else toast.success(`${d.groupName} seated at ${table.label}`);
     } catch (err) {
       toast.error(err);
@@ -401,14 +415,14 @@ function TableDetail({ table, onClose, onEdit }: { table: TableDTO; onClose: () 
           key={g.draftId}
           group={g}
           index={i}
-          onAddItems={() => navigate(`/billing?draft=${g.draftId}`)}
+          onAddItems={() => onOrder(g.draftId)}
           onGenerate={() => setPaying(g)}
           onDelete={() => setDeleting(g)}
         />
       ))}
 
       {adding ? (
-        <NewGroupForm free={free} busy={busy} onCreate={createGroup} onCancel={() => setAdding(false)} />
+        <NewGroupForm free={free} busy={busy} nextName={nextGroupName(table.groups.map((g) => g.groupName))} onCreate={createGroup} onCancel={() => setAdding(false)} />
       ) : (
         <button className="add-group" onClick={() => setAdding(true)} disabled={free === 0 || table.status === 'RESERVED'}>
           <span className="plus">
@@ -462,7 +476,30 @@ function TableDetail({ table, onClose, onEdit }: { table: TableDTO; onClose: () 
 
 // ---------------- Page ----------------
 
+/**
+ * Tables page. Ordering for a group (?order=<draftId>) happens right here: the menu appears on
+ * the left and the group's bill on the right, without going to the New Bill page.
+ */
 export function TablesPage() {
+  const [params, setParams] = useSearchParams();
+  const order = params.get('order');
+  if (order) {
+    return (
+      <BillingView
+        key={order}
+        tableDraftId={order}
+        onBackToTables={(tableId) => {
+          const p = new URLSearchParams();
+          if (tableId) p.set('table', tableId);
+          setParams(p);
+        }}
+      />
+    );
+  }
+  return <TablesBoard />;
+}
+
+function TablesBoard() {
   const { activeBranch } = useAuth();
   const branchId = activeBranch!.id;
   const tables = useTables(branchId);
@@ -579,7 +616,18 @@ export function TablesPage() {
         />
       )}
       {!panel && selected && (
-        <TableDetail key={selected.id} table={selected} onClose={() => setPanel({ table: null })} onEdit={() => setPanel({ panel: 'edit' })} />
+        <TableDetail
+          key={selected.id}
+          table={selected}
+          onClose={() => setPanel({ table: null })}
+          onEdit={() => setPanel({ panel: 'edit' })}
+          onOrder={(draftId) => {
+            // A new history entry, so the browser's Back button returns to the table.
+            const p = new URLSearchParams(params);
+            p.set('order', draftId);
+            setParams(p);
+          }}
+        />
       )}
     </>
   );

@@ -161,6 +161,8 @@ export const discountSchema = z.discriminatedUnion('type', [
 export const createGroupSchema = z.strictObject({
   tableId: objectIdSchema,
   guestCount: z.number().int().min(1).max(LIMITS.maxSeats),
+  /** Optional name such as "Ravi family"; defaults to "Group N". */
+  groupName: z.string().trim().max(40).optional(),
   groupTag: z.string().trim().max(30).optional(),
 });
 
