@@ -156,7 +156,7 @@ export function AnalyticsPage() {
               </div>
               <HBarList
                 total={o.summary.totalSales}
-                rows={o.byPaymentMethod.map((p) => ({ key: p.key, label: `${PAYMENT_LABEL[p.key]} · ${p.bills} bills`, value: p.sales }))}
+                rows={o.byPaymentMethod.map((p) => ({ key: p.key, label: PAYMENT_LABEL[p.key], value: p.sales }))}
               />
             </div>
             <div className="card chart-card">
