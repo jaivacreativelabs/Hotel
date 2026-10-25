@@ -7,7 +7,6 @@ import {
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  ArchiveRestore,
   ArrowDown,
   ArrowUp,
   Camera,
@@ -384,7 +383,7 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
       {confirmArchive && (
         <ConfirmDialog
           title={`Remove “${item!.name}”?`}
-          message="The item is archived: it disappears from the menu and billing, but past bills keep it. You can restore it later."
+          message="This food disappears from the menu and billing. Past bills still show it."
           confirmLabel="Remove"
           danger
           onCancel={() => setConfirmArchive(false)}
@@ -500,9 +499,8 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
   const queryClient = useQueryClient();
   const scoped = useScopedApi(scope);
   const toast = useToast();
-  const [showArchived, setShowArchived] = useState(false);
   const categories = useCategories(scope, true);
-  const items = useMenuItems(scope, showArchived);
+  const items = useMenuItems(scope);
   const [category, setCategory] = useState('all');
   const [panel, setPanel] = useState<{ kind: 'item'; item: MenuItemDTO | null } | { kind: 'categories' } | null>(null);
   const [archiving, setArchiving] = useState<MenuItemDTO | null>(null);
@@ -512,12 +510,9 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (items.data ?? []).filter(
-      (i) =>
-        (category === 'all' || i.categoryId === category) &&
-        (!q || i.name.toLowerCase().includes(q)) &&
-        (showArchived ? i.status === 'ARCHIVED' : i.status === 'ACTIVE'),
+      (i) => i.status === 'ACTIVE' && (category === 'all' || i.categoryId === category) && (!q || i.name.toLowerCase().includes(q)),
     );
-  }, [items.data, category, search, showArchived]);
+  }, [items.data, category, search]);
 
   const run = async (fn: () => Promise<unknown>, success: string) => {
     try {
@@ -557,16 +552,13 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
               {c.name}
             </button>
           ))}
-          <button className={cx('chip', showArchived && 'active')} onClick={() => setShowArchived((s) => !s)} title="Show removed items">
-            <ArchiveRestore /> Removed
-          </button>
         </div>
 
         {items.isLoading || categories.isLoading ? (
           <Loading label="Loading menu…" />
         ) : visible.length === 0 ? (
-          <Empty icon={<UtensilsCrossed />} title={showArchived ? 'No removed items' : search ? 'No items match your search' : 'No food items yet'}>
-            {!showArchived && !search && (
+          <Empty icon={<UtensilsCrossed />} title={search ? 'No items match your search' : 'No food items yet'}>
+            {!search && (
               <button className="btn btn-primary" onClick={() => setPanel({ kind: 'item', item: null })}>
                 <CirclePlus /> Add your first item
               </button>
@@ -575,14 +567,11 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
         ) : (
           <div className="menu-grid">
             {visible.map((item) => (
-              <div key={item.id} className={cx('menu-card', !item.isAvailable && 'unavailable', item.status === 'ARCHIVED' && 'archived')}>
+              <div key={item.id} className={cx('menu-card', !item.isAvailable && 'unavailable')}>
                 <div className="food-media">
                   <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
                 </div>
-                <div className="menu-card-tags">
-                  {!item.isAvailable && <span className="tag dark">Sold out</span>}
-                  {item.hasOverride && <span className="tag yellow">Branch price</span>}
-                </div>
+                <div className="menu-card-tags">{!item.isAvailable && <span className="tag dark">Sold out</span>}</div>
                 <div className="menu-card-body">
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="food-name" title={item.name}>
@@ -592,21 +581,13 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
                   </div>
                 </div>
                 <div className="menu-card-actions">
-                  {item.status === 'ARCHIVED' ? (
-                    <button className="btn btn-soft btn-sm" onClick={() => void run(() => scoped.post(`/menu/items/${item.id}/restore`), `“${item.name}” restored`)} disabled={!item.editable}>
-                      <ArchiveRestore /> Restore
+                  <button className="btn btn-soft btn-sm" onClick={() => setPanel({ kind: 'item', item })} aria-label={`Edit ${item.name}`}>
+                    <Pencil /> Edit
+                  </button>
+                  {item.editable && (
+                    <button className="btn btn-danger-soft btn-sm" onClick={() => setArchiving(item)} aria-label={`Remove ${item.name}`}>
+                      <Trash2 /> Remove
                     </button>
-                  ) : (
-                    <>
-                      <button className="btn btn-soft btn-sm" onClick={() => setPanel({ kind: 'item', item })} aria-label={`Edit ${item.name}`}>
-                        <Pencil /> Edit
-                      </button>
-                      {item.editable && (
-                        <button className="btn btn-danger-soft btn-sm" onClick={() => setArchiving(item)} aria-label={`Remove ${item.name}`}>
-                          <Trash2 /> Remove
-                        </button>
-                      )}
-                    </>
                   )}
                 </div>
               </div>
@@ -622,7 +603,7 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
       {archiving && (
         <ConfirmDialog
           title={`Remove “${archiving.name}”?`}
-          message="The item disappears from the menu and billing. Past bills keep it, and you can restore it from “Removed”."
+          message="This food disappears from the menu and billing. Past bills still show it."
           confirmLabel="Remove"
           danger
           onCancel={() => setArchiving(null)}
