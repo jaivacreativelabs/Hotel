@@ -2211,6 +2211,11 @@ a {
   box-shadow: var(--shadow-modal);
   white-space: nowrap;
 }
+.see-more {
+  align-self: center;
+  margin-top: 2px;
+  font-size: var(--font-size-md);
+}
 .trend-legend {
   display: flex;
   justify-content: center;

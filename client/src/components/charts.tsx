@@ -2,6 +2,7 @@
  * Minimal dependency-free charts. Single series in the brand hue (magnitude only), thin
  * bars with rounded data-ends, recessive grid, hover tooltip and keyboard focus.
  */
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { formatMoney } from '../utils/format';
 
@@ -224,12 +225,24 @@ export function TrendChart({ data, height = 280 }: { data: TrendDatum[]; height?
   );
 }
 
-export function HBarList({ rows, total }: { rows: { key: string; label: string; value: number; sub?: string }[]; total?: number }) {
+export function HBarList({
+  rows,
+  total,
+  initialCount,
+}: {
+  rows: { key: string; label: string; value: number; sub?: string }[];
+  total?: number;
+  /** Show only this many rows with a "See more" button for the rest. */
+  initialCount?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
   const max = Math.max(1, ...rows.map((r) => r.value));
   if (rows.length === 0) return <p className="muted">No sales in this period.</p>;
+  const hidden = initialCount && !expanded ? Math.max(0, rows.length - initialCount) : 0;
+  const shown = hidden ? rows.slice(0, initialCount) : rows;
   return (
     <div className="hbar-list">
-      {rows.map((r) => (
+      {shown.map((r) => (
         <div key={r.key} className="hbar-row" title={r.sub}>
           <span className="label">{r.label}</span>
           <div className="hbar-track">
@@ -241,6 +254,19 @@ export function HBarList({ rows, total }: { rows: { key: string; label: string; 
           </span>
         </div>
       ))}
+      {initialCount !== undefined && rows.length > initialCount && (
+        <button type="button" className="link-btn see-more" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
+          {expanded ? (
+            <>
+              See less <ChevronUp size={16} />
+            </>
+          ) : (
+            <>
+              See more ({hidden}) <ChevronDown size={16} />
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 }

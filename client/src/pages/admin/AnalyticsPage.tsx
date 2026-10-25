@@ -132,7 +132,10 @@ export function AnalyticsPage() {
                 <span className="card-title">Top-selling dishes</span>
                 <span className="muted">item sales</span>
               </div>
-              <HBarList rows={o.topItems.map((i) => ({ key: i.key, label: i.name, value: i.sales, sub: `${i.quantity.toLocaleString('en-IN')} sold` }))} />
+              <HBarList
+                initialCount={5}
+                rows={o.topItems.map((i) => ({ key: i.key, label: i.name, value: i.sales, sub: `${i.quantity.toLocaleString('en-IN')} sold` }))}
+              />
             </div>
             <div className="card chart-card">
               <div className="chart-head">

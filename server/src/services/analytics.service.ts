@@ -108,7 +108,7 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
             },
           },
           { $sort: { sales: -1, quantity: -1 } },
-          { $limit: 10 },
+          { $limit: 25 },
         ],
         topCategories: [
           { $match: { status: 'COMPLETED' } },

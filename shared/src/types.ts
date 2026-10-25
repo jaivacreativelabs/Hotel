@@ -263,7 +263,7 @@ export interface AnalyticsOverviewDTO {
   byRestaurant: (AnalyticsPoint & { name: string })[];
   byBranch: (AnalyticsPoint & { name: string; restaurantName: string })[];
   byPaymentMethod: (AnalyticsPoint & { key: PaymentMethod })[];
-  /** Best-selling dishes by item sales (quantity × price, before bill-level discount/tax). */
+  /** Best-selling dishes (top 25) by item sales (quantity × price, before bill-level discount/tax). */
   topItems: AnalyticsRankRow[];
   /** Item sales per category. */
   topCategories: AnalyticsRankRow[];
