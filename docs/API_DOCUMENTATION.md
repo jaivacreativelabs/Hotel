@@ -90,7 +90,7 @@ Super Admin accounts cannot be read, modified or created through these endpoints
 | GET | `/admin/daily-report` | daily report email settings: `{ enabled, recipients, sendTime, timezone, mailConfigured, sender, lastSentFor, lastSentAt, lastError }` |
 | PUT | `/admin/daily-report` | `{ enabled, recipients: email[] (≤10) }` (audit logged) |
 | GET | `/admin/daily-report/preview` | `{ html }` – today's report email as it would be sent now |
-| POST | `/admin/daily-report/send` | sends today's report now to the saved recipients (does not use up the scheduled send). 503 `MAIL_NOT_CONFIGURED`, 400 `NO_RECIPIENTS`, 502 `MAIL_FAILED` |
+| POST | `/admin/daily-report/send` | `{ to?: email[] }` – sends today's report now to the saved recipients, or one copy to `to` (not saved) (does not use up the scheduled send). 503 `MAIL_NOT_CONFIGURED`, 400 `NO_RECIPIENTS`, 502 `MAIL_FAILED` |
 
 ### Scheduled jobs
 

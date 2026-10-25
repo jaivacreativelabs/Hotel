@@ -125,6 +125,10 @@ export const dailyReportSettingsSchema = z.strictObject({
     .refine((a) => new Set(a).size === a.length, 'Each email only once'),
 });
 export type DailyReportSettingsInput = z.infer<typeof dailyReportSettingsSchema>;
+/** "Send now": to the saved recipients, or a one-off copy to `to` (they are not saved). */
+export const dailyReportSendSchema = z.strictObject({
+  to: z.array(z.string().trim().toLowerCase().email('Invalid email').max(200)).min(1).max(10).optional(),
+});
 
 // ---------- Menu ----------
 export const categoryCreateSchema = z.strictObject({

@@ -112,6 +112,13 @@ describe('sending', () => {
 
     ok(await w.sa.post('/api/v1/admin/daily-report/send'));
     expect(sendMail).toHaveBeenCalledTimes(2);
+
+    // A one-off copy goes only to the given address and does not change the saved list.
+    const once = ok<{ recipients: string[] }>(await w.sa.post('/api/v1/admin/daily-report/send', { to: ['Guest@Example.com'] }));
+    expect(once.recipients).toEqual(['guest@example.com']);
+    expect((sendMail.mock.calls[2][0] as { to: string[] }).to).toEqual(['guest@example.com']);
+    expect(ok<{ recipients: string[] }>(await w.sa.get('/api/v1/admin/daily-report')).recipients).toEqual(['owner@example.com']);
+    expect((await w.sa.post('/api/v1/admin/daily-report/send', { to: ['nope'] })).status).toBe(400);
     expect((await ReportSettingModel.findById('daily').lean())?.lastSentFor).toBe(today());
   });
 

@@ -4,6 +4,7 @@ import {
   auditQuerySchema,
   branchCreateSchema,
   branchUpdateSchema,
+  dailyReportSendSchema,
   dailyReportSettingsSchema,
   demoAccountUpdateSchema,
   resetPasswordSchema,
@@ -107,7 +108,8 @@ export const previewDailyReport = async (_req: Request, res: Response) => {
   res.json({ data: { html: await dailyReport.previewDailyReport() } });
 };
 export const sendDailyReportNow = async (req: Request, res: Response) => {
-  res.json({ data: await dailyReport.sendDailyReport({ manual: currentUser(req) }) });
+  const { to } = parse(dailyReportSendSchema, req.body ?? {});
+  res.json({ data: await dailyReport.sendDailyReport({ manual: currentUser(req), to }) });
 };
 
 // Analytics & reports

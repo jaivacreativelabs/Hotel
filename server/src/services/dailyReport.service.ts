@@ -232,16 +232,18 @@ export type SendResult = { status: 'sent'; date: string; recipients: string[] } 
 
 /**
  * Sends the report for `date`. Scheduled sends claim the day first so it goes out only once;
- * `manual` sends (the Super Admin's "Send now") always go and do not use up the day.
+ * `manual` sends (the Super Admin's "Send now") always go and do not use up the day; they may go
+ * to a one-off `to` list instead of the saved recipients.
  */
-export async function sendDailyReport(opts: { date?: string; manual?: AuthUser } = {}): Promise<SendResult> {
+export async function sendDailyReport(opts: { date?: string; manual?: AuthUser; to?: string[] } = {}): Promise<SendResult> {
   const date = opts.date ?? todayIn(env.APP_TIMEZONE);
   if (!env.mailConfigured) {
     if (opts.manual) throw new AppError(503, 'MAIL_NOT_CONFIGURED', 'Email is not set up on the server yet (SMTP_USER / SMTP_PASS).');
     return { status: 'skipped', reason: 'mail not configured' };
   }
   const settings = await loadSettings();
-  if (!settings.recipients.length) {
+  const recipients = opts.manual && opts.to?.length ? opts.to : settings.recipients;
+  if (!recipients.length) {
     if (opts.manual) throw new AppError(400, 'NO_RECIPIENTS', 'Add at least one email address first.');
     return { status: 'skipped', reason: 'no recipients' };
   }
@@ -257,7 +259,7 @@ export async function sendDailyReport(opts: { date?: string; manual?: AuthUser }
   }
 
   try {
-    await deliver(await buildDailyReport(date), settings.recipients);
+    await deliver(await buildDailyReport(date), recipients);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await ReportSettingModel.updateOne(
@@ -275,10 +277,10 @@ export async function sendDailyReport(opts: { date?: string; manual?: AuthUser }
       action: 'DAILY_REPORT_SENT',
       entityType: 'ReportSetting',
       entityId: SETTINGS_ID,
-      summary: `Sent the daily report for ${date} to ${settings.recipients.join(', ')}`,
+      summary: `Sent the daily report for ${date} to ${recipients.join(', ')}`,
     });
   }
-  return { status: 'sent', date, recipients: settings.recipients };
+  return { status: 'sent', date, recipients };
 }
 
 /** Current HH:MM in APP_TIMEZONE. */

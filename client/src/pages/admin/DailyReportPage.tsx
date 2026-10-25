@@ -45,11 +45,13 @@ function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
     setDraft('');
   };
 
-  const sendNow = async () => {
+  const [onceTo, setOnceTo] = useState('');
+  const sendNow = async (to?: string) => {
     setBusy('send');
     try {
-      const r = await api.post<{ recipients: string[] }>('/admin/daily-report/send', undefined, { branchId: null });
+      const r = await api.post<{ recipients: string[] }>('/admin/daily-report/send', to ? { to: [to] } : undefined, { branchId: null });
       toast.success(`Today's report sent to ${r.recipients.join(', ')}`);
+      if (to) setOnceTo('');
       void queryClient.invalidateQueries({ queryKey: KEY });
     } catch (err) {
       toast.error(err);
@@ -120,9 +122,24 @@ function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
           <span>Last attempt failed: {settings.lastError}</span>
         </div>
       )}
-      <button className="btn btn-primary btn-lg" onClick={sendNow} disabled={busy !== null || changed || !settings.mailConfigured || settings.recipients.length === 0}>
+      <button className="btn btn-primary btn-lg" onClick={() => void sendNow()} disabled={busy !== null || changed || !settings.mailConfigured || settings.recipients.length === 0}>
         {busy === 'send' ? <Spinner /> : <Send size={18} />} Send today's report now
       </button>
+      <div>
+        <div className="muted" style={{ fontSize: '0.8125rem', marginBottom: 6 }}>
+          Send one copy to someone else (not saved)
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <input className="input" type="email" placeholder="name@gmail.com" value={onceTo} onChange={(e) => setOnceTo(e.target.value)} aria-label="Send one copy to" />
+          <button
+            className="btn btn-soft"
+            onClick={() => void sendNow(onceTo.trim().toLowerCase())}
+            disabled={busy !== null || !settings.mailConfigured || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(onceTo.trim())}
+          >
+            <Send size={16} /> Send
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
