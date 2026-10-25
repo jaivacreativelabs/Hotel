@@ -77,6 +77,21 @@ describe('Super Admin – Restaurant Admin accounts', () => {
     expect((await ra.useBranch(w.branchA1).get('/api/v1/tables')).status).toBe(403);
   });
 
+  it('keeps branches isolated: a Restaurant Admin can be assigned to only one branch', async () => {
+    const two = await w.sa.post('/api/v1/admin/users', {
+      name: 'Two',
+      email: 'two@test.local',
+      password: PASSWORD,
+      branchIds: [w.branchA1, w.branchA2],
+    });
+    expect(two.status).toBe(400);
+    expect(two.body.error.message).toMatch(/only one branch/);
+    const users = ok<{ id: string; email: string }[]>(await w.sa.get('/api/v1/admin/users'));
+    const a1 = users.find((u) => u.email === 'a1@test.local')!;
+    expect((await w.sa.patch(`/api/v1/admin/users/${a1.id}`, { branchIds: [w.branchA1, w.branchB1] })).status).toBe(400);
+    expect((await w.sa.patch(`/api/v1/admin/users/${a1.id}`, { branchIds: [] })).status).toBe(400);
+  });
+
   it('rejects duplicate emails and unknown branches', async () => {
     expect((await w.sa.post('/api/v1/admin/users', { name: 'D', email: 'a1@test.local', password: PASSWORD, branchIds: [w.branchA1] })).status).toBe(409);
     expect(

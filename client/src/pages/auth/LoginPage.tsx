@@ -87,7 +87,7 @@ export function LoginPage() {
                       setError(null);
                     }}
                   >
-                    {d.role === 'Super Admin' ? <ShieldCheck /> : <Store />}
+                    {d.kind === 'super' ? <ShieldCheck /> : <Store />}
                     <span>
                       <strong>{d.role}</strong>
                       <small>{d.hint}</small>

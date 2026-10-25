@@ -12,7 +12,7 @@ There are exactly two roles:
 | Role | Can do |
 |---|---|
 | **Super Admin** | Restaurants, branches, Restaurant Admin accounts and assignments, shared and branch menus, all transactions, reports (CSV), analytics, audit log |
-| **Restaurant Admin** | For assigned branches only: New Bill, table billing, menu (branch items, branch prices/availability), transactions, void/refund with reason |
+| **Restaurant Admin** | Exactly **one** branch (branches are fully isolated): New Bill, table billing, menu (branch items, branch prices/availability/photos), transactions, void/refund with reason |
 
 ## Requirements
 

@@ -10,24 +10,26 @@ import { usePageSearch } from '../../store/topbar';
 import { formatDateTime } from '../../utils/format';
 import { adminKeys, useAllBranches, useRestaurants } from './adminShared';
 
-/** Branch checkboxes grouped by restaurant. */
-function BranchAssignment({ value, onChange, restrictTo }: { value: string[]; onChange: (ids: string[]) => void; restrictTo?: string }) {
+/**
+ * Branch picker grouped by restaurant. Branches are fully isolated, so a Restaurant Admin
+ * manages exactly one branch (radio buttons).
+ */
+function BranchAssignment({ value, onChange, restrictTo }: { value: string | null; onChange: (id: string) => void; restrictTo?: string }) {
   const restaurants = useRestaurants();
   const branches = useAllBranches();
   const groups = (restaurants.data ?? [])
     .filter((r) => !restrictTo || r.id === restrictTo)
     .map((r) => ({ restaurant: r, branches: (branches.data ?? []).filter((b) => b.restaurantId === r.id) }))
     .filter((g) => g.branches.length > 0);
-  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
   if (groups.length === 0) return <span className="field-hint">Create a branch first.</span>;
   return (
-    <div className="stack" style={{ gap: 10 }}>
+    <div className="stack" style={{ gap: 10 }} role="radiogroup" aria-label="Branch">
       {groups.map(({ restaurant, branches: list }) => (
         <div key={restaurant.id} className="assign-group">
           <h4>{restaurant.name}</h4>
           {list.map((b) => (
             <label key={b.id} className="check">
-              <input type="checkbox" checked={value.includes(b.id)} onChange={() => toggle(b.id)} />
+              <input type="radio" name="admin-branch" checked={value === b.id} onChange={() => onChange(b.id)} />
               {b.name} <span className="muted">({b.code})</span>
               {b.status === 'INACTIVE' && <span className="badge badge-gray badge-sm">inactive</span>}
             </label>
@@ -44,7 +46,8 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
   const [name, setName] = useState(initial?.name ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
   const [password, setPassword] = useState('');
-  const [branchIds, setBranchIds] = useState<string[]>(initial?.branchIds ?? []);
+  // Older accounts may still list several branches; editing keeps only one.
+  const [branchId, setBranchId] = useState<string | null>(initial?.branchIds[0] ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -54,7 +57,8 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
       const check = passwordSchema.safeParse(password);
       if (!check.success) return setError(`Password: ${check.error.issues[0].message}`);
     }
-    if (branchIds.length === 0) return setError('Assign at least one branch');
+    if (!branchId) return setError('Choose the branch this admin manages');
+    const branchIds = [branchId];
     setBusy(true);
     setError(null);
     try {
@@ -71,7 +75,11 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
   };
 
   return (
-    <SidePanel title={initial ? 'Edit Restaurant Admin' : 'Add Restaurant Admin'} subtitle="Restaurant Admins bill, manage menus, tables and transactions of their branches" onClose={onClose}>
+    <SidePanel
+      title={initial ? 'Edit Restaurant Admin' : 'Add Restaurant Admin'}
+      subtitle="A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch"
+      onClose={onClose}
+    >
       <form className="stack" style={{ gap: 18 }} onSubmit={submit}>
         <Field label="Full name">{(id) => <input id={id} className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />}</Field>
         <Field label="Email (login)">
@@ -83,8 +91,11 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
           </Field>
         )}
         <div className="field">
-          <span className="field-label">Assigned branches</span>
-          <BranchAssignment value={branchIds} onChange={setBranchIds} restrictTo={initial ? undefined : restrictTo} />
+          <span className="field-label">Branch</span>
+          <BranchAssignment value={branchId} onChange={setBranchId} restrictTo={initial ? undefined : restrictTo} />
+          {initial && initial.branchIds.length > 1 && (
+            <span className="field-hint">This admin had several branches. Saving keeps only the selected one.</span>
+          )}
         </div>
         {error && <div className="alert alert-danger">{error}</div>}
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>

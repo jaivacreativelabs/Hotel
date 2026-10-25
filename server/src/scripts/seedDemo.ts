@@ -118,18 +118,23 @@ async function main() {
     );
   }
 
-  const email = 'admin@tiffinhouse.local';
-  const password = process.env.DEMO_ADMIN_PASSWORD || `Demo-${randomBytes(4).toString('hex')}1`;
-  if (!(await UserModel.exists({ email }))) {
+  // One Restaurant Admin per branch – branches are fully isolated.
+  const admins = [
+    { branch: branches[0], name: 'Anna Nagar Admin', email: 'admin@tiffinhouse.local', password: process.env.DEMO_ADMIN_PASSWORD },
+    { branch: branches[1], name: 'T. Nagar Admin', email: 'tnagar@tiffinhouse.local', password: process.env.DEMO_ADMIN2_PASSWORD },
+  ];
+  for (const a of admins) {
+    if (await UserModel.exists({ email: a.email })) continue;
+    const password = a.password || `Demo-${randomBytes(4).toString('hex')}1`;
     await UserModel.create({
-      name: 'Branch Admin',
-      email,
+      name: a.name,
+      email: a.email,
       passwordHash: await hashPassword(password),
       role: 'RESTAURANT_ADMIN',
       restaurantIds: [restaurant._id],
-      branchIds: branches.map((b) => b._id),
+      branchIds: [a.branch._id],
     });
-    console.log(`✔ Restaurant Admin: ${email} / ${password}  (change it after signing in)`);
+    console.log(`✔ ${a.name}: ${a.email} / ${password}  (change it after signing in)`);
   }
   console.log(`✔ Seeded "${restaurantName}" with ${branches.length} branches, ${ITEMS.length} items and ${TABLES.length} tables per branch.`);
 }

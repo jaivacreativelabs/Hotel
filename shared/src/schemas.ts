@@ -91,15 +91,22 @@ export const branchCreateSchema = z.strictObject({
 export const branchUpdateSchema = branchCreateSchema.omit({ restaurantId: true }).partial();
 
 // ---------- Users (Restaurant Admins only) ----------
+// Branches are fully isolated: a Restaurant Admin manages exactly one branch. Only the
+// Super Admin works across branches.
+const singleBranchSchema = z
+  .array(objectIdSchema)
+  .min(1, 'Choose the branch this admin manages')
+  .max(1, 'A Restaurant Admin can manage only one branch');
+
 export const userCreateSchema = z.strictObject({
   name: name(100),
   email: z.string().trim().toLowerCase().email('Invalid email').max(200),
   password: passwordSchema,
-  branchIds: z.array(objectIdSchema).min(1, 'Assign at least one branch').max(50),
+  branchIds: singleBranchSchema,
 });
 export const userUpdateSchema = z.strictObject({
   name: name(100).optional(),
-  branchIds: z.array(objectIdSchema).min(1, 'Assign at least one branch').max(50).optional(),
+  branchIds: singleBranchSchema.optional(),
 });
 export const resetPasswordSchema = z.strictObject({ password: passwordSchema });
 
