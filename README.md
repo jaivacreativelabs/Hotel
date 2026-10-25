@@ -57,6 +57,7 @@ MONGODB_URI="mongodb://127.0.0.1:27027/restaurant_billing?replicaSet=rb-dev&dire
 | `npm run setup:superadmin` | create a Super Admin (`-- --reset-password` to reset one) |
 | `npm run seed:demo` | demo data (refuses to run in production; creates no sales) |
 | `npm run seed:bills` | 10 000 demo bills over the last 90 days for every active branch, numbered `D00001…` and tagged `isDemo` (`-- --count=500 --days=30` to change) |
+| `npm run seed:bills -- --append` | adds another batch on top of existing demo bills (numbering continues) |
 | `npm run seed:bills -- --remove` | deletes every demo bill; real bills (`B…`) are never touched |
 
 ## Getting a MongoDB URL (MongoDB Atlas)

@@ -31,9 +31,12 @@ const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}`)
 const COUNT = Number(arg('count') ?? 10_000);
 const DAYS = Number(arg('days') ?? 90);
 const REMOVE = process.argv.includes('--remove');
+// Add more demo bills on top of existing ones (numbering continues after the last D-number).
+const APPEND = process.argv.includes('--append');
 
-// Deterministic pseudo-random numbers so a run can be reproduced.
-let seed = 20261025;
+// Deterministic pseudo-random numbers so a first run can be reproduced; appends use a new seed
+// so they do not repeat the same bills.
+let seed = APPEND ? Date.now() | 0 : 20261025;
 const rand = () => {
   seed = (seed + 0x6d2b79f5) | 0;
   let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -70,8 +73,8 @@ async function remove() {
 }
 
 async function generate() {
-  if (await TransactionModel.exists({ isDemo: true })) {
-    throw new Error('Demo bills already exist. Run `npm run seed:bills -- --remove` first.');
+  if (!APPEND && (await TransactionModel.exists({ isDemo: true }))) {
+    throw new Error('Demo bills already exist. Add more with `npm run seed:bills -- --append`, or remove them with `-- --remove`.');
   }
   const restaurants = await RestaurantModel.find({ status: 'ACTIVE' }).lean<RestaurantLean[]>();
   const branches = await BranchModel.find({ status: 'ACTIVE', restaurantId: { $in: restaurants.map((r) => r._id) } }).lean();
@@ -148,7 +151,15 @@ async function writeBills(setups: Setup[]) {
   while (times.length > COUNT) times.splice(Math.floor(rand() * times.length), 1);
   times.sort((a, b) => a.getTime() - b.getTime());
 
+  // Continue each branch's D-numbering after any existing demo bills.
   const seq = new Map<string, number>();
+  for (const s of setups) {
+    const last = await TransactionModel.findOne({ branchId: s.branch._id, isDemo: true, billNumber: /^D\d+$/ })
+      .sort({ billNumber: -1 })
+      .select('billNumber')
+      .lean<{ billNumber: string }>();
+    seq.set(String(s.branch._id), last ? Number(last.billNumber.slice(1)) : 0);
+  }
   const docs = times.map((finalizedAt) => {
     const s = pick(setups);
     const key = String(s.branch._id);
