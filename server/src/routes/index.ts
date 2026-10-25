@@ -20,6 +20,11 @@ function rateLimited(message: string) {
 export function createApiRouter(): Router {
   const api = Router();
 
+  // Clients are identified by req.ip, which Express derives from X-Forwarded-For when
+  // TRUST_PROXY is set. Hosts such as Vercel also send the standard `Forwarded` header, which
+  // Express ignores – that is expected, so the limiter's warning about it is turned off.
+  const validate = { forwardedHeader: false } as const;
+
   // Only failed attempts count, so busy counters are not locked out by their own logins.
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -27,6 +32,7 @@ export function createApiRouter(): Router {
     skipSuccessfulRequests: true,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    validate,
     handler: rateLimited('Too many sign-in attempts. Try again in 15 minutes.'),
   });
   const apiLimiter = rateLimit({
@@ -34,6 +40,7 @@ export function createApiRouter(): Router {
     limit: 1200,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    validate,
     handler: rateLimited('Too many requests. Slow down a little.'),
   });
 

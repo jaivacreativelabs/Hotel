@@ -39,7 +39,8 @@ const schema = z.object({
   SERVE_CLIENT: bool(false),
   CLIENT_DIST: z.string().default(path.join(repoRoot, 'client', 'dist')),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
-  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Vercel always sits behind one proxy hop, so trust it there without extra configuration.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(process.env.VERCEL ? 1 : 0),
 });
 
 const parsed = schema.safeParse(process.env);

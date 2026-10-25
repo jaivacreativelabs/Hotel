@@ -127,7 +127,7 @@ because Vercel has no persistent disk.
    | `MONGODB_URI` | your Atlas connection string (the `mongodb+srv://…` form works on Vercel) |
    | `JWT_SECRET` | a new long random secret (do not reuse the development one) |
    | `APP_TIMEZONE` | `Asia/Kolkata` |
-   | `TRUST_PROXY` | `1` |
+   | `TRUST_PROXY` | `1` (optional – set automatically on Vercel) |
    | `IMAGE_STORAGE` | `mongo` |
 
    Optional demo buttons on the login page (they fill the form): `VITE_DEMO_SUPERADMIN_EMAIL`,
