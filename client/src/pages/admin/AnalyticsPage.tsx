@@ -1,8 +1,8 @@
 import type { AnalyticsOverviewDTO } from '@rb/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Ban, IndianRupee, Receipt, ReceiptText, Undo2 } from 'lucide-react';
+import { Ban, IndianRupee, Receipt, ReceiptText, TrendingUp, Undo2 } from 'lucide-react';
 import { useState } from 'react';
-import { BarChart, HBarList } from '../../components/charts';
+import { BarChart, HBarList, TrendChart } from '../../components/charts';
 import { Empty, Loading, PageHeader } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { formatDay, formatMoney, PAYMENT_LABEL } from '../../utils/format';
@@ -119,10 +119,13 @@ export function AnalyticsPage() {
             </div>
             <div className="card chart-card wide">
               <div className="chart-head">
-                <span className="card-title">Sales by hour</span>
-                <span className="muted">busiest times of day</span>
+                <span className="stat-label" style={{ color: 'var(--color-primary)' }}>
+                  <TrendingUp />
+                </span>
+                <span className="card-title">Sales Trend</span>
+                <span className="muted">by hour of day</span>
               </div>
-              <BarChart height={220} data={trimHours(o.hourly).map((h) => ({ key: h.key, label: hourLabel(h.key), value: h.sales, sub: `${h.bills} bills` }))} />
+              <TrendChart data={trimHours(o.hourly).map((h) => ({ key: h.key, label: hourLabel(h.key), value: h.sales, count: h.bills }))} />
             </div>
             <div className="card chart-card">
               <div className="chart-head">

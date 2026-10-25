@@ -2211,6 +2211,31 @@ a {
   box-shadow: var(--shadow-modal);
   white-space: nowrap;
 }
+.trend-legend {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch-line {
+  width: 22px;
+  height: 0;
+  border-top: 3px solid var(--color-primary);
+  border-radius: 2px;
+}
+.swatch-badge {
+  width: 18px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--color-accent-purple);
+}
 .hbar-list {
   display: flex;
   flex-direction: column;

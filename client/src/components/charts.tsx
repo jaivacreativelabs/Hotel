@@ -114,6 +114,116 @@ export function BarChart({ data, height = 240, valueLabel = 'Sales' }: { data: B
   );
 }
 
+export interface TrendDatum {
+  key: string;
+  label: string;
+  /** money, paise – drawn as the line on the ₹ axis */
+  value: number;
+  /** order count – shown as a label above the hour (no second axis) */
+  count: number;
+}
+
+/**
+ * Sales trend: net total as a line on a single ₹ axis, with each point's order count shown as a
+ * label above the x-axis (two measures, one scale – no dual axis).
+ */
+export function TrendChart({ data, height = 280 }: { data: TrendDatum[]; height?: number }) {
+  const { ref, width } = useWidth<HTMLDivElement>();
+  const [hover, setHover] = useState<number | null>(null);
+  // Bottom area holds, top to bottom: the order-count row, hour labels and the axis title.
+  const pad = { top: 16, right: 18, bottom: 70, left: 60 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const max = niceMax(Math.max(0, ...data.map((d) => d.value)));
+  const step = data.length > 1 ? innerW / (data.length - 1) : 0;
+  const x = (i: number) => pad.left + (data.length > 1 ? i * step : innerW / 2);
+  const y = (v: number) => pad.top + innerH - (max ? (v / max) * innerH : 0);
+  const baseline = pad.top + innerH;
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+  const labelEvery = Math.ceil(data.length / Math.max(1, Math.floor(innerW / 56)));
+  const line = data.map((d, i) => `${i ? 'L' : 'M'}${x(i)},${y(d.value)}`).join(' ');
+  const area = data.length ? `${line} L${x(data.length - 1)},${baseline} L${x(0)},${baseline} Z` : '';
+  const badgeY = baseline + 8; // below the plot, so a low point never hides a count
+  // On narrow screens show counts only where an hour label is shown (the tooltip has all).
+  const badgeEvery = step >= 30 ? 1 : labelEvery;
+  const h = hover !== null ? data[hover] : null;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div className="trend-legend" aria-hidden="true">
+        <span>
+          <i className="swatch-line" /> Net Total (₹)
+        </span>
+        <span>
+          <i className="swatch-badge" /> Orders
+        </span>
+      </div>
+      <svg
+        className="chart-svg"
+        width={width}
+        height={height}
+        role="img"
+        aria-label="Sales trend by hour: net total and number of orders"
+        onMouseLeave={() => setHover(null)}
+        onMouseMove={(e) => {
+          const bx = e.currentTarget.getBoundingClientRect().left;
+          const i = Math.round((e.clientX - bx - pad.left) / (step || 1));
+          setHover(Math.max(0, Math.min(data.length - 1, i)));
+        }}
+      >
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={pad.left} x2={width - pad.right} y1={y(max * t)} y2={y(max * t)} stroke="var(--color-border)" />
+            <text x={pad.left - 8} y={y(max * t) + 4} textAnchor="end">
+              ₹{compact.format((max * t) / 100)}
+            </text>
+          </g>
+        ))}
+        <text x={14} y={pad.top + innerH / 2} transform={`rotate(-90 14 ${pad.top + innerH / 2})`} textAnchor="middle">
+          Net Total (₹)
+        </text>
+        {data.map((d, i) => (
+          <line key={d.key} x1={x(i)} x2={x(i)} y1={pad.top} y2={baseline} stroke="var(--color-border)" strokeDasharray="2 4" opacity={0.6} />
+        ))}
+        <path d={area} fill="var(--color-primary)" opacity={0.1} />
+        <path d={line} fill="none" stroke="var(--color-primary)" strokeWidth={2.5} strokeLinejoin="round" />
+        {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={baseline} stroke="var(--color-text-muted)" strokeWidth={1} />}
+        {data.map((d, i) => {
+          const w = Math.max(22, String(d.count).length * 7 + 10);
+          return (
+            <g key={d.key}>
+              <circle cx={x(i)} cy={y(d.value)} r={hover === i ? 6 : 4.5} fill="var(--color-surface)" stroke="var(--color-primary)" strokeWidth={2.5} />
+              {(i % badgeEvery === 0 || hover === i) && (
+                <>
+                  <rect x={x(i) - w / 2} y={badgeY} width={w} height={18} rx={5} fill="var(--color-accent-purple)" />
+                  <text x={x(i)} y={badgeY + 13} textAnchor="middle" style={{ fill: '#fff', fontWeight: 700, fontSize: 10.5 }}>
+                    {d.count}
+                  </text>
+                </>
+              )}
+              {i % labelEvery === 0 && (
+                <text x={x(i)} y={height - 22} textAnchor="middle">
+                  {d.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        <text x={pad.left + innerW / 2} y={height - 4} textAnchor="middle">
+          Hour of day
+        </text>
+      </svg>
+      {h && (
+        <div className="chart-tooltip" style={{ position: 'absolute', left: Math.min(x(hover!) + 12, width - 170), top: 40 }}>
+          <strong>{h.label}</strong>
+          <div>Net Total: {formatMoney(h.value)}</div>
+          <div>Orders: {h.count.toLocaleString('en-IN')}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HBarList({ rows, total }: { rows: { key: string; label: string; value: number; sub?: string }[]; total?: number }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   if (rows.length === 0) return <p className="muted">No sales in this period.</p>;
