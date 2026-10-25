@@ -21,7 +21,7 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
@@ -494,7 +494,18 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
 
 // ---------------- Page body (shared with the Super Admin) ----------------
 
-export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerExtra?: React.ReactNode }) {
+export function MenuManager({
+  scope,
+  headerExtra,
+  initialEditId,
+  onInitialEditOpened,
+}: {
+  scope: MenuScope;
+  headerExtra?: React.ReactNode;
+  /** Opens this item's edit panel once the menu has loaded (e.g. from the all-restaurants view). */
+  initialEditId?: string | null;
+  onInitialEditOpened?: () => void;
+}) {
   const search = usePageSearch('Search food items...');
   const queryClient = useQueryClient();
   const scoped = useScopedApi(scope);
@@ -503,6 +514,12 @@ export function MenuManager({ scope, headerExtra }: { scope: MenuScope; headerEx
   const items = useMenuItems(scope);
   const [category, setCategory] = useState('all');
   const [panel, setPanel] = useState<{ kind: 'item'; item: MenuItemDTO | null } | { kind: 'categories' } | null>(null);
+  useEffect(() => {
+    const target = initialEditId ? items.data?.find((i) => i.id === initialEditId) : undefined;
+    if (!target) return;
+    setPanel({ kind: 'item', item: target });
+    onInitialEditOpened?.();
+  }, [initialEditId, items.data, onInitialEditOpened]);
   const [archiving, setArchiving] = useState<MenuItemDTO | null>(null);
 
   const activeCategories = (categories.data ?? []).filter((c) => c.status === 'ACTIVE');

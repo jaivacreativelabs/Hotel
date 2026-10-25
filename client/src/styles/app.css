@@ -1746,6 +1746,26 @@ a {
   background: var(--color-secondary);
   color: var(--color-secondary-contrast);
 }
+.menu-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+.menu-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.menu-section-head .card-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-section-head .btn {
+  margin-left: auto;
+}
 .menu-card-actions {
   display: flex;
   gap: 8px;
