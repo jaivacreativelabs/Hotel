@@ -117,6 +117,15 @@ export const demoAccountUpdateSchema = z.strictObject({
 });
 export const demoLoginSchema = z.strictObject({ userId: objectIdSchema });
 
+export const dailyReportSettingsSchema = z.strictObject({
+  enabled: z.boolean(),
+  recipients: z
+    .array(z.string().trim().toLowerCase().email('Invalid email').max(200))
+    .max(10, 'At most 10 email addresses')
+    .refine((a) => new Set(a).size === a.length, 'Each email only once'),
+});
+export type DailyReportSettingsInput = z.infer<typeof dailyReportSettingsSchema>;
+
 // ---------- Menu ----------
 export const categoryCreateSchema = z.strictObject({
   name: name(50),

@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import { timingSafeEqual } from 'node:crypto';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 import { env } from '../config/env.js';
@@ -11,7 +12,18 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { apiNotFound } from '../middleware/error.js';
 import { requireBranchScope, requireMenuScope } from '../middleware/scope.js';
 import { imageUpload } from '../middleware/upload.js';
+import { runDueDailyReport } from '../services/dailyReport.service.js';
 import { AppError } from '../utils/errors.js';
+
+/** Only the scheduler knows CRON_SECRET; without one configured the endpoint stays closed. */
+function cronAuth(req: Request, _res: Response, next: NextFunction) {
+  const expected = Buffer.from(`Bearer ${env.CRON_SECRET}`);
+  const given = Buffer.from(req.get('authorization') ?? '');
+  if (!env.CRON_SECRET || given.length !== expected.length || !timingSafeEqual(given, expected)) {
+    throw new AppError(401, 'UNAUTHORIZED', 'Not allowed');
+  }
+  next();
+}
 
 function rateLimited(message: string) {
   return (_req: unknown, _res: unknown, next: (err: unknown) => void) => next(new AppError(429, 'RATE_LIMITED', message));
@@ -81,6 +93,10 @@ export function createApiRouter(): Router {
   adminRouter.post('/users/:id/reset-password', admin.resetUserPassword);
   adminRouter.get('/demo-accounts', admin.listDemoAccounts);
   adminRouter.patch('/demo-accounts/:id', admin.updateDemoAccount);
+  adminRouter.get('/daily-report', admin.getDailyReport);
+  adminRouter.put('/daily-report', admin.updateDailyReport);
+  adminRouter.get('/daily-report/preview', admin.previewDailyReport);
+  adminRouter.post('/daily-report/send', admin.sendDailyReportNow);
   adminRouter.get('/analytics/overview', admin.analyticsOverview);
   adminRouter.get('/reports/transactions.csv', admin.transactionsCsv);
   adminRouter.get('/reports/sales.csv', admin.salesCsv);
@@ -88,6 +104,11 @@ export function createApiRouter(): Router {
   adminRouter.get('/reports/branches.csv', admin.branchesCsv);
   adminRouter.get('/audit-logs', admin.auditLogs);
   api.use('/admin', adminRouter);
+
+  // ---- Scheduled jobs (Vercel Cron sends `Authorization: Bearer $CRON_SECRET`) ----
+  api.get('/cron/daily-report', cronAuth, async (_req, res) => {
+    res.json({ data: await runDueDailyReport(new Date(), true) });
+  });
 
   // ---- Menu (both roles, scoped) ----
   const menuRouter = Router();

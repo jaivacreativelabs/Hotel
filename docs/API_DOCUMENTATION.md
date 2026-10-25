@@ -87,6 +87,16 @@ Super Admin accounts cannot be read, modified or created through these endpoints
 | GET | `/admin/audit-logs` | `page, limit, restaurantId?, action?` |
 | GET | `/admin/demo-accounts` | every account with its demo-button setting |
 | PATCH | `/admin/demo-accounts/:id` | `{ enabled, label? }` – show/hide a one-tap sign-in button on the login page (audit logged) |
+| GET | `/admin/daily-report` | daily report email settings: `{ enabled, recipients, sendTime, timezone, mailConfigured, sender, lastSentFor, lastSentAt, lastError }` |
+| PUT | `/admin/daily-report` | `{ enabled, recipients: email[] (≤10) }` (audit logged) |
+| GET | `/admin/daily-report/preview` | `{ html }` – today's report email as it would be sent now |
+| POST | `/admin/daily-report/send` | sends today's report now to the saved recipients (does not use up the scheduled send). 503 `MAIL_NOT_CONFIGURED`, 400 `NO_RECIPIENTS`, 502 `MAIL_FAILED` |
+
+### Scheduled jobs
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/cron/daily-report` | called by Vercel Cron with `Authorization: Bearer $CRON_SECRET` (401 otherwise, also when `CRON_SECRET` is unset). Sends today's report once per day; a second call the same day returns `{ status: "skipped", reason: "already sent" }` |
 
 Dates are interpreted in `APP_TIMEZONE` (default `Asia/Kolkata`). Only `COMPLETED`
 transactions count as revenue.

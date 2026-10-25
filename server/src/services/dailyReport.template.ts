@@ -1,0 +1,230 @@
+/**
+ * Daily report email. Table layout with inline styles so it renders the same in Gmail, Outlook
+ * and phone mail apps. Colours follow the app theme (client/src/styles/theme.css).
+ */
+import { formatMoney, type PaymentMethod } from '@rb/shared';
+import { env } from '../config/env.js';
+import type { DailyReport } from './dailyReport.service.js';
+
+/** "2026-10-25" → "Sun, 25 Oct 2026" */
+export function longDate(date: string): string {
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${date}T00:00:00Z`));
+}
+
+const C = {
+  primary: '#1e7b34',
+  primarySoft: '#e7f3ea',
+  secondary: '#f7c600',
+  text: '#1a1d1a',
+  muted: '#667065',
+  subtle: '#8c948a',
+  border: '#e3e7e0',
+  page: '#f2f4ef',
+  surfaceMuted: '#f7f8f4',
+  danger: '#d43c3c',
+};
+const FONT = `-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
+
+export const PAYMENT_NAME: Record<PaymentMethod, string> = { CASH: 'Cash', UPI: 'GPay / UPI', CARD: 'Card' };
+const PAYMENT_COLOUR: Record<PaymentMethod, string> = { CASH: C.primary, UPI: C.secondary, CARD: '#2f6fdb' };
+
+const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) * 100) : 0);
+
+function timeOf(d: Date): string {
+  return new Intl.DateTimeFormat('en-IN', { timeZone: env.APP_TIMEZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(d).toUpperCase();
+}
+function sendTimeLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+function sectionTitle(title: string, aside = ''): string {
+  return `<tr><td style="padding:28px 24px 10px 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td style="font:600 15px/20px ${FONT};color:${C.text};">${title}</td>
+      <td align="right" style="font:400 13px/20px ${FONT};color:${C.muted};">${aside}</td>
+    </tr></table>
+  </td></tr>`;
+}
+
+function stat(label: string, value: string, align: 'left' | 'center' | 'right'): string {
+  return `<td align="${align}" width="33%" style="padding:0 4px;">
+    <div style="font:400 12px/16px ${FONT};color:${C.muted};">${label}</div>
+    <div style="font:600 16px/22px ${FONT};color:${C.text};padding-top:2px;">${value}</div>
+  </td>`;
+}
+
+function paymentSection(r: DailyReport): string {
+  const paid = r.payments.filter((p) => p.sales > 0);
+  const bar = paid.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-radius:5px;overflow:hidden;"><tr>${paid
+        .map((p) => `<td width="${Math.max(pct(p.sales, r.totalSales), 1)}%" style="height:10px;line-height:10px;font-size:0;background:${PAYMENT_COLOUR[p.method]};">&nbsp;</td>`)
+        .join('')}</tr></table>`
+    : '';
+  const rows = r.payments
+    .map(
+      (p, i) => `<tr>
+        <td style="padding:12px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 14px/20px ${FONT};color:${C.text};white-space:nowrap;">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${PAYMENT_COLOUR[p.method]};margin-right:10px;vertical-align:middle;"></span>${PAYMENT_NAME[p.method]}
+        </td>
+        <td align="right" style="padding:12px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">
+          ${p.bills} bill${p.bills === 1 ? '' : 's'} · ${pct(p.sales, r.totalSales)}%
+        </td>
+        <td align="right" width="110" style="padding:12px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(p.sales)}</td>
+      </tr>`,
+    )
+    .join('');
+  return `${sectionTitle('Payment split')}
+  <tr><td style="padding:0 24px;">
+    ${bar}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">${rows}</table>
+  </td></tr>`;
+}
+
+function itemsSection(r: DailyReport): string {
+  const qty = r.items.reduce((a, i) => a + i.quantity, 0);
+  const cell = (i: number) => `padding:10px 12px;${i ? `border-top:1px solid ${C.border};` : ''}`;
+  const rows = r.items
+    .map(
+      (it, i) => `<tr>
+        <td style="${cell(i)}font:400 14px/20px ${FONT};color:${C.text};">${esc(it.name)}</td>
+        <td align="center" width="60" style="${cell(i)}font:400 14px/20px ${FONT};color:${C.muted};">${it.quantity}</td>
+        <td align="right" width="110" style="${cell(i)}font:500 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(it.sales)}</td>
+      </tr>`,
+    )
+    .join('');
+  return `${sectionTitle('Item-wise sale', `${r.items.length} item${r.items.length === 1 ? '' : 's'} · ${qty} sold`)}
+  <tr><td style="padding:0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:8px;border-collapse:separate;">
+      <tr style="background:${C.surfaceMuted};">
+        <td style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Item</td>
+        <td align="center" style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Qty</td>
+        <td align="right" style="padding:9px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">Amount</td>
+      </tr>
+      ${rows}
+      <tr style="background:${C.primarySoft};">
+        <td style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">Total</td>
+        <td align="center" style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">${qty}</td>
+        <td align="right" style="padding:10px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.primary};white-space:nowrap;">${formatMoney(r.items.reduce((a, i) => a + i.sales, 0))}</td>
+      </tr>
+    </table>
+    ${
+      r.taxTotal || r.items.reduce((a, i) => a + i.sales, 0) !== r.totalSales
+        ? `<div style="font:400 12px/18px ${FONT};color:${C.subtle};padding-top:6px;">Item amounts are before discount and tax.</div>`
+        : ''
+    }
+  </td></tr>`;
+}
+
+function branchSection(r: DailyReport): string {
+  if (r.branches.length < 2) return '';
+  const rows = r.branches
+    .map(
+      (b, i) => `<tr>
+        <td style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 14px/20px ${FONT};color:${C.text};">${esc(b.branchName)}
+          <div style="font:400 12px/16px ${FONT};color:${C.muted};">${esc(b.restaurantName)}</div></td>
+        <td align="right" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">${b.bills} bill${b.bills === 1 ? '' : 's'}</td>
+        <td align="right" width="110" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(b.sales)}</td>
+      </tr>`,
+    )
+    .join('');
+  return `${sectionTitle('Branch-wise sale')}
+  <tr><td style="padding:0 24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table></td></tr>`;
+}
+
+function notCountedNote(r: DailyReport): string {
+  const parts = [
+    r.voided.bills && `${r.voided.bills} voided bill${r.voided.bills === 1 ? '' : 's'} (${formatMoney(r.voided.amount)})`,
+    r.refunded.bills && `${r.refunded.bills} refunded bill${r.refunded.bills === 1 ? '' : 's'} (${formatMoney(r.refunded.amount)})`,
+  ].filter(Boolean);
+  if (!parts.length) return '';
+  return `<tr><td style="padding:20px 24px 0 24px;">
+    <div style="background:#fdf3f3;border-radius:8px;padding:10px 14px;font:400 13px/18px ${FONT};color:${C.text};">
+      Not counted in the total: ${parts.join(' and ')}.
+    </div>
+  </td></tr>`;
+}
+
+export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | null; sendTime: string }): string {
+  const logo = opts.logoSrc
+    ? `<img src="${opts.logoSrc}" width="48" height="48" alt="Tiffin House" style="display:block;border-radius:24px;border:1px solid ${C.border};">`
+    : `<div style="width:48px;height:48px;border-radius:24px;background:${C.secondary};font:700 20px/48px ${FONT};color:${C.text};text-align:center;">T</div>`;
+  const empty = r.billCount === 0;
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only"><title>Daily Sales Report</title></head>
+<body style="margin:0;padding:0;background:${C.page};-webkit-text-size-adjust:100%;">
+<div style="display:none;max-height:0;overflow:hidden;">Total sale ${formatMoney(r.totalSales)} from ${r.billCount} bill${r.billCount === 1 ? '' : 's'} on ${longDate(r.date)}.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page};"><tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid ${C.border};border-radius:12px;border-collapse:separate;">
+
+  <tr><td style="padding:24px 24px 20px 24px;border-bottom:1px solid ${C.border};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      <td width="60" valign="middle">${logo}</td>
+      <td valign="middle">
+        <div style="font:700 17px/22px ${FONT};color:${C.text};">Tiffin House</div>
+        <div style="font:400 13px/18px ${FONT};color:${C.muted};">Daily Sales Report</div>
+      </td>
+      <td align="right" valign="middle" style="padding-left:12px;">
+        <div style="font:600 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${longDate(r.date)}</div>
+        <div style="font:400 12px/18px ${FONT};color:${C.muted};white-space:nowrap;">Till ${timeOf(r.asOf)}</div>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td style="padding:26px 24px 4px 24px;">
+    <div style="font:500 13px/18px ${FONT};color:${C.muted};">Total Sale</div>
+    <div style="font:700 34px/42px ${FONT};color:${C.primary};padding-top:2px;">${formatMoney(r.totalSales)}</div>
+  </td></tr>
+  <tr><td style="padding:14px 20px 4px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.surfaceMuted};border-radius:8px;"><tr><td style="padding:12px 8px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        ${stat('Bills', String(r.billCount), 'left')}
+        ${stat('Average bill', formatMoney(r.averageBill), 'center')}
+        ${stat('Tax collected', formatMoney(r.taxTotal), 'right')}
+      </tr></table>
+    </td></tr></table>
+  </td></tr>
+
+  ${
+    empty
+      ? `<tr><td style="padding:28px 24px 4px 24px;font:400 14px/20px ${FONT};color:${C.muted};">No bills were made today.</td></tr>`
+      : `${paymentSection(r)}${itemsSection(r)}${branchSection(r)}`
+  }
+  ${notCountedNote(r)}
+
+  <tr><td style="padding:28px 24px 26px 24px;">
+    <div style="border-top:1px solid ${C.border};padding-top:16px;font:400 12px/18px ${FONT};color:${C.subtle};">
+      Paid bills only. Amounts include tax. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
+      To change who gets this email, open Super Admin &rsaquo; Daily Report.
+    </div>
+  </td></tr>
+
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+export function renderDailyReportText(r: DailyReport): string {
+  const line = (label: string, value: string) => `${label.padEnd(22)}${value}`;
+  const out = [
+    `Tiffin House – Daily Sales Report`,
+    `${longDate(r.date)} (till ${timeOf(r.asOf)})`,
+    '',
+    line('Total Sale', formatMoney(r.totalSales)),
+    line('Bills', String(r.billCount)),
+    line('Average bill', formatMoney(r.averageBill)),
+    line('Tax collected', formatMoney(r.taxTotal)),
+    '',
+    'Payment split',
+    ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, `${formatMoney(p.sales)}  (${p.bills} bills)`)),
+    '',
+    'Item-wise sale',
+    ...r.items.map((i) => line(`  ${i.name} x${i.quantity}`, formatMoney(i.sales))),
+  ];
+  if (r.branches.length > 1) out.push('', 'Branch-wise sale', ...r.branches.map((b) => line(`  ${b.branchName}`, `${formatMoney(b.sales)}  (${b.bills} bills)`)));
+  if (r.voided.bills || r.refunded.bills) out.push('', `Not counted: ${r.voided.bills} voided, ${r.refunded.bills} refunded.`);
+  return out.join('\n');
+}

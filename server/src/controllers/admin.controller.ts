@@ -4,6 +4,7 @@ import {
   auditQuerySchema,
   branchCreateSchema,
   branchUpdateSchema,
+  dailyReportSettingsSchema,
   demoAccountUpdateSchema,
   resetPasswordSchema,
   restaurantCreateSchema,
@@ -19,6 +20,7 @@ import { currentUser } from '../middleware/auth.js';
 import { AuditLogModel } from '../models/index.js';
 import * as admin from '../services/admin.service.js';
 import * as analytics from '../services/analytics.service.js';
+import * as dailyReport from '../services/dailyReport.service.js';
 import * as demo from '../services/demo.service.js';
 import { exportTransactionsCsv } from '../services/transactions.service.js';
 import { todayIn } from '../utils/dates.js';
@@ -91,6 +93,21 @@ export const listDemoAccounts = async (_req: Request, res: Response) => {
 };
 export const updateDemoAccount = async (req: Request, res: Response) => {
   res.json({ data: await demo.updateDemoSetting(currentUser(req), id(req), parse(demoAccountUpdateSchema, req.body)) });
+};
+
+// Daily report email
+export const getDailyReport = async (_req: Request, res: Response) => {
+  res.json({ data: await dailyReport.getDailyReportSettings() });
+};
+export const updateDailyReport = async (req: Request, res: Response) => {
+  res.json({ data: await dailyReport.updateDailyReportSettings(currentUser(req), parse(dailyReportSettingsSchema, req.body)) });
+};
+export const previewDailyReport = async (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ data: { html: await dailyReport.previewDailyReport() } });
+};
+export const sendDailyReportNow = async (req: Request, res: Response) => {
+  res.json({ data: await dailyReport.sendDailyReport({ manual: currentUser(req) }) });
 };
 
 // Analytics & reports

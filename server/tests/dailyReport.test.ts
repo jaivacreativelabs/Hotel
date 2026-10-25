@@ -1,0 +1,121 @@
+import request from 'supertest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { createApp } from '../src/app.js';
+import { env } from '../src/config/env.js';
+import { ReportSettingModel } from '../src/models/index.js';
+import { buildDailyReport, runDueDailyReport, sendDailyReport } from '../src/services/dailyReport.service.js';
+import { todayIn } from '../src/utils/dates.js';
+import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
+
+const sendMail = vi.hoisted(() => vi.fn(async (_mail: unknown) => ({ messageId: 'test' })));
+vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail }) } }));
+
+useTestDatabase();
+
+let w: World;
+const today = () => todayIn(env.APP_TIMEZONE);
+
+async function bill(c: Client, items: { menuItemId: string; quantity: number }[], paymentMethod: string) {
+  let d = ok<{ id: string; version: number }>(await c.get('/api/v1/bills/counter'));
+  d = ok(await c.put(`/api/v1/bills/${d.id}`, { version: d.version, items }));
+  const res = await c.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod, idempotencyKey: key() });
+  return res.body.data.transaction as { id: string };
+}
+
+function configureMail(on: boolean) {
+  Object.assign(env, { SMTP_USER: on ? 'reports@example.com' : '', SMTP_PASS: on ? 'app-password' : '', mailConfigured: on, CRON_SECRET: on ? 'cron-secret-for-tests' : '' });
+}
+
+beforeAll(async () => {
+  w = await buildWorld();
+  await bill(w.adminA1, [{ menuItemId: w.items.idly, quantity: 2 }, { menuItemId: w.items.coffee, quantity: 1 }], 'CASH'); // 85
+  await bill(w.adminA1, [{ menuItemId: w.items.dosa, quantity: 1 }], 'UPI'); // 50
+  await bill(w.adminA2, [{ menuItemId: w.items.idly, quantity: 1 }], 'UPI'); // 30
+  const voided = await bill(w.adminA1, [{ menuItemId: w.items.biryani, quantity: 1 }], 'CARD'); // 80, voided
+  ok(await w.adminA1.post(`/api/v1/transactions/${voided.id}/void`, { reason: 'Wrong bill' }));
+});
+
+describe('daily report contents', () => {
+  it('totals paid bills, splits by payment and lists items', async () => {
+    const r = await buildDailyReport(today());
+    expect(r.totalSales).toBe(16500);
+    expect(r.billCount).toBe(3);
+    expect(r.payments).toEqual([
+      { method: 'CASH', sales: 8500, bills: 1 },
+      { method: 'UPI', sales: 8000, bills: 2 },
+      { method: 'CARD', sales: 0, bills: 0 },
+    ]);
+    expect(r.items.map((i) => [i.name, i.quantity, i.sales])).toEqual([
+      ['Idly', 3, 9000],
+      ['Dosa', 1, 5000],
+      ['Coffee', 1, 2500],
+    ]);
+    expect(r.branches.map((b) => b.sales)).toEqual([13500, 3000]);
+    expect(r.voided).toEqual({ bills: 1, amount: 8000 });
+  });
+
+  it('renders a preview for the Super Admin only', async () => {
+    const html = ok<{ html: string }>(await w.sa.get('/api/v1/admin/daily-report/preview')).html;
+    expect(html).toContain('Daily Sales Report');
+    expect(html).toContain('GPay / UPI');
+    expect(html).toContain('Idly');
+    expect((await w.adminA1.get('/api/v1/admin/daily-report/preview')).status).toBe(403);
+  });
+});
+
+describe('sending', () => {
+  it('saves recipients and validates them', async () => {
+    expect((await w.sa.put('/api/v1/admin/daily-report', { enabled: true, recipients: ['not-an-email'] })).status).toBe(400);
+    const s = ok<{ recipients: string[]; sendTime: string }>(await w.sa.put('/api/v1/admin/daily-report', { enabled: true, recipients: ['Owner@Example.com'] }));
+    expect(s.recipients).toEqual(['owner@example.com']);
+    expect(s.sendTime).toBe('21:00');
+    expect((await w.adminA1.put('/api/v1/admin/daily-report', { enabled: true, recipients: ['x@example.com'] })).status).toBe(403);
+  });
+
+  it('explains when mail is not set up', async () => {
+    configureMail(false);
+    const res = await w.sa.post('/api/v1/admin/daily-report/send');
+    expect(res.status).toBe(503);
+    expect(res.body.error.code).toBe('MAIL_NOT_CONFIGURED');
+    expect(await sendDailyReport()).toEqual({ status: 'skipped', reason: 'mail not configured' });
+  });
+
+  it('sends on schedule once per day, and "Send now" any time', async () => {
+    configureMail(true);
+    sendMail.mockClear();
+    expect((await runDueDailyReport(new Date('2026-10-25T10:00:00+05:30'))).status).toBe('skipped'); // before 9 PM
+    expect(sendMail).not.toHaveBeenCalled();
+
+    expect((await sendDailyReport({ date: today() })).status).toBe('sent');
+    expect(await sendDailyReport({ date: today() })).toEqual({ status: 'skipped', reason: 'already sent' });
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0][0] as { to: string[]; subject: string; html: string; attachments: { cid: string }[] };
+    expect(mail.to).toEqual(['owner@example.com']);
+    expect(mail.subject).toContain('₹ 165');
+    expect(mail.html).toContain('cid:logo@tiffinhouse');
+    expect(mail.attachments[0].cid).toBe('logo@tiffinhouse');
+
+    ok(await w.sa.post('/api/v1/admin/daily-report/send'));
+    expect(sendMail).toHaveBeenCalledTimes(2);
+    expect((await ReportSettingModel.findById('daily').lean())?.lastSentFor).toBe(today());
+  });
+
+  it('gives the day back when sending fails', async () => {
+    await ReportSettingModel.updateOne({ _id: 'daily' }, { $set: { lastSentFor: '' } });
+    sendMail.mockRejectedValueOnce(new Error('Invalid login'));
+    expect((await sendDailyReport({ date: today() })).status).toBe('skipped');
+    const s = await ReportSettingModel.findById('daily').lean();
+    expect(s?.lastSentFor).toBe('');
+    expect(s?.lastError).toContain('Invalid login');
+  });
+
+  it('cron endpoint needs the secret', async () => {
+    const app = createApp();
+    expect((await request(app).get('/api/v1/cron/daily-report')).status).toBe(401);
+    expect((await request(app).get('/api/v1/cron/daily-report').set('Authorization', 'Bearer wrong')).status).toBe(401);
+    const res = await request(app).get('/api/v1/cron/daily-report').set('Authorization', 'Bearer cron-secret-for-tests');
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('sent');
+    configureMail(false);
+  });
+});

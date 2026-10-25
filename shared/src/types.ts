@@ -54,6 +54,22 @@ export interface AdminDemoAccountDTO extends DemoAccountDTO {
   demoLabel: string;
 }
 
+/** Emailed daily sales report (Super Admin). */
+export interface DailyReportSettingsDTO {
+  enabled: boolean;
+  recipients: string[];
+  /** "21:00" in `timezone` */
+  sendTime: string;
+  timezone: string;
+  /** false until SMTP_USER / SMTP_PASS are set on the server */
+  mailConfigured: boolean;
+  /** Address the report is sent from */
+  sender: string;
+  lastSentFor: string;
+  lastSentAt: string | null;
+  lastError: string;
+}
+
 export interface RestaurantSettings {
   taxes: TaxRate[];
   pricesIncludeTax: boolean;

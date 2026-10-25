@@ -41,6 +41,18 @@ const schema = z.object({
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
   // Vercel always sits behind one proxy hop, so trust it there without extra configuration.
   TRUST_PROXY: z.coerce.number().int().min(0).default(process.env.VERCEL ? 1 : 0),
+  // Outgoing mail (daily report). Gmail: the account address and a Google "App password".
+  SMTP_HOST: z.string().default('smtp.gmail.com'),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_USER: z.string().default(''),
+  SMTP_PASS: z.string().default(''),
+  MAIL_FROM_NAME: z.string().default('Tiffin House Reports'),
+  // Daily report time (HH:MM in APP_TIMEZONE) and the secret Vercel Cron sends as a Bearer token.
+  DAILY_REPORT_TIME: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'DAILY_REPORT_TIME must look like 21:00')
+    .default('21:00'),
+  CRON_SECRET: z.string().default(''),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -57,6 +69,7 @@ export const env = {
     .filter(Boolean),
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
+  mailConfigured: Boolean(parsed.data.SMTP_USER && parsed.data.SMTP_PASS),
 };
 
 try {

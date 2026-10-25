@@ -5,6 +5,7 @@ export * from './Counter.js';
 export * from './Draft.js';
 export * from './MenuImage.js';
 export * from './MenuItem.js';
+export * from './ReportSetting.js';
 export * from './Restaurant.js';
 export * from './Table.js';
 export * from './Transaction.js';

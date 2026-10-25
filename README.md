@@ -112,6 +112,29 @@ dialog. Printing reads the stored bill and never creates a new one.
 - For one-click printing in Chrome you can start it with `--kiosk-printing` (prints to the default printer without the dialog).
 - 58 mm printers work but long item names wrap; there is no direct ESC/POS (USB/serial) integration – printing goes through the browser.
 
+## Daily sales report email
+
+Every day at `DAILY_REPORT_TIME` (default **9:00 PM**, `APP_TIMEZONE`) the Super Admin's recipients
+get one email with today's total sale, bill count, average bill, the **Cash / GPay (UPI) / Card**
+split, item-wise sale and, when more than one branch billed, branch-wise sale. Voided and refunded
+bills are listed separately and not counted. Recipients, on/off, a live preview and *Send today's
+report now* are under **Super Admin → Daily Report**.
+
+Mail goes out through Gmail SMTP:
+
+1. Sign in to the sending Gmail account → <https://myaccount.google.com/security> → turn on
+   **2-Step Verification**.
+2. Open <https://myaccount.google.com/apppasswords>, create an app password named *Tiffin House*,
+   and copy the 16 letters (spaces do not matter).
+3. Put it in `.env` as `SMTP_PASS=` (with `SMTP_USER=` the same Gmail address) and restart
+   `npm run dev`. Never commit it or paste it anywhere else.
+
+Who sends it: a long-running server (`npm run dev` / `npm start`) checks the clock every minute.
+On Vercel, **Vercel Cron** calls `/api/v1/cron/daily-report` at `30 15 * * *` (UTC = 9:00 PM IST,
+see `vercel.json`). The day is claimed in MongoDB before sending, so the report is sent only once
+even if both are running. On the Vercel Hobby plan cron jobs may fire anywhere within that hour
+(8:30–9:29 PM IST); the email states the time it was made ("Till 9:04 PM").
+
 ## Deployment
 
 **Vercel (this repository is set up for it – `vercel.json` + `api/index.js`):**
@@ -132,6 +155,9 @@ because Vercel has no persistent disk.
    | `APP_TIMEZONE` | `Asia/Kolkata` |
    | `TRUST_PROXY` | `1` (optional – set automatically on Vercel) |
    | `IMAGE_STORAGE` | `mongo` |
+   | `SMTP_USER` | Gmail address that sends the daily report |
+   | `SMTP_PASS` | its Google App password (see *Daily sales report email*) |
+   | `CRON_SECRET` | long random secret; Vercel Cron sends it to `/api/v1/cron/daily-report` |
 
    Demo sign-in buttons on the login page need no variables: the Super Admin switches them on per
    account under **Demo Logins** (stored in MongoDB, no passwords involved). Anyone who opens the

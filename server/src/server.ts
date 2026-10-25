@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/db.js';
 import { env } from './config/env.js';
+import { startDailyReportTimer } from './services/dailyReport.service.js';
 
 async function main() {
   await connectDatabase();
@@ -8,6 +9,10 @@ async function main() {
   const server = app.listen(env.PORT, () => {
     console.log(`[server] API listening on http://localhost:${env.PORT}/api/v1 (${env.NODE_ENV})`);
   });
+  if (env.mailConfigured) {
+    startDailyReportTimer();
+    console.log(`[daily-report] will be emailed at ${env.DAILY_REPORT_TIME} (${env.APP_TIMEZONE})`);
+  }
 
   const shutdown = async (signal: string) => {
     console.log(`[server] ${signal} received, shutting down`);
