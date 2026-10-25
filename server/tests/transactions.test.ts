@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { AuditLogModel, TransactionModel } from '../src/models/index.js';
+import { AuditLogModel, MenuItemModel, TransactionModel } from '../src/models/index.js';
 import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
 
 useTestDatabase();
@@ -134,6 +134,35 @@ describe('editing a bill within 30 minutes', () => {
     expect(voided.status).toBe(409);
     expect(voided.body.error.code).toBe('INVALID_STATUS');
     expect((await w.adminA2.put(`/api/v1/transactions/${bills[7].id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' })).status).toBe(404);
+  });
+
+  it('lets the Super Admin edit any time, keeping billed prices for existing lines', async () => {
+    // bills[6] is over 30 minutes old (previous test); the menu price of Idly goes up meanwhile.
+    await MenuItemModel.updateOne({ _id: w.items.idly }, { $set: { price: 4000 } });
+    try {
+      const before = ok<Tx>(await w.sa.get(`/api/v1/transactions/${bills[6].id}`));
+      const edited = ok<Tx>(
+        await w.sa.put(`/api/v1/transactions/${bills[6].id}`, {
+          editCount: 0,
+          items: [
+            { menuItemId: w.items.idly, quantity: before.items[0].quantity + 1 },
+            { menuItemId: w.items.coffee, quantity: 1 },
+          ],
+          paymentMethod: 'CARD',
+          reason: 'Corrected by head office',
+        }),
+      );
+      expect(edited.editCount).toBe(1);
+      expect(edited.items.map((i) => [i.name, i.unitPrice])).toEqual([
+        ['Idly', 3000],
+        ['Coffee', 2500],
+      ]);
+      expect(edited.grandTotal).toBe(3000 * (before.items[0].quantity + 1) + 2500);
+      // Restaurant Admins still cannot.
+      expect((await w.adminA1.put(`/api/v1/transactions/${bills[6].id}`, { editCount: 1, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' })).status).toBe(409);
+    } finally {
+      await MenuItemModel.updateOne({ _id: w.items.idly }, { $set: { price: 3000 } });
+    }
   });
 
   it('still blocks direct rewrites that skip the edit workflow', async () => {

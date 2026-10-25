@@ -105,16 +105,18 @@ function BillDetails({
 }) {
   const [change, setChange] = useState<'void' | 'refund' | null>(null);
   const toast = useToast();
-  const minutesLeft = useEditMinutesLeft(tx.status === 'COMPLETED' ? tx.editableUntil : null);
+  const { user } = useAuth();
+  const anyTime = user?.role === 'SUPER_ADMIN';
+  const minutesLeft = useEditMinutesLeft(tx.status === 'COMPLETED' && !anyTime ? tx.editableUntil : null);
   return (
     <SidePanel
       title="Bill Details"
       onClose={onClose}
       footer={
         <>
-          {minutesLeft > 0 && (
+          {tx.status === 'COMPLETED' && (anyTime || minutesLeft > 0) && (
             <button className="btn btn-outline-primary btn-lg btn-block" onClick={onEdit}>
-              <Pencil /> Edit bill ({minutesLeft} min left)
+              <Pencil /> {anyTime ? 'Edit bill' : `Edit bill (${minutesLeft} min left)`}
             </button>
           )}
           <button className="btn btn-primary btn-lg btn-block" onClick={() => openReceipt(tx.id)}>

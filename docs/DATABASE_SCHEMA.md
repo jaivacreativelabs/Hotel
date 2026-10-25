@@ -167,7 +167,7 @@ Indexes:
 
 A Mongoose guard rejects any update that touches snapshot or amount fields. Permitted changes:
 `COMPLETED → VOIDED | REFUNDED` through the controlled workflow, and the bill edit
-(`PUT /transactions/:id`, within 30 minutes of `finalizedAt`), which must push the previous
+(`PUT /transactions/:id`; Restaurant Admins within 30 minutes of `finalizedAt`, the Super Admin any time), which must push the previous
 version to `revisions` and increment `editCount` in the same update.
 
 Indexes: `{ branchId: 1, billNumber: 1 }` unique, `{ sourceDraftId: 1 }` unique,

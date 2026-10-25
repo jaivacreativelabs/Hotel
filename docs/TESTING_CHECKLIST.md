@@ -77,7 +77,7 @@ All **[A]** items below are covered by those suites. **[M]** items still need a 
 - [A] Historical prices preserved
 - [A] Restaurant / branch isolation
 - [A] Void / refund workflow writes audit logs and rejects a second change
-- [A] Bill edit within 30 minutes re-prices on the server, keeps the old version, logs it; stale copy, voided bill, other branch and after-30-minutes edits are refused
+- [A] Bill edit within 30 minutes re-prices on the server, keeps the old version, logs it; stale copy, voided bill, other branch and after-30-minutes edits (Restaurant Admin) are refused; the Super Admin can edit any time and existing lines keep their billed price
 - [M] Transactions → open a bill made in the last 30 minutes → "Edit bill (N min left)" → add/remove food, change payment → Save; list shows "Edited", receipt shows "Revised"
 
 ## Security

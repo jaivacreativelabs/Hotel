@@ -140,14 +140,15 @@ export async function exportTransactionsCsv(user: AuthUser, q: Partial<Transacti
 }
 
 /**
- * Corrects a paid bill within BILL_EDIT_WINDOW_MINUTES of billing. Items are re-priced from the
- * branch menu and totals recomputed on the server; the previous version is kept in `revisions`
- * and the change is audit logged. After the window, only void/refund remain.
+ * Corrects a paid bill. Restaurant Admins can do this within BILL_EDIT_WINDOW_MINUTES of billing;
+ * the Super Admin at any time. Lines already on the bill keep their billed price, added dishes
+ * take the branch menu price, and totals are recomputed on the server. The previous version is
+ * kept in `revisions` and the change is audit logged.
  */
 export async function editTransaction(user: AuthUser, id: string, input: TransactionEditInput): Promise<TransactionDTO> {
   const tx = await getAccessible(user, id);
   if (tx.status !== 'COMPLETED') throw conflict(`Bill ${tx.billNumber} is ${tx.status.toLowerCase()} and cannot be edited`, 'INVALID_STATUS');
-  if (!editableUntil(tx)) {
+  if (user.role !== 'SUPER_ADMIN' && !editableUntil(tx)) {
     throw conflict(`Bills can be edited only within ${BILL_EDIT_WINDOW_MINUTES} minutes of billing. Use Void or Refund instead.`, 'EDIT_WINDOW_CLOSED');
   }
   if ((tx.editCount ?? 0) !== input.editCount) {
@@ -157,9 +158,12 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
   }
 
   const scope = await loadBranchScope(user, String(tx.branchId));
-  const lines = await priceLines(scope, input.items);
-  const before = new Map(tx.items.map((i) => [String(i.menuItemId), i.quantity]));
-  const blocked = lines.filter((l) => l.unavailable && l.quantity > (before.get(String(l.menuItemId)) ?? 0));
+  const billed = new Map(tx.items.map((i) => [String(i.menuItemId), i]));
+  const lines = (await priceLines(scope, input.items)).map((l) => {
+    const old = billed.get(String(l.menuItemId));
+    return old ? { ...l, unitPrice: old.unitPrice, taxable: old.taxable } : l;
+  });
+  const blocked = lines.filter((l) => l.unavailable && l.quantity > (billed.get(String(l.menuItemId))?.quantity ?? 0));
   if (blocked.length) {
     throw badRequest(`${blocked.map((l) => l.name).join(', ')} ${blocked.length > 1 ? 'are' : 'is'} unavailable`, 'ITEM_UNAVAILABLE');
   }

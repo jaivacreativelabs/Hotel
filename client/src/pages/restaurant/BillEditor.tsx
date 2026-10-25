@@ -9,7 +9,7 @@ import { ApiError, api } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import type { LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
-import { formatMoney } from '../../utils/format';
+import { formatDateTime, formatMoney } from '../../utils/format';
 
 /** Minutes left to edit a bill (rounded up), ticking while the screen is open; 0 once closed. */
 export function useEditMinutesLeft(editableUntil: string | null): number {
@@ -37,13 +37,16 @@ function toLocalBill(tx: TransactionDTO): LocalBill {
  */
 export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionDTO; search: string; onCancel: () => void; onSaved: (t: TransactionDTO) => void }) {
   const toast = useToast();
-  const { activeBranch } = useAuth();
+  const { activeBranch, user } = useAuth();
+  // Restaurant Admins have BILL_EDIT_WINDOW_MINUTES; the Super Admin can correct a bill any time.
+  const anyTime = user?.role === 'SUPER_ADMIN';
   const [bill, setBill] = useState(() => toLocalBill(tx));
   const [payment, setPayment] = useState<PaymentMethod>(tx.paymentMethod);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [panelOnPhone, setPanelOnPhone] = useState(false);
-  const minutesLeft = useEditMinutesLeft(tx.editableUntil);
+  const minutesLeft = useEditMinutesLeft(anyTime ? null : tx.editableUntil);
+  const canEdit = anyTime || minutesLeft > 0;
 
   // The preview uses the branch's tax settings; the server's totals are the ones saved.
   const settings: TaxSettings = useMemo(
@@ -96,7 +99,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
           </button>
           <h1 className="page-title">Edit bill #{tx.billNumber}</h1>
         </div>
-        <FoodGrid branchId={tx.branchId} search={search} qtyById={qtyById} editable={minutesLeft > 0} onAdd={(item) => setBill((b) => addItemToBill(b, item))} />
+        <FoodGrid branchId={tx.branchId} search={search} qtyById={qtyById} editable={canEdit} onAdd={(item) => setBill((b) => addItemToBill(b, item))} />
       </div>
 
       <button type="button" className="bill-mobile-bar" onClick={() => setPanelOnPhone(true)} aria-label="View bill">
@@ -113,15 +116,19 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
         className={panelOnPhone ? undefined : 'phone-hidden'}
         title={`Edit Bill #${tx.billNumber}`}
         subtitle={
-          <span className={minutesLeft <= 5 ? 'danger-text' : undefined}>
-            <Clock size={13} /> {minutesLeft > 0 ? `${minutesLeft} min left to edit` : `The ${BILL_EDIT_WINDOW_MINUTES}-minute edit time is over`}
-          </span>
+          anyTime ? (
+            `${tx.branchSnapshot.name} · billed ${formatDateTime(tx.finalizedAt)}`
+          ) : (
+            <span className={minutesLeft <= 5 ? 'danger-text' : undefined}>
+              <Clock size={13} /> {minutesLeft > 0 ? `${minutesLeft} min left to edit` : `The ${BILL_EDIT_WINDOW_MINUTES}-minute edit time is over`}
+            </span>
+          )
         }
         onClose={() => (panelOnPhone ? setPanelOnPhone(false) : onCancel())}
         footer={
           <div className="modal-actions" style={{ marginTop: 0 }}>
             <CancelButton onClick={onCancel} disabled={busy} />
-            <ConfirmButton onClick={save} busy={busy} disabled={!changed || bill.items.length === 0 || minutesLeft === 0} label="Save changes" />
+            <ConfirmButton onClick={save} busy={busy} disabled={!changed || bill.items.length === 0 || !canEdit} label="Save changes" />
           </div>
         }
       >
