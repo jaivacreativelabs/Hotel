@@ -22,6 +22,7 @@ export function SidePanel({
   onClose,
   children,
   footer,
+  className,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
@@ -29,6 +30,7 @@ export function SidePanel({
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  className?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !document.querySelector('.overlay') && onClose();
@@ -36,7 +38,7 @@ export function SidePanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
-    <aside className="side-panel" aria-label={typeof title === 'string' ? title : undefined}>
+    <aside className={cx('side-panel', className)} aria-label={typeof title === 'string' ? title : undefined}>
       <div className="side-panel-header">
         <div style={{ minWidth: 0, flex: 1 }}>
           <h2 className="side-panel-title">{title}</h2>

@@ -1,4 +1,5 @@
 import {
+  calculateBill,
   LIMITS,
   TABLE_SHAPES,
   type DraftDTO,
@@ -9,7 +10,7 @@ import {
   type TransactionDTO,
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { CirclePlus, FileText, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
+import { ArrowLeft, Check, ChevronUp, CirclePlus, FileText, Minus, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
@@ -24,7 +25,8 @@ import { acquireDraftSync, releaseDraftSync } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
-import { BillingView } from './BillingPage';
+import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
+import { useDraftSync } from '../../hooks/useDraftSync';
 
 const ALL_FLOORS = '__all__';
 /** Same default naming as the server: the first free "Group N". */
@@ -191,6 +193,134 @@ function TableForm({
 
 // ---------------- Table detail (groups) ----------------
 
+/**
+ * The group being served while the menu is open on the left: same card, with its dishes,
+ * quantities and live total (shares the draft's sync engine with the menu).
+ */
+function ActiveGroupCard({
+  group,
+  index,
+  branchId,
+  onDone,
+  onGenerate,
+  onDelete,
+}: {
+  group: TableGroupSummaryDTO;
+  index: number;
+  branchId: string;
+  onDone: () => void;
+  onGenerate: (liveTotal: number) => void;
+  onDelete: () => void;
+}) {
+  const { activeBranch } = useAuth();
+  const settings = activeBranch!.restaurant.settings;
+  const { sync, state } = useDraftSync(group.draftId, branchId);
+  const local = state.local;
+  const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
+  const lines = local?.items ?? [];
+  const total = totals?.grandTotal ?? group.grandTotal;
+  const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
+  const setQty = (id: string, quantity: number) => sync?.update((b) => setBillQuantity(b, id, quantity));
+
+  return (
+    <div className="group-card active" aria-label={`Adding food to ${group.groupName}`}>
+      <div className="group-head">
+        <div className="group-icon" style={{ background: bg, color: fg }}>
+          <Users />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="group-name">{group.groupName}</div>
+          <div className="muted">
+            {group.guestCount} {group.guestCount === 1 ? 'Person' : 'People'}
+          </div>
+        </div>
+        <div className="group-amount num">{formatMoney(total)}</div>
+        <button className="icon-btn plain" onClick={onDelete} aria-label={`Delete ${group.groupName}`} title="Delete this group's bill">
+          <Trash2 />
+        </button>
+      </div>
+      <div className="group-adding">
+        <Utensils size={14} /> Adding food – tap dishes on the left
+        <span className={cx('group-sync', state.status === 'error' && 'error')}>
+          {state.status === 'saved' ? 'Saved' : state.status === 'error' ? 'Not saved – retrying' : state.status === 'loading' ? '' : 'Saving…'}
+        </span>
+      </div>
+      {state.message && (state.status === 'conflict' || state.status === 'rejected') && <div className="alert alert-warning">{state.message}</div>}
+      {lines.length === 0 ? (
+        <span className="muted">No items yet</span>
+      ) : (
+        <div className="group-lines">
+          {lines.map((l) => (
+            <div key={l.menuItemId} className={cx('group-line', l.unavailable && 'unavailable')}>
+              <div className="thumb thumb-xs">
+                <FoodImage src={l.imageUrl} alt={l.name} />
+              </div>
+              <span className="group-line-name" title={l.name}>
+                {l.name}
+                <small>{formatMoney(l.unitPrice * l.quantity)}</small>
+              </span>
+              <div className="qty">
+                <button onClick={() => setQty(l.menuItemId, l.quantity - 1)} aria-label={`Decrease ${l.name}`}>
+                  <Minus size={15} />
+                </button>
+                <output>{l.quantity}</output>
+                <button onClick={() => setQty(l.menuItemId, l.quantity + 1)} disabled={l.unavailable} aria-label={`Increase ${l.name}`}>
+                  <Plus size={15} />
+                </button>
+              </div>
+              <button className="icon-btn plain danger-text" onClick={() => setQty(l.menuItemId, 0)} aria-label={`Remove ${l.name}`}>
+                <Trash2 />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="group-actions">
+        <button className="btn btn-outline-primary" onClick={onDone}>
+          <Check /> Done
+        </button>
+        <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={lines.length === 0}>
+          <FileText /> Generate Bill
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Left side while ordering: the branch menu; tapping a dish adds it to the active group. */
+function OrderingMenu({
+  draftId,
+  branchId,
+  title,
+  search,
+  onDone,
+}: {
+  draftId: string;
+  branchId: string;
+  title: string;
+  search: string;
+  onDone: () => void;
+}) {
+  const { sync, state } = useDraftSync(draftId, branchId);
+  const qtyById = useMemo(() => new Map((state.local?.items ?? []).map((i) => [i.menuItemId, i.quantity])), [state.local]);
+  const editable = Boolean(sync && state.local && state.draft?.status === 'ACTIVE');
+  return (
+    <div className="page">
+      <div className="ordering-head">
+        <button className="link-btn" onClick={onDone}>
+          <ArrowLeft size={16} /> Tables
+        </button>
+        <h1 className="page-title">{title}</h1>
+      </div>
+      {state.status === 'closed' ? (
+        <div className="alert alert-info">{state.message}</div>
+      ) : (
+        <FoodGrid branchId={branchId} search={search} qtyById={qtyById} editable={editable} onAdd={(item) => sync?.update((b) => addItemToBill(b, item))} />
+      )}
+    </div>
+  );
+}
+
 function GroupCard({
   group,
   index,
@@ -290,12 +420,20 @@ function TableDetail({
   onClose,
   onEdit,
   onOrder,
+  activeDraftId,
+  onExitOrder,
+  hiddenOnPhone,
 }: {
   table: TableDTO;
   onClose: () => void;
   onEdit: () => void;
   /** Shows the menu for this group's bill inside the Tables page. */
   onOrder: (draftId: string) => void;
+  /** The group currently being served (menu open on the left), if any. */
+  activeDraftId: string | null;
+  onExitOrder: () => void;
+  /** Phones while ordering: the menu takes the screen until the bottom bar is tapped. */
+  hiddenOnPhone?: boolean;
 }) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -346,6 +484,7 @@ function TableDetail({
       );
       setPaying(null);
       setDone(res.transaction);
+      if (group.draftId === activeDraftId) onExitOrder();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     } catch (err) {
       toast.error(err);
@@ -358,6 +497,7 @@ function TableDetail({
   const removeGroup = async (group: TableGroupSummaryDTO) => {
     try {
       await withLatestDraft(group.draftId, (d) => api.delete(`/bills/${d.id}`, { query: { version: d.version } }));
+      if (group.draftId === activeDraftId) onExitOrder();
       toast.success(`${group.groupName}'s bill deleted`);
     } catch (err) {
       toast.error(err);
@@ -378,6 +518,7 @@ function TableDetail({
 
   return (
     <SidePanel
+      className={hiddenOnPhone ? 'phone-hidden' : undefined}
       title={`Table ${table.label}`}
       subtitle={
         <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -410,16 +551,28 @@ function TableDetail({
         </div>
       )}
 
-      {table.groups.map((g, i) => (
-        <GroupCard
-          key={g.draftId}
-          group={g}
-          index={i}
-          onAddItems={() => onOrder(g.draftId)}
-          onGenerate={() => setPaying(g)}
-          onDelete={() => setDeleting(g)}
-        />
-      ))}
+      {table.groups.map((g, i) =>
+        g.draftId === activeDraftId ? (
+          <ActiveGroupCard
+            key={g.draftId}
+            group={g}
+            index={i}
+            branchId={branchId}
+            onDone={onExitOrder}
+            onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
+            onDelete={() => setDeleting(g)}
+          />
+        ) : (
+          <GroupCard
+            key={g.draftId}
+            group={g}
+            index={i}
+            onAddItems={() => onOrder(g.draftId)}
+            onGenerate={() => setPaying(g)}
+            onDelete={() => setDeleting(g)}
+          />
+        ),
+      )}
 
       {adding ? (
         <NewGroupForm free={free} busy={busy} nextName={nextGroupName(table.groups.map((g) => g.groupName))} onCreate={createGroup} onCancel={() => setAdding(false)} />
@@ -476,39 +629,35 @@ function TableDetail({
 
 // ---------------- Page ----------------
 
+const isPhone = () => window.matchMedia('(max-width: 768px)').matches;
+
 /**
- * Tables page. Ordering for a group (?order=<draftId>) happens right here: the menu appears on
- * the left and the group's bill on the right, without going to the New Bill page.
+ * Tables page. Serving a group (?order=<draftId>) happens right here: the right panel stays as it
+ * is and only the left side changes from the tables to the menu.
  */
 export function TablesPage() {
-  const [params, setParams] = useSearchParams();
-  const order = params.get('order');
-  if (order) {
-    return (
-      <BillingView
-        key={order}
-        tableDraftId={order}
-        onBackToTables={(tableId) => {
-          const p = new URLSearchParams();
-          if (tableId) p.set('table', tableId);
-          setParams(p);
-        }}
-      />
-    );
-  }
-  return <TablesBoard />;
-}
-
-function TablesBoard() {
   const { activeBranch } = useAuth();
   const branchId = activeBranch!.id;
   const tables = useTables(branchId);
   const queryClient = useQueryClient();
-  const search = usePageSearch('Search tables...');
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('table');
   const panel = params.get('panel'); // 'add' | 'edit'
+  const order = params.get('order');
   const [floor, setFloor] = useState<string>(ALL_FLOORS);
+  // Phones: while ordering, the menu fills the screen and the table panel opens from a bottom bar.
+  const [panelOnPhone, setPanelOnPhone] = useState(false);
+
+  const selectedTable = tables.data?.tables.find((t) => t.id === selectedId) ?? null;
+  const activeGroup = order ? (selectedTable?.groups.find((g) => g.draftId === order) ?? null) : null;
+  const ordering = Boolean(order && selectedTable && activeGroup && !panel);
+  const search = usePageSearch(ordering ? 'Search food items...' : 'Search tables...');
+  const live = useDraftSync(ordering ? order : null, branchId);
+  const liveCount = live.state.local?.items.reduce((a, i) => a + i.quantity, 0) ?? 0;
+  const liveTotal = useMemo(
+    () => (live.state.local ? calculateBill(live.state.local.items, activeBranch!.restaurant.settings, live.state.local.discount).grandTotal : 0),
+    [live.state.local, activeBranch],
+  );
 
   const floors = tables.data?.floors ?? [];
   const effectiveFloor = floor !== ALL_FLOORS && !floors.includes(floor) ? ALL_FLOORS : floor;
@@ -523,7 +672,7 @@ function TablesBoard() {
     return `T${String(Math.max(0, ...nums) + 1).padStart(2, '0')}`;
   }, [tables.data]);
 
-  const setPanel = (next: { table?: string | null; panel?: string | null }) => {
+  const setPanel = (next: { table?: string | null; panel?: string | null; order?: string | null }) => {
     const p = new URLSearchParams(params);
     for (const [k, v] of Object.entries(next)) {
       if (v) p.set(k, v);
@@ -532,9 +681,23 @@ function TablesBoard() {
     setParams(p, { replace: true });
   };
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
+  const exitOrder = () => {
+    setPanelOnPhone(false);
+    setPanel({ order: null });
+    void refresh();
+  };
 
   return (
     <>
+      {ordering ? (
+        <OrderingMenu
+          draftId={order!}
+          branchId={branchId}
+          title={`Table ${selectedTable!.label} · ${activeGroup!.groupName}`}
+          search={search}
+          onDone={exitOrder}
+        />
+      ) : (
       <div className="page">
         <PageHeader
           title="Tables"
@@ -585,6 +748,19 @@ function TablesBoard() {
           </div>
         )}
       </div>
+      )}
+
+      {ordering && (
+        <button type="button" className="bill-mobile-bar" onClick={() => setPanelOnPhone(true)} aria-label="View table bill">
+          <span className="count">
+            {liveCount} item{liveCount === 1 ? '' : 's'}
+          </span>
+          <span className="total num">{formatMoney(liveTotal)}</span>
+          <span className="view">
+            {activeGroup!.groupName} <ChevronUp size={18} />
+          </span>
+        </button>
+      )}
 
       {panel === 'add' && (
         <TableForm
@@ -619,9 +795,16 @@ function TablesBoard() {
         <TableDetail
           key={selected.id}
           table={selected}
-          onClose={() => setPanel({ table: null })}
-          onEdit={() => setPanel({ panel: 'edit' })}
+          hiddenOnPhone={ordering && !panelOnPhone}
+          onClose={() => {
+            if (ordering && isPhone()) setPanelOnPhone(false); // back to the menu
+            else setPanel({ table: null, order: null });
+          }}
+          onEdit={() => setPanel({ panel: 'edit', order: null })}
+          activeDraftId={ordering ? order : null}
+          onExitOrder={exitOrder}
           onOrder={(draftId) => {
+            setPanelOnPhone(false);
             // A new history entry, so the browser's Back button returns to the table.
             const p = new URLSearchParams(params);
             p.set('order', draftId);
