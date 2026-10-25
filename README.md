@@ -130,6 +130,11 @@ because Vercel has no persistent disk.
    | `TRUST_PROXY` | `1` |
    | `IMAGE_STORAGE` | `mongo` |
 
+   Optional demo buttons on the login page (they fill the form): `VITE_DEMO_SUPERADMIN_EMAIL`,
+   `VITE_DEMO_SUPERADMIN_PASSWORD`, `VITE_DEMO_BRANCH_EMAIL`, `VITE_DEMO_BRANCH_PASSWORD`. These end up
+   in the public web page, so use them only for demo accounts and delete them (then redeploy) after
+   the demo. Locally they go in `client/.env.local` (gitignored).
+
 3. **MongoDB Atlas → Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`)** –
    Vercel functions do not have fixed IP addresses. Keep the database user's password strong.
 4. Push to the connected branch; Vercel builds and deploys automatically.

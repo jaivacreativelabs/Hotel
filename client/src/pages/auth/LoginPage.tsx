@@ -1,4 +1,5 @@
-import { LogIn, Mail, Lock, TriangleAlert } from 'lucide-react';
+import { LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
+import { DEMO_LOGINS, DEMO_LOGINS_ENABLED } from '../../demoLogins';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Field, Spinner } from '../../components/ui';
@@ -71,6 +72,31 @@ export function LoginPage() {
           <button className="btn btn-primary btn-lg" disabled={busy}>
             {busy ? <Spinner /> : <LogIn />} Sign in
           </button>
+          {DEMO_LOGINS_ENABLED && (
+            <div className="demo-logins">
+              <div className="demo-logins-title">Demo – tap to fill the login</div>
+              <div className="demo-logins-buttons">
+                {DEMO_LOGINS.map((d) => (
+                  <button
+                    key={d.email}
+                    type="button"
+                    className="demo-login"
+                    onClick={() => {
+                      setEmail(d.email);
+                      setPassword(d.password);
+                      setError(null);
+                    }}
+                  >
+                    {d.role === 'Super Admin' ? <ShieldCheck /> : <Store />}
+                    <span>
+                      <strong>{d.role}</strong>
+                      <small>{d.hint}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </form>
       </section>
     </div>
