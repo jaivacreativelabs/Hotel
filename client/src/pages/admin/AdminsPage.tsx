@@ -1,13 +1,13 @@
-import { passwordSchema, type BranchDTO, type UserDTO } from '@rb/shared';
+import { passwordSchema, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CirclePlus, KeyRound, Pencil, Power, Users } from 'lucide-react';
+import { ChefHat, CirclePlus, KeyRound, Pencil, Power, Store, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ActiveBadge } from '../../components/badges';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, Modal, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
-import { formatDateTime } from '../../utils/format';
+import { cx, formatDateTime } from '../../utils/format';
 import { adminKeys, useAllBranches, useRestaurants } from './adminShared';
 
 /**
@@ -48,6 +48,8 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
   const [password, setPassword] = useState('');
   // Older accounts may still list several branches; editing keeps only one.
   const [branchId, setBranchId] = useState<string | null>(initial?.branchIds[0] ?? null);
+  const [role, setRole] = useState<StaffRole>(initial?.role === 'KITCHEN' ? 'KITCHEN' : 'RESTAURANT_ADMIN');
+  const kind = role === 'KITCHEN' ? 'Kitchen login' : 'Restaurant Admin';
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -57,15 +59,15 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
       const check = passwordSchema.safeParse(password);
       if (!check.success) return setError(`Password: ${check.error.issues[0].message}`);
     }
-    if (!branchId) return setError('Choose the branch this admin manages');
+    if (!branchId) return setError(role === 'KITCHEN' ? 'Choose the branch whose kitchen this login shows' : 'Choose the branch this admin manages');
     const branchIds = [branchId];
     setBusy(true);
     setError(null);
     try {
       if (initial) await api.patch(`/admin/users/${initial.id}`, { name, branchIds }, { branchId: null });
-      else await api.post('/admin/users', { name, email, password, branchIds }, { branchId: null });
+      else await api.post('/admin/users', { name, email, password, branchIds, role }, { branchId: null });
       await queryClient.invalidateQueries({ queryKey: ['admin'] });
-      toast.success(initial ? 'Admin updated' : `Restaurant Admin ${email} created`);
+      toast.success(initial ? `${kind} updated` : `${kind} ${email} created`);
       onClose();
     } catch (err) {
       setError(errorMessage(err));
@@ -76,11 +78,32 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
 
   return (
     <SidePanel
-      title={initial ? 'Edit Restaurant Admin' : 'Add Restaurant Admin'}
-      subtitle="A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch"
+      title={initial ? `Edit ${kind}` : 'Add Account'}
+      subtitle={
+        role === 'KITCHEN'
+          ? 'A Kitchen login only sees the Kitchen Display of one branch – no bills, sales or prices'
+          : 'A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch'
+      }
       onClose={onClose}
     >
       <form className="stack" style={{ gap: 18 }} onSubmit={submit}>
+        {!initial && (
+          <div className="field">
+            <span className="field-label">Account type</span>
+            <div className="row" style={{ gap: 8 }} role="radiogroup" aria-label="Account type">
+              {(
+                [
+                  ['RESTAURANT_ADMIN', 'Branch Admin', Store],
+                  ['KITCHEN', 'Kitchen login', ChefHat],
+                ] as const
+              ).map(([value, label, Icon]) => (
+                <button key={value} type="button" role="radio" aria-checked={role === value} className={cx('chip outline', role === value && 'active')} onClick={() => setRole(value)}>
+                  <Icon size={16} /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <Field label="Full name">{(id) => <input id={id} className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required autoFocus />}</Field>
         <Field label="Email (login)">
           {(id) => <input id={id} className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={Boolean(initial)} required />}
@@ -99,7 +122,7 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
         </div>
         {error && <div className="alert alert-danger">{error}</div>}
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>
-          {busy ? <Spinner /> : <CirclePlus />} {initial ? 'Save Changes' : 'Create Admin'}
+          {busy ? <Spinner /> : <CirclePlus />} {initial ? 'Save Changes' : role === 'KITCHEN' ? 'Create Kitchen Login' : 'Create Admin'}
         </button>
       </form>
     </SidePanel>
@@ -177,6 +200,11 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
               <tr key={u.id}>
                 <td>
                   <strong>{u.name}</strong>
+                  {u.role === 'KITCHEN' && (
+                    <span className="badge badge-amber badge-sm" style={{ marginLeft: 6 }}>
+                      Kitchen
+                    </span>
+                  )}
                   <span className="cell-sub">{u.email}</span>
                 </td>
                 <td data-label="Branch">
@@ -238,11 +266,11 @@ export function AdminsPage() {
     <>
       <div className="page">
         <PageHeader
-          title="Restaurant Admins"
-          subtitle="Create accounts and assign them to branches"
+          title="Admins &amp; Kitchen Logins"
+          subtitle="Branch Admins run billing; Kitchen logins only see the Kitchen Display"
           actions={
             <button className="btn btn-primary btn-lg" onClick={() => setAdding(true)}>
-              <CirclePlus /> Add Admin
+              <CirclePlus /> Add Account
             </button>
           }
         />

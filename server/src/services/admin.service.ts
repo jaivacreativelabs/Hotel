@@ -1,11 +1,12 @@
 /** Super Admin operations: restaurants, branches and Restaurant Admin accounts. */
 import type { Types } from 'mongoose';
-import type {
-  BranchCreateInput,
-  RecordStatus,
-  RestaurantCreateInput,
-  RestaurantSettingsInput,
-  UserCreateInput,
+import {
+  STAFF_ROLES,
+  type BranchCreateInput,
+  type RecordStatus,
+  type RestaurantCreateInput,
+  type RestaurantSettingsInput,
+  type UserCreateInput,
 } from '@rb/shared';
 import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
@@ -85,7 +86,7 @@ export async function createRestaurant(actor: AuthUser, input: RestaurantCreateI
 export async function getRestaurantDetail(id: string) {
   const r = await getRestaurantOr404(id);
   const branches = await BranchModel.find({ restaurantId: r._id }).sort({ name: 1 }).lean<BranchLean[]>();
-  const admins = await UserModel.find({ role: 'RESTAURANT_ADMIN', restaurantIds: r._id })
+  const admins = await UserModel.find({ role: { $in: STAFF_ROLES }, restaurantIds: r._id })
     .sort({ name: 1 })
     .lean<AuthUser[]>();
   return {
@@ -237,13 +238,16 @@ async function resolveAssignments(branchIds: string[]) {
 
 async function getRestaurantAdminOr404(id: string) {
   // Super Admin accounts are deliberately invisible to these endpoints.
-  const u = await UserModel.findOne({ _id: toObjectId(id, 'user'), role: 'RESTAURANT_ADMIN' });
+  const u = await UserModel.findOne({ _id: toObjectId(id, 'user'), role: { $in: STAFF_ROLES } });
   if (!u) throw notFound('Restaurant Admin');
   return u;
 }
 
+/** Audit wording per account type. */
+const accountKind = (role: string) => (role === 'KITCHEN' ? { action: 'KITCHEN_LOGIN', label: 'Kitchen login' } : { action: 'RESTAURANT_ADMIN', label: 'Restaurant Admin' });
+
 export async function listRestaurantAdmins(query: { restaurantId?: unknown; status?: unknown }) {
-  const filter: Record<string, unknown> = { role: 'RESTAURANT_ADMIN' };
+  const filter: Record<string, unknown> = { role: { $in: STAFF_ROLES } };
   if (query.restaurantId) filter.restaurantIds = toObjectId(query.restaurantId, 'restaurant');
   if (query.status === 'ACTIVE' || query.status === 'INACTIVE') filter.status = query.status;
   const users = await UserModel.find(filter).sort({ name: 1 }).lean<AuthUser[]>();
@@ -257,15 +261,15 @@ export async function createRestaurantAdmin(actor: AuthUser, input: UserCreateIn
     name: input.name,
     email: input.email,
     passwordHash: await hashPassword(input.password),
-    role: 'RESTAURANT_ADMIN',
+    role: input.role,
     ...assignments,
   });
   await audit(actor, {
-    action: 'RESTAURANT_ADMIN_CREATED',
+    action: `${accountKind(input.role).action}_CREATED`,
     entityType: 'User',
     entityId: user._id,
     restaurantId: assignments.restaurantIds[0] ?? null,
-    summary: `Created Restaurant Admin ${user.email}`,
+    summary: `Created ${accountKind(input.role).label} ${user.email}`,
     meta: { branchIds: assignments.branchIds.map(String) },
   });
   return toUserDTO(user.toObject() as unknown as AuthUser);
@@ -282,10 +286,10 @@ export async function updateRestaurantAdmin(actor: AuthUser, id: string, input: 
   }
   await user.save();
   await audit(actor, {
-    action: input.branchIds ? 'RESTAURANT_ADMIN_REASSIGNED' : 'RESTAURANT_ADMIN_UPDATED',
+    action: `${accountKind(user.role).action}_${input.branchIds ? 'REASSIGNED' : 'UPDATED'}`,
     entityType: 'User',
     entityId: user._id,
-    summary: `Updated Restaurant Admin ${user.email}`,
+    summary: `Updated ${accountKind(user.role).label} ${user.email}`,
     meta: { before, after: user.branchIds.map(String) },
   });
   return toUserDTO(user.toObject() as unknown as AuthUser);
@@ -297,10 +301,10 @@ export async function setRestaurantAdminStatus(actor: AuthUser, id: string, stat
   if (status === 'INACTIVE') user.tokenVersion += 1; // sign out everywhere
   await user.save();
   await audit(actor, {
-    action: status === 'ACTIVE' ? 'RESTAURANT_ADMIN_ACTIVATED' : 'RESTAURANT_ADMIN_DEACTIVATED',
+    action: `${accountKind(user.role).action}_${status === 'ACTIVE' ? 'ACTIVATED' : 'DEACTIVATED'}`,
     entityType: 'User',
     entityId: user._id,
-    summary: `${status === 'ACTIVE' ? 'Activated' : 'Deactivated'} Restaurant Admin ${user.email}`,
+    summary: `${status === 'ACTIVE' ? 'Activated' : 'Deactivated'} ${accountKind(user.role).label} ${user.email}`,
   });
   return toUserDTO(user.toObject() as unknown as AuthUser);
 }
@@ -311,7 +315,7 @@ export async function resetRestaurantAdminPassword(actor: AuthUser, id: string, 
   user.tokenVersion += 1;
   await user.save();
   await audit(actor, {
-    action: 'RESTAURANT_ADMIN_PASSWORD_RESET',
+    action: `${accountKind(user.role).action}_PASSWORD_RESET`,
     entityType: 'User',
     entityId: user._id,
     summary: `Reset password of ${user.email}`,

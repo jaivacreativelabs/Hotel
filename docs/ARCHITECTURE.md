@@ -17,8 +17,10 @@ and call services; services enforce scope, compute totals and write audit logs.
   user from MongoDB, so deactivation, reassignment and password resets take effect immediately
   (`tokenVersion` revokes old sessions).
 - CSRF: SameSite cookie + mandatory `X-Requested-With: rb-client` header + Origin check.
-- Roles: `SUPER_ADMIN` and `RESTAURANT_ADMIN` only; the `role` field is `immutable` in Mongoose and no
-  request schema accepts it. Super Admins are created only by the CLI script.
+- Roles: `SUPER_ADMIN`, `RESTAURANT_ADMIN` and `KITCHEN`; the `role` field is `immutable` in Mongoose.
+  The Super Admin's user form can only create `RESTAURANT_ADMIN` or `KITCHEN`; Super Admins are created
+  only by the CLI script. A `KITCHEN` login is refused by `authenticate` on every route except `/auth/*`
+  and `/kitchen/*` (deny by default), and works one branch's Kitchen Display only.
 - Scope: `requireBranchScope` / `requireMenuScope` resolve the branch from the `X-Branch-Id` header and
   verify the user is assigned to it and that branch + restaurant are active. Every query is additionally
   filtered by `branchId` / `restaurantId`, so a guessed id from another branch returns 404/403.

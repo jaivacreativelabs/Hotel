@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { KitchenTicketModel } from '../src/models/index.js';
-import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
+import { buildWorld, Client, key, ok, PASSWORD, useTestDatabase, type World } from './helpers.js';
 
 useTestDatabase();
 
@@ -10,6 +10,7 @@ interface Draft {
 }
 interface Ticket {
   id: string;
+  draftId?: string;
   number: string;
   type: string;
   tableLabel: string;
@@ -149,5 +150,37 @@ describe('the pipeline', () => {
     await w.sa.patch(`/api/v1/admin/branches/${w.branchA2}`, { kitchenDisplay: true });
     expect(await board(w.adminA2)).toEqual([]);
     expect((await w.adminA2.post(`/api/v1/kitchen/tickets/${t.id}/advance`, { from: t.status })).status).toBe(404);
+  });
+});
+
+describe('kitchen login', () => {
+  let cook: Client;
+
+  it('the Super Admin creates a Kitchen login for one branch', async () => {
+    const body = { name: 'A1 Kitchen', email: 'kitchen.a1@test.local', password: PASSWORD, branchIds: [w.branchA1], role: 'KITCHEN' };
+    expect((await w.adminA1.post('/api/v1/admin/users', body)).status).toBe(403);
+    const u = ok<{ role: string }>(await w.sa.post('/api/v1/admin/users', body), 201);
+    expect(u.role).toBe('KITCHEN');
+    cook = await new Client().login('kitchen.a1@test.local');
+    const me = ok<{ user: { role: string }; branches: { id: string; kitchenDisplay: boolean }[] }>(await cook.get('/api/v1/auth/me'));
+    expect(me.user.role).toBe('KITCHEN');
+    expect(me.branches.map((b) => [b.id, b.kitchenDisplay])).toEqual([[w.branchA1, true]]);
+    cook.useBranch(w.branchA1);
+  });
+
+  it('works the board of its own branch', async () => {
+    const [t] = await board(cook);
+    expect(ok<Ticket>(await cook.post(`/api/v1/kitchen/tickets/${t.id}/advance`, { from: t.status })).status).not.toBe(t.status);
+    expect((await cook.useBranch(w.branchA2).get('/api/v1/kitchen/tickets')).status).toBe(403);
+    cook.useBranch(w.branchA1);
+  });
+
+  it('cannot open anything else', async () => {
+    for (const url of ['/api/v1/transactions', '/api/v1/bills/counter', '/api/v1/tables', '/api/v1/menu/items', '/api/v1/admin/users', '/api/v1/admin/analytics/overview']) {
+      expect([url, (await cook.get(url)).status]).toEqual([url, 403]);
+    }
+    const [t] = await board(cook);
+    expect((await cook.post(`/api/v1/bills/${t.draftId ?? t.id}/kitchen`)).status).toBe(403);
+    expect((await cook.post('/api/v1/bills/table-groups', { tableId: w.tables.t3, guestCount: 1 })).status).toBe(403);
   });
 });

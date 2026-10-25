@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Empty, Loading, PageHeader, Pagination } from '../../components/ui';
 import { api } from '../../services/api';
 import { formatDateTime } from '../../utils/format';
+import { ROLE_LABEL } from '../../utils/roles';
 
 const ACTIONS = [
   'BILL_FINALIZED',
@@ -15,6 +16,7 @@ const ACTIONS = [
   'MENU_ITEM_OVERRIDE_SET',
   'RESTAURANT_ADMIN_CREATED',
   'RESTAURANT_ADMIN_REASSIGNED',
+  'KITCHEN_LOGIN_CREATED',
   'RESTAURANT_SETTINGS_UPDATED',
 ];
 
@@ -76,7 +78,7 @@ export function AuditLogPage() {
                       <td data-label="Who">
                         <span>
                           {l.actorName}
-                          <span className="cell-sub">{l.actorRole === 'SUPER_ADMIN' ? 'Super Admin' : l.actorRole === 'RESTAURANT_ADMIN' ? 'Restaurant Admin' : 'System'}</span>
+                          <span className="cell-sub">{ROLE_LABEL[l.actorRole] ?? 'System'}</span>
                         </span>
                       </td>
                       <td data-label="Action">

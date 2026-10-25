@@ -66,9 +66,16 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     clearSession(res);
     throw unauthenticated('Your session is no longer valid. Please sign in again.');
   }
+  // Kitchen logins may only use the kitchen board and their own session – everything else is
+  // refused here, whatever a route would otherwise allow.
+  if (user.role === 'KITCHEN' && !KITCHEN_ROUTES.some((r) => req.baseUrl.endsWith(r))) {
+    throw forbidden('Kitchen logins can only open the Kitchen Display');
+  }
   req.user = user;
   next();
 }
+
+const KITCHEN_ROUTES = ['/kitchen', '/auth'];
 
 export function requireRole(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {

@@ -69,7 +69,7 @@ Unknown body fields are rejected (`.strict()` schemas), so fields such as `role`
 | Method | Path | Body |
 |---|---|---|
 | GET | `/admin/users` | `?restaurantId=&status=` – Restaurant Admins only |
-| POST | `/admin/users` | `{ name, email, password, branchIds: [branchId] }` – role is always `RESTAURANT_ADMIN`; exactly one branch (branches are isolated) |
+| POST | `/admin/users` | `{ name, email, password, branchIds: [branchId], role? }` – `role` is `RESTAURANT_ADMIN` (default) or `KITCHEN` (Kitchen Display only); exactly one branch (branches are isolated) |
 | PATCH | `/admin/users/:id` | `{ name?, branchIds?: [branchId] }` (move the admin to another branch) |
 | PATCH | `/admin/users/:id/status` | `{ status }` – deactivation revokes sessions |
 | POST | `/admin/users/:id/reset-password` | `{ password }` |

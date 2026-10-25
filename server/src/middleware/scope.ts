@@ -36,13 +36,13 @@ export function canAccessBranch(user: AuthUser, branch: Pick<BranchLean, '_id' |
 export async function loadBranchScope(user: AuthUser, rawBranchId: unknown): Promise<BranchScope> {
   const branchId = toObjectId(rawBranchId, 'branch');
   const branch = await BranchModel.findById(branchId).lean<BranchLean>();
-  const isRA = user.role === 'RESTAURANT_ADMIN';
-  // Restaurant Admins get 403 for unknown branches too, so ids cannot be probed.
-  if (!branch) throw isRA ? forbidden('You are not assigned to this branch') : notFound('Branch');
+  const isBranchUser = user.role !== 'SUPER_ADMIN';
+  // Branch accounts get 403 for unknown branches too, so ids cannot be probed.
+  if (!branch) throw isBranchUser ? forbidden('You are not assigned to this branch') : notFound('Branch');
   if (!canAccessBranch(user, branch)) throw forbidden('You are not assigned to this branch');
   const restaurant = await RestaurantModel.findById(branch.restaurantId).lean<RestaurantLean>();
   if (!restaurant) throw notFound('Restaurant');
-  if (isRA && (branch.status !== 'ACTIVE' || restaurant.status !== 'ACTIVE')) {
+  if (isBranchUser && (branch.status !== 'ACTIVE' || restaurant.status !== 'ACTIVE')) {
     throw forbidden('This branch or restaurant is inactive');
   }
   return { restaurant, branch };

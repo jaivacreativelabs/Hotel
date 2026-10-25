@@ -12,6 +12,7 @@ import { KitchenPage, PrintKitchenTicketPage } from './pages/restaurant/KitchenP
 import { TablesPage } from './pages/restaurant/TablesPage';
 import { TransactionsPage } from './pages/restaurant/TransactionsPage';
 import { useAuth } from './store/auth';
+import { homeFor } from './utils/roles';
 
 // Super Admin pages are only downloaded by Super Admins.
 const named = <K extends string>(load: () => Promise<Record<K, React.ComponentType>>, name: K) =>
@@ -27,9 +28,7 @@ const AuditLogPage = named(() => import('./pages/admin/AuditLogPage'), 'AuditLog
 const DemoLoginsPage = named(() => import('./pages/admin/DemoLoginsPage'), 'DemoLoginsPage');
 const DailyReportPage = named(() => import('./pages/admin/DailyReportPage'), 'DailyReportPage');
 
-const homeFor = (role: Role) => (role === 'SUPER_ADMIN' ? '/admin/restaurants' : '/billing');
-
-function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
+function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { user, loading, activeBranch } = useAuth();
   const location = useLocation();
   if (loading) {
@@ -40,8 +39,8 @@ function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
     );
   }
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
-  if (user.role !== role) return <Navigate to={homeFor(user.role)} replace />;
-  if (role === 'RESTAURANT_ADMIN' && !activeBranch) {
+  if (!roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
+  if (user.role !== 'SUPER_ADMIN' && !activeBranch) {
     return (
       <div className="center-screen">
         <Empty icon={<Building2 />} title="No active branch assigned">
@@ -67,7 +66,7 @@ export function App() {
       <Route path="/print/kitchen/:id" element={<PrintKitchenTicketPage />} />
       <Route
         element={
-          <RequireRole role="RESTAURANT_ADMIN">
+          <RequireRole roles={['RESTAURANT_ADMIN']}>
             <AppLayout />
           </RequireRole>
         }
@@ -76,12 +75,20 @@ export function App() {
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/tables" element={<TablesPage />} />
+      </Route>
+      <Route
+        element={
+          <RequireRole roles={['RESTAURANT_ADMIN', 'KITCHEN']}>
+            <AppLayout />
+          </RequireRole>
+        }
+      >
         <Route path="/kitchen" element={<KitchenPage />} />
       </Route>
       <Route
         path="/admin"
         element={
-          <RequireRole role="SUPER_ADMIN">
+          <RequireRole roles={['SUPER_ADMIN']}>
             <AppLayout />
           </RequireRole>
         }

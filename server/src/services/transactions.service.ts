@@ -27,7 +27,7 @@ type TransactionLean = Transaction & { _id: Types.ObjectId };
  */
 export function transactionFilter(user: AuthUser, q: Partial<TransactionQuery>): Record<string, unknown> {
   const filter: Record<string, unknown> = {};
-  if (user.role === 'RESTAURANT_ADMIN') {
+  if (user.role !== 'SUPER_ADMIN') {
     if (q.branchId) {
       const id = toObjectId(q.branchId, 'branch');
       if (!user.branchIds.some((b) => b.equals(id))) throw forbidden('You are not assigned to this branch');
@@ -74,7 +74,7 @@ export async function listTransactions(
 async function getAccessible(user: AuthUser, id: string) {
   const tx = await TransactionModel.findById(toObjectId(id, 'transaction')).lean<TransactionLean>();
   if (!tx) throw notFound('Transaction');
-  if (user.role === 'RESTAURANT_ADMIN' && !user.branchIds.some((b) => b.equals(tx.branchId))) {
+  if (user.role !== 'SUPER_ADMIN' && !user.branchIds.some((b) => b.equals(tx.branchId))) {
     throw notFound('Transaction');
   }
   return tx;

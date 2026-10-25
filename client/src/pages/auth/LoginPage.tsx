@@ -1,11 +1,12 @@
 import type { DemoAccountDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
-import { LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
+import { ChefHat, LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Field, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { useAuth } from '../../store/auth';
+import { homeFor } from '../../utils/roles';
 
 export function LoginPage() {
   const { user, login, demoLogin, loading } = useAuth();
@@ -23,7 +24,7 @@ export function LoginPage() {
     retry: false,
   });
 
-  if (!loading && user) return <Navigate to={user.role === 'SUPER_ADMIN' ? '/admin/restaurants' : '/billing'} replace />;
+  if (!loading && user) return <Navigate to={homeFor(user.role)} replace />;
 
   const run = async (key: string, action: () => Promise<void>) => {
     setBusy(key);
@@ -92,7 +93,7 @@ export function LoginPage() {
               <div className="demo-logins-buttons">
                 {demos.data!.map((d) => (
                   <button key={d.id} type="button" className="demo-login" disabled={busy !== null} onClick={() => void run(d.id, () => demoLogin(d.id))}>
-                    {busy === d.id ? <Spinner /> : d.role === 'SUPER_ADMIN' ? <ShieldCheck /> : <Store />}
+                    {busy === d.id ? <Spinner /> : d.role === 'SUPER_ADMIN' ? <ShieldCheck /> : d.role === 'KITCHEN' ? <ChefHat /> : <Store />}
                     <span>
                       <strong>{d.label}</strong>
                       <small>{d.hint}</small>

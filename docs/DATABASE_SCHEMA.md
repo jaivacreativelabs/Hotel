@@ -20,7 +20,7 @@ timestamps unless noted.
 | name | string | |
 | email | string | unique, lower-cased |
 | passwordHash | string | bcrypt (cost 12), never returned by the API |
-| role | `SUPER_ADMIN` \| `RESTAURANT_ADMIN` | enum validated by Mongoose and Zod |
+| role | `SUPER_ADMIN` \| `RESTAURANT_ADMIN` \| `KITCHEN` | enum validated by Mongoose and Zod; `KITCHEN` = Kitchen Display of one branch only |
 | restaurantIds | ObjectId[] | derived server-side from `branchIds` |
 | branchIds | ObjectId[] | branches the Restaurant Admin may operate |
 | status | `ACTIVE` \| `INACTIVE` | |

@@ -33,9 +33,9 @@ export async function changePassword(user: AuthUser, currentPassword: string, ne
   return doc.toObject() as unknown as AuthUser;
 }
 
-/** Branches the user may operate (Restaurant Admin) – active branch + active restaurant only. */
+/** Branches a branch account (Restaurant Admin / Kitchen) may operate – active branch + active restaurant only. */
 export async function accessibleBranches(user: AuthUser): Promise<BranchContextDTO[]> {
-  if (user.role !== 'RESTAURANT_ADMIN' || user.branchIds.length === 0) return [];
+  if (user.role === 'SUPER_ADMIN' || user.branchIds.length === 0) return [];
   const branches = await BranchModel.find({
     _id: { $in: user.branchIds },
     restaurantId: { $in: user.restaurantIds },

@@ -115,6 +115,10 @@ Preparing → Ready** – that refreshes every few seconds (open it on a kitchen
 - **Served** on a Ready ticket takes it off the board. Deleting an order cancels tickets the kitchen
   has not accepted yet.
 
+**Kitchen login:** Super Admin → Admins → *Add Account* → *Kitchen login*, pick the branch. That
+account opens straight to the Kitchen board and is refused everything else (bills, sales, menu,
+tables), so it is safe on a shared kitchen tablet.
+
 ## Receipt printing
 
 *Print Bill* opens a receipt page sized for **80 mm thermal printers** and calls the browser’s print

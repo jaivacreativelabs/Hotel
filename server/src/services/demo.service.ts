@@ -34,7 +34,7 @@ async function hints(users: DemoUser[]): Promise<Map<string, string>> {
       String(u._id),
       u.role === 'SUPER_ADMIN'
         ? 'All branches, reports, analytics'
-        : `Only ${u.branchIds.map((id) => branchName.get(String(id)) ?? 'branch').join(', ')}`,
+        : `${u.role === 'KITCHEN' ? 'Kitchen board of' : 'Only'} ${u.branchIds.map((id) => branchName.get(String(id)) ?? 'branch').join(', ')}`,
     ]),
   );
 }

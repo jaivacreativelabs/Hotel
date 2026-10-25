@@ -29,6 +29,7 @@ import { useAuth } from '../store/auth';
 import { getSyncSummary, subscribeSyncSummary } from '../store/draftSync';
 import { useTopbar } from '../store/topbar';
 import { cx } from '../utils/format';
+import { ROLE_LABEL } from '../utils/roles';
 
 interface NavItem {
   to: string;
@@ -90,7 +91,12 @@ function UserMenu() {
   }, []);
 
   if (!user) return null;
-  const roleText = user.role === 'SUPER_ADMIN' ? 'Super Admin' : activeBranch ? `${activeBranch.restaurant.name} · ${activeBranch.name}` : 'Restaurant Admin';
+  const roleText =
+    user.role === 'SUPER_ADMIN'
+      ? 'Super Admin'
+      : activeBranch
+        ? `${user.role === 'KITCHEN' ? 'Kitchen · ' : ''}${activeBranch.restaurant.name} · ${activeBranch.name}`
+        : ROLE_LABEL[user.role];
   return (
     <div className="user-menu" ref={ref}>
       <button className="user-button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
@@ -163,9 +169,11 @@ export function AppLayout() {
   const { user, activeBranch } = useAuth();
   const { placeholder, query, setQuery, extra } = useTopbar();
   const isSuper = user?.role === 'SUPER_ADMIN';
-  const nav = isSuper ? ADMIN_NAV : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
-  // Phones: Restaurant Admins get a bottom tab bar; the Super Admin a slide-in menu.
-  const bottomNav = !isSuper;
+  const isKitchen = user?.role === 'KITCHEN';
+  const nav = isSuper ? ADMIN_NAV : isKitchen ? [KITCHEN_NAV] : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
+  // Phones: Restaurant Admins get a bottom tab bar, the Super Admin a slide-in menu; a Kitchen
+  // login has a single page and needs neither.
+  const bottomNav = user?.role === 'RESTAURANT_ADMIN';
   const [navOpen, setNavOpen] = useState(false);
   const location = useLocation();
   useEffect(() => setNavOpen(false), [location.pathname]);
@@ -176,11 +184,11 @@ export function AppLayout() {
         <img src="/logo.jpeg" alt="" />
         <div>
           <div className="brand-name">Tiffin House</div>
-          <div className="brand-sub">{user?.role === 'SUPER_ADMIN' ? 'Super Admin Panel' : 'Billing & POS'}</div>
+          <div className="brand-sub">{isSuper ? 'Super Admin Panel' : isKitchen ? 'Kitchen Display' : 'Billing & POS'}</div>
         </div>
       </div>
       <header className="topbar">
-        {!bottomNav && (
+        {isSuper && (
           <button className="icon-btn plain nav-toggle" onClick={() => setNavOpen((o) => !o)} aria-label="Open menu" aria-expanded={navOpen}>
             <MenuIcon />
           </button>

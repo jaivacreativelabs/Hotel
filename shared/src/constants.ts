@@ -1,5 +1,12 @@
-export const ROLES = ['SUPER_ADMIN', 'RESTAURANT_ADMIN'] as const;
+/**
+ * SUPER_ADMIN: everything. RESTAURANT_ADMIN: one branch's billing, menu, tables, transactions.
+ * KITCHEN: one branch's Kitchen Display only (no bills, sales or prices).
+ */
+export const ROLES = ['SUPER_ADMIN', 'RESTAURANT_ADMIN', 'KITCHEN'] as const;
 export type Role = (typeof ROLES)[number];
+/** Branch accounts the Super Admin creates and manages. */
+export const STAFF_ROLES = ['RESTAURANT_ADMIN', 'KITCHEN'] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
 
 export const RECORD_STATUSES = ['ACTIVE', 'INACTIVE'] as const;
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
