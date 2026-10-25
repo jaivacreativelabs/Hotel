@@ -170,7 +170,8 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
   const now = new Date();
 
   const updated = await TransactionModel.findOneAndUpdate(
-    { _id: tx._id, status: 'COMPLETED', editCount: tx.editCount ?? 0 },
+    // Bills made before editing existed have no editCount field; `null` matches those too.
+    { _id: tx._id, status: 'COMPLETED', editCount: tx.editCount ? tx.editCount : { $in: [0, null] } },
     {
       $set: {
         items: lines.map((l, i) => ({
