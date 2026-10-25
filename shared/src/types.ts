@@ -246,6 +246,12 @@ export interface TransactionDTO {
   statusChange: { at: string; byName: string; reason: string } | null;
   createdByName: string;
   finalizedAt: string;
+  /** How many times the bill was corrected (each keeps the previous version). */
+  editCount: number;
+  editedAt: string | null;
+  editedByName: string;
+  /** Until when the bill can still be edited; null when no longer editable. */
+  editableUntil: string | null;
 }
 
 export interface AnalyticsPoint {

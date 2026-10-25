@@ -63,6 +63,11 @@ export function PrintReceiptPage() {
             <tr>
               <td colSpan={2}>{formatDateTime(t.finalizedAt)}</td>
             </tr>
+            {t.editCount > 0 && t.editedAt && (
+              <tr>
+                <td colSpan={2}>Revised: {formatDateTime(t.editedAt)}</td>
+              </tr>
+            )}
             {t.customerName && (
               <tr>
                 <td colSpan={2}>Customer: {t.customerName}</td>

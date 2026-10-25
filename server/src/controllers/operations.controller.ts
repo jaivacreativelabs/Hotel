@@ -6,6 +6,7 @@ import {
   finalizeSchema,
   tableCreateSchema,
   tableUpdateSchema,
+  transactionEditSchema,
   transactionQuerySchema,
   transactionStatusChangeSchema,
 } from '@rb/shared';
@@ -77,6 +78,9 @@ export const exportTransactions = async (req: Request, res: Response) => {
   res.setHeader('Content-Disposition', `attachment; filename="transactions-${todayIn(env.APP_TIMEZONE)}.csv"`);
   res.setHeader('Cache-Control', 'no-store');
   res.send(csv);
+};
+export const editTransaction = async (req: Request, res: Response) => {
+  res.json({ data: await transactions.editTransaction(currentUser(req), id(req), parse(transactionEditSchema, req.body)) });
 };
 export const voidTransaction = async (req: Request, res: Response) => {
   const { reason } = parse(transactionStatusChangeSchema, req.body);

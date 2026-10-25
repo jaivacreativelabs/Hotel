@@ -1,6 +1,6 @@
 import { PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Calendar, ChevronDown, Download, Eye, FileText, Printer, Undo2 } from 'lucide-react';
+import { Ban, Calendar, ChevronDown, Download, Eye, FileText, Pencil, Printer, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBadge, TableBadge, TxStatusBadge } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
@@ -12,6 +12,7 @@ import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
 import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, PAYMENT_LABEL, presetRange, STATUS_LABEL, type DatePreset } from '../../utils/format';
+import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
   ['all', 'All Bills'],
@@ -89,15 +90,33 @@ function StatusChangeModal({ tx, kind, onClose, onDone }: { tx: TransactionDTO; 
   );
 }
 
-function BillDetails({ tx, onClose, onChanged, showBranch }: { tx: TransactionDTO; onClose: () => void; onChanged: (t: TransactionDTO) => void; showBranch: boolean }) {
+function BillDetails({
+  tx,
+  onClose,
+  onChanged,
+  onEdit,
+  showBranch,
+}: {
+  tx: TransactionDTO;
+  onClose: () => void;
+  onChanged: (t: TransactionDTO) => void;
+  onEdit: () => void;
+  showBranch: boolean;
+}) {
   const [change, setChange] = useState<'void' | 'refund' | null>(null);
   const toast = useToast();
+  const minutesLeft = useEditMinutesLeft(tx.status === 'COMPLETED' ? tx.editableUntil : null);
   return (
     <SidePanel
       title="Bill Details"
       onClose={onClose}
       footer={
         <>
+          {minutesLeft > 0 && (
+            <button className="btn btn-outline-primary btn-lg btn-block" onClick={onEdit}>
+              <Pencil /> Edit bill ({minutesLeft} min left)
+            </button>
+          )}
           <button className="btn btn-primary btn-lg btn-block" onClick={() => openReceipt(tx.id)}>
             <Printer /> Print Bill Again
           </button>
@@ -158,6 +177,14 @@ function BillDetails({ tx, onClose, onChanged, showBranch }: { tx: TransactionDT
           </div>
         )}
       </dl>
+      {tx.editCount > 0 && tx.editedAt && (
+        <div className="alert alert-info">
+          <Pencil />
+          <span>
+            Edited {tx.editCount > 1 ? `${tx.editCount} times, last ` : ''}by {tx.editedByName} at {formatTime(tx.editedAt)}. The earlier version is kept in the records.
+          </span>
+        </div>
+      )}
       {tx.statusChange && (
         <div className="alert alert-warning">
           <Ban />
@@ -247,6 +274,7 @@ export function TransactionsView({
   const [status, setStatus] = useState<TransactionStatus | ''>('');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<TransactionDTO | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const range = preset === 'custom' && custom ? custom : presetRange(preset);
@@ -287,6 +315,23 @@ export function TransactionsView({
       setExporting(false);
     }
   };
+
+  if (editing) {
+    return (
+      <div className="tx-layout">
+        <BillEditor
+          key={editing.id}
+          tx={editing}
+          search={search}
+          onCancel={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="tx-layout">
@@ -365,7 +410,10 @@ export function TransactionsView({
                   <tbody>
                     {list.data!.data.map((t) => (
                       <tr key={t.id} className={cx('clickable', t.id === selectedId && 'selected')} onClick={() => setSelectedId(t.id)}>
-                        <td className="bill-no">#{t.billNumber}</td>
+                        <td className="bill-no">
+                          #{t.billNumber}
+                          {t.editCount > 0 && <span className="cell-sub">Edited</span>}
+                        </td>
                         <td className="nowrap">
                           {formatDate(t.finalizedAt)}
                           <span className="cell-sub">{formatTime(t.finalizedAt)}</span>
@@ -411,7 +459,10 @@ export function TransactionsView({
                   <li key={t.id}>
                     <button type="button" className={cx('tx-card', t.id === selectedId && 'selected')} onClick={() => setSelectedId(t.id)}>
                       <span className="tx-card-top">
-                        <span className="bill-no">#{t.billNumber}</span>
+                        <span className="bill-no">
+                          #{t.billNumber}
+                          {t.editCount > 0 && <small className="muted"> · Edited</small>}
+                        </span>
                         <span className="tx-card-total num">{formatMoney(t.grandTotal)}</span>
                       </span>
                       <span className="tx-card-meta">
@@ -438,6 +489,7 @@ export function TransactionsView({
           tx={selected}
           showBranch={showBranch}
           onClose={() => setSelectedId(null)}
+          onEdit={() => setEditing(selected)}
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transactions'] })}
         />
       )}

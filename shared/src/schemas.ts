@@ -191,6 +191,26 @@ export const finalizeSchema = z.strictObject({
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
 });
 
+/** Correcting a generated bill within the edit window. Prices always come from the server. */
+export const transactionEditSchema = z.strictObject({
+  /** editCount the client last saw – a stale value returns 409 instead of overwriting */
+  editCount: z.number().int().min(0),
+  items: z
+    .array(
+      z.strictObject({
+        menuItemId: objectIdSchema,
+        quantity: z.number().int().min(1).max(LIMITS.maxQuantity),
+      }),
+    )
+    .min(1, 'A bill needs at least one item – void it instead')
+    .max(LIMITS.maxBillLines)
+    .refine((items) => new Set(items.map((i) => i.menuItemId)).size === items.length, { message: 'Duplicate items' }),
+  paymentMethod: z.enum(PAYMENT_METHODS),
+  customerName: z.string().trim().max(80).optional(),
+  discount: discountSchema.nullable().optional(),
+  reason: z.string().trim().max(200).optional(),
+});
+
 export const transactionStatusChangeSchema = z.strictObject({
   reason: z.string().trim().min(3, 'Give a reason').max(200),
 });
@@ -240,5 +260,6 @@ export type MenuItemUpdateInput = z.infer<typeof menuItemUpdateSchema>;
 export type TableCreateInput = z.infer<typeof tableCreateSchema>;
 export type DraftUpdateInput = z.infer<typeof draftUpdateSchema>;
 export type FinalizeInput = z.infer<typeof finalizeSchema>;
+export type TransactionEditInput = z.infer<typeof transactionEditSchema>;
 export type TransactionQuery = z.infer<typeof transactionQuerySchema>;
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;

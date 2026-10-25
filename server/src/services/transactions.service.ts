@@ -1,12 +1,21 @@
 import type { Types } from 'mongoose';
-import type { PageMeta, TransactionDTO, TransactionQuery } from '@rb/shared';
+import {
+  BILL_EDIT_WINDOW_MINUTES,
+  calculateBill,
+  type PageMeta,
+  type TransactionDTO,
+  type TransactionEditInput,
+  type TransactionQuery,
+} from '@rb/shared';
 import { env } from '../config/env.js';
 import type { AuthUser } from '../middleware/auth.js';
+import { loadBranchScope } from '../middleware/scope.js';
 import { BranchModel, RestaurantModel, TransactionModel, type Transaction } from '../models/index.js';
 import { dayRange, formatDateTime } from '../utils/dates.js';
 import { toCsv, paiseToDecimal } from '../utils/csv.js';
-import { conflict, forbidden, notFound } from '../utils/errors.js';
-import { toTransactionDTO } from '../utils/serialize.js';
+import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
+import { editableUntil, restaurantSettings, toTransactionDTO } from '../utils/serialize.js';
+import { priceLines } from './bills.service.js';
 import { escapeRegex, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 
@@ -128,6 +137,100 @@ export async function exportTransactionsCsv(user: AuthUser, q: Partial<Transacti
       t.createdByName ?? '',
     ]),
   );
+}
+
+/**
+ * Corrects a paid bill within BILL_EDIT_WINDOW_MINUTES of billing. Items are re-priced from the
+ * branch menu and totals recomputed on the server; the previous version is kept in `revisions`
+ * and the change is audit logged. After the window, only void/refund remain.
+ */
+export async function editTransaction(user: AuthUser, id: string, input: TransactionEditInput): Promise<TransactionDTO> {
+  const tx = await getAccessible(user, id);
+  if (tx.status !== 'COMPLETED') throw conflict(`Bill ${tx.billNumber} is ${tx.status.toLowerCase()} and cannot be edited`, 'INVALID_STATUS');
+  if (!editableUntil(tx)) {
+    throw conflict(`Bills can be edited only within ${BILL_EDIT_WINDOW_MINUTES} minutes of billing. Use Void or Refund instead.`, 'EDIT_WINDOW_CLOSED');
+  }
+  if ((tx.editCount ?? 0) !== input.editCount) {
+    throw conflict(`Bill ${tx.billNumber} was just changed by ${tx.editedByName || 'someone else'}. The latest version has been loaded.`, 'CONFLICT', {
+      current: toTransactionDTO(tx),
+    });
+  }
+
+  const scope = await loadBranchScope(user, String(tx.branchId));
+  const lines = await priceLines(scope, input.items);
+  const before = new Map(tx.items.map((i) => [String(i.menuItemId), i.quantity]));
+  const blocked = lines.filter((l) => l.unavailable && l.quantity > (before.get(String(l.menuItemId)) ?? 0));
+  if (blocked.length) {
+    throw badRequest(`${blocked.map((l) => l.name).join(', ')} ${blocked.length > 1 ? 'are' : 'is'} unavailable`, 'ITEM_UNAVAILABLE');
+  }
+  const settings = restaurantSettings(scope.restaurant);
+  const discount =
+    input.discount === undefined ? (tx.discount?.type ? { type: tx.discount.type as 'PERCENT' | 'FLAT', value: tx.discount.value ?? 0 } : null) : input.discount;
+  const totals = calculateBill(lines, settings, discount);
+  const now = new Date();
+
+  const updated = await TransactionModel.findOneAndUpdate(
+    { _id: tx._id, status: 'COMPLETED', editCount: tx.editCount ?? 0 },
+    {
+      $set: {
+        items: lines.map((l, i) => ({
+          menuItemId: l.menuItemId,
+          name: l.name,
+          categoryName: l.categoryName,
+          imageUrl: l.imageUrl,
+          unitPrice: l.unitPrice,
+          quantity: l.quantity,
+          taxable: l.taxable,
+          lineTotal: totals.lineTotals[i],
+        })),
+        subtotal: totals.subtotal,
+        discount: discount ? { ...discount, amount: totals.discountAmount } : null,
+        taxes: totals.taxes,
+        taxTotal: totals.taxTotal,
+        grandTotal: totals.grandTotal,
+        pricesIncludeTax: settings.pricesIncludeTax,
+        paymentMethod: input.paymentMethod,
+        ...(input.customerName !== undefined && { customerName: input.customerName }),
+        editedAt: now,
+        editedByName: user.name,
+      },
+      $inc: { editCount: 1 },
+      $push: {
+        revisions: {
+          at: now,
+          by: user._id,
+          byName: user.name,
+          reason: input.reason ?? '',
+          items: tx.items,
+          customerName: tx.customerName,
+          subtotal: tx.subtotal,
+          discount: tx.discount,
+          taxes: tx.taxes,
+          taxTotal: tx.taxTotal,
+          grandTotal: tx.grandTotal,
+          paymentMethod: tx.paymentMethod,
+        },
+      },
+    },
+    { new: true, billEdit: true },
+  ).lean<TransactionLean>();
+  if (!updated) {
+    const current = await getAccessible(user, id);
+    throw conflict(`Bill ${tx.billNumber} was just changed. The latest version has been loaded.`, 'CONFLICT', { current: toTransactionDTO(current) });
+  }
+  await audit(user, {
+    action: 'TRANSACTION_EDITED',
+    entityType: 'Transaction',
+    entityId: tx._id,
+    restaurantId: tx.restaurantId,
+    branchId: tx.branchId,
+    summary: `Edited bill ${tx.billNumber}: ${tx.grandTotal} → ${updated.grandTotal} paise${input.reason ? ` (${input.reason})` : ''}`,
+    meta: {
+      before: { grandTotal: tx.grandTotal, paymentMethod: tx.paymentMethod, items: tx.items.map((i) => `${i.name} x${i.quantity}`) },
+      after: { grandTotal: updated.grandTotal, paymentMethod: updated.paymentMethod, items: updated.items.map((i) => `${i.name} x${i.quantity}`) },
+    },
+  });
+  return toTransactionDTO(updated);
 }
 
 /** Controlled correction workflow: COMPLETED → VOIDED | REFUNDED. Amounts are never edited. */

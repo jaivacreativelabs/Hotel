@@ -49,7 +49,7 @@ interface PricedLine {
 }
 
 /** Looks up each requested item in the branch's effective menu. */
-async function priceLines(
+export async function priceLines(
   scope: BranchScope,
   requested: { menuItemId: Types.ObjectId | string; quantity: number }[],
   session?: ClientSession,

@@ -1,3 +1,4 @@
+import { Types } from 'mongoose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { AuditLogModel, TransactionModel } from '../src/models/index.js';
 import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
@@ -66,6 +67,77 @@ describe('transaction history', () => {
     const rows = res.text.trim().split('\r\n');
     expect(rows).toHaveLength(1 + 13);
     expect(res.text).not.toContain('Branch A2');
+  });
+});
+
+describe('editing a bill within 30 minutes', () => {
+  interface Tx {
+    id: string;
+    billNumber: string;
+    grandTotal: number;
+    paymentMethod: string;
+    editCount: number;
+    editableUntil: string | null;
+    items: { name: string; quantity: number; unitPrice: number }[];
+  }
+
+  it('corrects items and payment, keeps the old version and logs it', async () => {
+    const tx = ok<Tx>(await w.adminA1.get(`/api/v1/transactions/${bills[5].id}`));
+    expect(tx.editCount).toBe(0);
+    expect(tx.editableUntil).not.toBeNull();
+    const edited = ok<Tx>(
+      await w.adminA1.put(`/api/v1/transactions/${tx.id}`, {
+        editCount: 0,
+        items: [
+          { menuItemId: w.items.idly, quantity: 1 },
+          { menuItemId: w.items.coffee, quantity: 2 },
+        ],
+        paymentMethod: 'UPI',
+        reason: 'Customer added coffee',
+      }),
+    );
+    expect(edited.billNumber).toBe(tx.billNumber);
+    expect(edited.items.map((i) => [i.name, i.quantity, i.unitPrice])).toEqual([
+      ['Idly', 1, 3000],
+      ['Coffee', 2, 2500],
+    ]);
+    expect(edited.grandTotal).toBe(8000);
+    expect(edited.paymentMethod).toBe('UPI');
+    expect(edited.editCount).toBe(1);
+    const stored = await TransactionModel.findById(tx.id).lean();
+    expect(stored?.revisions).toHaveLength(1);
+    expect(stored?.revisions[0].grandTotal).toBe(tx.grandTotal);
+    expect(await AuditLogModel.countDocuments({ action: 'TRANSACTION_EDITED', entityId: tx.id })).toBe(1);
+  });
+
+  it('ignores client prices and rejects a stale copy', async () => {
+    expect(
+      (await w.adminA1.put(`/api/v1/transactions/${bills[5].id}`, { editCount: 1, items: [{ menuItemId: w.items.idly, quantity: 1, unitPrice: 1 }], paymentMethod: 'CASH' })).status,
+    ).toBe(400);
+    const stale = await w.adminA1.put(`/api/v1/transactions/${bills[5].id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.details.current.editCount).toBe(1);
+    expect((await w.adminA1.put(`/api/v1/transactions/${bills[5].id}`, { editCount: 1, items: [], paymentMethod: 'CASH' })).status).toBe(400);
+  });
+
+  it('refuses edits after 30 minutes, on voided bills and from other branches', async () => {
+    // Move a bill's time back 31 minutes (direct collection write, bypassing the model guard).
+    await TransactionModel.collection.updateOne({ _id: new Types.ObjectId(bills[6].id) }, { $set: { finalizedAt: new Date(Date.now() - 31 * 60_000) } });
+    const late = ok<Tx>(await w.adminA1.get(`/api/v1/transactions/${bills[6].id}`));
+    expect(late.editableUntil).toBeNull();
+    const res = await w.adminA1.put(`/api/v1/transactions/${bills[6].id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('EDIT_WINDOW_CLOSED');
+
+    ok(await w.adminA1.post(`/api/v1/transactions/${bills[8].id}/void`, { reason: 'Duplicate' }));
+    const voided = await w.adminA1.put(`/api/v1/transactions/${bills[8].id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' });
+    expect(voided.status).toBe(409);
+    expect(voided.body.error.code).toBe('INVALID_STATUS');
+    expect((await w.adminA2.put(`/api/v1/transactions/${bills[7].id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' })).status).toBe(404);
+  });
+
+  it('still blocks direct rewrites that skip the edit workflow', async () => {
+    await expect(TransactionModel.findOneAndUpdate({ _id: bills[7].id }, { $set: { grandTotal: 1 } }, { billEdit: true })).rejects.toThrow(/previous version/);
   });
 });
 

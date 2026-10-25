@@ -1,5 +1,6 @@
 /** Mongo documents → API DTOs (see shared/src/types.ts). */
 import type { Types } from 'mongoose';
+import { BILL_EDIT_WINDOW_MINUTES } from '@rb/shared';
 import type {
   AuditLogDTO,
   BranchDTO,
@@ -210,7 +211,18 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
       : null,
     createdByName: t.createdByName ?? '',
     finalizedAt: iso(t.finalizedAt) ?? '',
+    editCount: t.editCount ?? 0,
+    editedAt: iso(t.editedAt),
+    editedByName: t.editedByName ?? '',
+    editableUntil: editableUntil(t),
   };
+}
+
+/** End of the edit window for a paid bill, or null when it can no longer be edited. */
+export function editableUntil(t: Pick<Transaction, 'status' | 'finalizedAt'>, now = Date.now()): string | null {
+  if (t.status !== 'COMPLETED' || !t.finalizedAt) return null;
+  const until = new Date(t.finalizedAt).getTime() + BILL_EDIT_WINDOW_MINUTES * 60_000;
+  return until > now ? new Date(until).toISOString() : null;
 }
 
 export function toAuditLogDTO(a: WithId<AuditLog>): AuditLogDTO {

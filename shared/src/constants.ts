@@ -45,6 +45,9 @@ export const LIMITS = {
   maxImageBytes: 2 * 1024 * 1024,
 } as const;
 
+/** A generated (paid) bill can be corrected for this long; every edit keeps the old version. */
+export const BILL_EDIT_WINDOW_MINUTES = 30;
+
 export const CSRF_HEADER = 'x-requested-with';
 export const CSRF_HEADER_VALUE = 'rb-client';
 export const BRANCH_HEADER = 'x-branch-id';

@@ -142,6 +142,7 @@ draft containing an item that became unavailable cannot be finalised until it is
 | GET | `/transactions` | `page, limit (≤100), q (bill no./table), from, to, paymentMethod, status, restaurantId?, branchId?` |
 | GET | `/transactions/:id` | full transaction with snapshots |
 | GET | `/transactions/export.csv` | same filters, scoped to the caller |
+| PUT | `/transactions/:id` | `{ editCount, items: [{menuItemId, quantity}], paymentMethod, customerName?, discount?, reason? }` – corrects a COMPLETED bill within 30 minutes of billing. Same bill number; prices/totals recomputed on the server; previous version kept in `revisions`; audit logged. 409 `EDIT_WINDOW_CLOSED` after 30 minutes, 409 `CONFLICT` (with `details.current`) if `editCount` is stale, 409 `INVALID_STATUS` for voided/refunded bills |
 | POST | `/transactions/:id/void` | `{ reason }` – COMPLETED → VOIDED (audit logged) |
 | POST | `/transactions/:id/refund` | `{ reason }` – COMPLETED → REFUNDED (audit logged) |
 

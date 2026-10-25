@@ -162,9 +162,13 @@ Indexes:
 | idempotencyKey | string | unique per branch |
 | createdBy, createdByName | | cashier shown on the receipt |
 | finalizedAt | Date | |
+| editCount, editedAt, editedByName | int, Date, string | set when the bill is corrected |
+| revisions | `{ at, by, byName, reason, items, customerName, subtotal, discount, taxes, taxTotal, grandTotal, paymentMethod }[]` | every earlier version, oldest first |
 
-A Mongoose guard rejects any update that touches snapshot or amount fields; the only
-permitted change is `COMPLETED → VOIDED | REFUNDED` through the controlled workflow.
+A Mongoose guard rejects any update that touches snapshot or amount fields. Permitted changes:
+`COMPLETED → VOIDED | REFUNDED` through the controlled workflow, and the bill edit
+(`PUT /transactions/:id`, within 30 minutes of `finalizedAt`), which must push the previous
+version to `revisions` and increment `editCount` in the same update.
 
 Indexes: `{ branchId: 1, billNumber: 1 }` unique, `{ sourceDraftId: 1 }` unique,
 `{ branchId: 1, idempotencyKey: 1 }` unique, `{ branchId: 1, finalizedAt: -1 }`,

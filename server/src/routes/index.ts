@@ -135,6 +135,7 @@ export function createApiRouter(): Router {
   txRouter.get('/', ops.listTransactions);
   txRouter.get('/export.csv', ops.exportTransactions);
   txRouter.get('/:id', ops.getTransaction);
+  txRouter.put('/:id', ops.editTransaction);
   txRouter.post('/:id/void', ops.voidTransaction);
   txRouter.post('/:id/refund', ops.refundTransaction);
   api.use('/transactions', txRouter);
