@@ -12,7 +12,8 @@
     "test": "vitest run",
     "setup:superadmin": "tsx src/scripts/setupSuperAdmin.ts",
     "seed:demo": "tsx src/scripts/seedDemo.ts",
-    "images:migrate": "tsx src/scripts/migrateImages.ts"
+    "images:migrate": "tsx src/scripts/migrateImages.ts",
+    "seed:bills": "tsx src/scripts/seedDemoBills.ts"
   },
   "dependencies": {
     "@rb/shared": "1.0.0",

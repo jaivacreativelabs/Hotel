@@ -21,7 +21,8 @@
     "test": "npm run build -w shared && npm run test -w shared && npm run test -w server && npm run test -w client",
     "setup:superadmin": "npm run setup:superadmin -w server",
     "seed:demo": "npm run seed:demo -w server",
-    "images:migrate": "npm run images:migrate -w server"
+    "images:migrate": "npm run images:migrate -w server",
+    "seed:bills": "npm run seed:bills -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
