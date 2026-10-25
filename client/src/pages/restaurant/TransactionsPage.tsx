@@ -441,7 +441,7 @@ export function TransactionsView({
                         </td>
                         <td className="center">
                           <button
-                            className="btn btn-soft btn-sm"
+                            className="btn btn-primary btn-sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedId(t.id);
