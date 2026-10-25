@@ -3,6 +3,15 @@
 import { createApp } from '../server/dist/app.js';
 import { connectDatabase } from '../server/dist/config/db.js';
 
+// Vercel's Node runtime parses request URLs with the legacy url.parse(), which makes Node
+// print DEP0169 on every cold start. It is not our code and is harmless; drop only that one.
+const emitWarning = process.emitWarning.bind(process);
+process.emitWarning = (warning, ...args) => {
+  const code = typeof args[0] === 'object' ? args[0]?.code : args[1];
+  if (code === 'DEP0169') return;
+  return emitWarning(warning, ...args);
+};
+
 const app = createApp();
 let ready = null;
 
