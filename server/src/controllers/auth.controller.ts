@@ -1,12 +1,25 @@
 import type { Request, Response } from 'express';
-import { changePasswordSchema, loginSchema } from '@rb/shared';
+import { changePasswordSchema, demoLoginSchema, loginSchema } from '@rb/shared';
 import { clearSession, currentUser, issueSession } from '../middleware/auth.js';
 import * as authService from '../services/auth.service.js';
+import * as demo from '../services/demo.service.js';
 import { parse } from '../utils/validate.js';
 
 export async function login(req: Request, res: Response) {
   const { email, password } = parse(loginSchema, req.body);
   const user = await authService.login(email, password);
+  issueSession(res, user);
+  res.json({ data: await authService.me(user) });
+}
+
+export async function demoAccounts(_req: Request, res: Response) {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ data: await demo.listPublicDemoAccounts() });
+}
+
+export async function demoLogin(req: Request, res: Response) {
+  const { userId } = parse(demoLoginSchema, req.body);
+  const user = await demo.demoLogin(userId);
   issueSession(res, user);
   res.json({ data: await authService.me(user) });
 }

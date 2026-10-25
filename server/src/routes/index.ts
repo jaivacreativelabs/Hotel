@@ -54,6 +54,8 @@ export function createApiRouter(): Router {
   // ---- Auth ----
   const authRouter = Router();
   authRouter.post('/login', loginLimiter, auth.login);
+  authRouter.get('/demo-accounts', auth.demoAccounts);
+  authRouter.post('/demo-login', loginLimiter, auth.demoLogin);
   authRouter.post('/logout', auth.logout);
   authRouter.get('/me', authenticate, auth.me);
   authRouter.post('/change-password', authenticate, auth.changePassword);
@@ -77,6 +79,8 @@ export function createApiRouter(): Router {
   adminRouter.patch('/users/:id', admin.updateUser);
   adminRouter.patch('/users/:id/status', admin.setUserStatus);
   adminRouter.post('/users/:id/reset-password', admin.resetUserPassword);
+  adminRouter.get('/demo-accounts', admin.listDemoAccounts);
+  adminRouter.patch('/demo-accounts/:id', admin.updateDemoAccount);
   adminRouter.get('/analytics/overview', admin.analyticsOverview);
   adminRouter.get('/reports/transactions.csv', admin.transactionsCsv);
   adminRouter.get('/reports/sales.csv', admin.salesCsv);

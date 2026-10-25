@@ -10,6 +10,7 @@ import {
   History,
   KeyRound,
   LogOut,
+  MonitorPlay,
   Search,
   Store,
   UserRound,
@@ -49,6 +50,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/reports', label: 'Reports', icon: ChartLine },
   { to: '/admin/analytics', label: 'Analytics', icon: ChartColumn },
   { to: '/admin/audit', label: 'Audit Log', icon: History },
+  { to: '/admin/demo-logins', label: 'Demo Logins', icon: MonitorPlay },
 ];
 
 function SyncIndicator() {

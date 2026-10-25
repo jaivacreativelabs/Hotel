@@ -130,10 +130,9 @@ because Vercel has no persistent disk.
    | `TRUST_PROXY` | `1` (optional – set automatically on Vercel) |
    | `IMAGE_STORAGE` | `mongo` |
 
-   Optional demo buttons on the login page (they fill the form): `VITE_DEMO_SUPERADMIN_EMAIL`,
-   `VITE_DEMO_SUPERADMIN_PASSWORD`, `VITE_DEMO_BRANCH_EMAIL`, `VITE_DEMO_BRANCH_PASSWORD`. These end up
-   in the public web page, so use them only for demo accounts and delete them (then redeploy) after
-   the demo. Locally they go in `client/.env.local` (gitignored).
+   Demo sign-in buttons on the login page need no variables: the Super Admin switches them on per
+   account under **Demo Logins** (stored in MongoDB, no passwords involved). Anyone who opens the
+   site can use a button while it is on, so switch them off after the demo – it applies instantly.
 
 3. **MongoDB Atlas → Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`)** –
    Vercel functions do not have fixed IP addresses. Keep the database user's password strong.

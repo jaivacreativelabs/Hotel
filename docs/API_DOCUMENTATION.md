@@ -41,6 +41,8 @@ Unknown body fields are rejected (`.strict()` schemas), so fields such as `role`
 | POST | `/auth/login` | public (rate limited) | `{ email, password }` → `{ user }` + cookie |
 | POST | `/auth/logout` | any | clears cookie |
 | GET | `/auth/me` | any | `{ user, branches: [{ id, name, code, restaurant: { id, name, settings } }] }` |
+| GET | `/auth/demo-accounts` | public | demo buttons switched on by the Super Admin: `[{ id, label, role, hint }]` (no email, no password) |
+| POST | `/auth/demo-login` | public (rate limited) | `{ userId }` – signs in only while that account's demo button is on and the account is active |
 | POST | `/auth/change-password` | any | `{ currentPassword, newPassword }` – revokes other sessions |
 
 ## Super Admin – `/admin/*` (SUPER_ADMIN only, 403 for everyone else)
@@ -83,6 +85,8 @@ Super Admin accounts cannot be read, modified or created through these endpoints
 | GET | `/admin/reports/restaurants.csv` | `from, to` |
 | GET | `/admin/reports/branches.csv` | `from, to, restaurantId?` |
 | GET | `/admin/audit-logs` | `page, limit, restaurantId?, action?` |
+| GET | `/admin/demo-accounts` | every account with its demo-button setting |
+| PATCH | `/admin/demo-accounts/:id` | `{ enabled, label? }` – show/hide a one-tap sign-in button on the login page (audit logged) |
 
 Dates are interpreted in `APP_TIMEZONE` (default `Asia/Kolkata`). Only `COMPLETED`
 transactions count as revenue.

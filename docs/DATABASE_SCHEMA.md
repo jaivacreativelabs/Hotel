@@ -26,6 +26,7 @@ timestamps unless noted.
 | status | `ACTIVE` \| `INACTIVE` | |
 | tokenVersion | number | incremented on deactivate / password reset → old sessions die |
 | lastLoginAt | Date | |
+| demo | `{ enabled, label }` | one-tap demo sign-in button on the login page (Super Admin controlled) |
 
 Indexes: `{ email: 1 }` unique, `{ role: 1, status: 1 }`, `{ branchIds: 1 }`.
 

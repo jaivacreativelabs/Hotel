@@ -9,6 +9,8 @@ interface AuthState {
   activeBranch: BranchContextDTO | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** One-tap sign-in with a demo account enabled by the Super Admin. */
+  demoLogin: (userId: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   selectBranch: (id: string) => void;
@@ -73,6 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login: async (email, password) => {
         queryClient.clear();
         apply(await api.post<MeDTO>('/auth/login', { email, password }));
+      },
+      demoLogin: async (userId) => {
+        queryClient.clear();
+        apply(await api.post<MeDTO>('/auth/demo-login', { userId }));
       },
       logout: async () => {
         await api.post('/auth/logout').catch(() => undefined);

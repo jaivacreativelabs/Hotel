@@ -28,6 +28,8 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+const AUTH_PROBES = new Set(['/auth/login', '/auth/me', '/auth/demo-login', '/auth/demo-accounts']);
+
 let activeBranchId: string | null = null;
 let onUnauthorized: (() => void) | null = null;
 
@@ -73,7 +75,10 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     const e = json?.error ?? {};
-    if (res.status === 401 && onUnauthorized && path !== '/auth/login') onUnauthorized();
+    // A 401 from these auth calls just means "not signed in" – not an expired session – so it
+    // must not trigger the sign-out handler (which also clears cached data such as the
+    // login page's demo buttons).
+    if (res.status === 401 && onUnauthorized && !AUTH_PROBES.has(path)) onUnauthorized();
     throw new ApiError(res.status, e.code ?? 'HTTP_ERROR', e.message ?? `Request failed (${res.status})`, e.details);
   }
   return json as { data: T; meta?: PageMeta };

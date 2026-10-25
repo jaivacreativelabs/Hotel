@@ -110,6 +110,13 @@ export const userUpdateSchema = z.strictObject({
 });
 export const resetPasswordSchema = z.strictObject({ password: passwordSchema });
 
+// ---------- Demo sign-in buttons (configured by the Super Admin, stored in MongoDB) ----------
+export const demoAccountUpdateSchema = z.strictObject({
+  enabled: z.boolean(),
+  label: z.string().trim().max(40).optional(),
+});
+export const demoLoginSchema = z.strictObject({ userId: objectIdSchema });
+
 // ---------- Menu ----------
 export const categoryCreateSchema = z.strictObject({
   name: name(50),

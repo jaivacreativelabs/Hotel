@@ -4,6 +4,7 @@ import {
   auditQuerySchema,
   branchCreateSchema,
   branchUpdateSchema,
+  demoAccountUpdateSchema,
   resetPasswordSchema,
   restaurantCreateSchema,
   restaurantSettingsSchema,
@@ -18,6 +19,7 @@ import { currentUser } from '../middleware/auth.js';
 import { AuditLogModel } from '../models/index.js';
 import * as admin from '../services/admin.service.js';
 import * as analytics from '../services/analytics.service.js';
+import * as demo from '../services/demo.service.js';
 import { exportTransactionsCsv } from '../services/transactions.service.js';
 import { todayIn } from '../utils/dates.js';
 import { env } from '../config/env.js';
@@ -81,6 +83,14 @@ export const setUserStatus = async (req: Request, res: Response) => {
 export const resetUserPassword = async (req: Request, res: Response) => {
   const { password } = parse(resetPasswordSchema, req.body);
   res.json({ data: await admin.resetRestaurantAdminPassword(currentUser(req), id(req), password) });
+};
+
+// Demo login buttons
+export const listDemoAccounts = async (_req: Request, res: Response) => {
+  res.json({ data: await demo.listDemoSettings() });
+};
+export const updateDemoAccount = async (req: Request, res: Response) => {
+  res.json({ data: await demo.updateDemoSetting(currentUser(req), id(req), parse(demoAccountUpdateSchema, req.body)) });
 };
 
 // Analytics & reports

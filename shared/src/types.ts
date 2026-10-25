@@ -37,6 +37,23 @@ export interface UserDTO {
   createdAt: string;
 }
 
+/** Public: one button on the login page. Contains no email or password. */
+export interface DemoAccountDTO {
+  id: string;
+  label: string;
+  role: Role;
+  hint: string;
+}
+
+/** Super Admin view of every account and its demo-button setting. */
+export interface AdminDemoAccountDTO extends DemoAccountDTO {
+  name: string;
+  email: string;
+  status: RecordStatus;
+  demoEnabled: boolean;
+  demoLabel: string;
+}
+
 export interface RestaurantSettings {
   taxes: TaxRate[];
   pricesIncludeTax: boolean;

@@ -1,35 +1,48 @@
+import type { DemoAccountDTO } from '@rb/shared';
+import { useQuery } from '@tanstack/react-query';
 import { LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
-import { DEMO_LOGINS, DEMO_LOGINS_ENABLED } from '../../demoLogins';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Field, Spinner } from '../../components/ui';
-import { errorMessage } from '../../services/api';
+import { api, errorMessage } from '../../services/api';
 import { useAuth } from '../../store/auth';
 
 export function LoginPage() {
-  const { user, login, loading } = useAuth();
+  const { user, login, demoLogin, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  // Demo buttons are configured by the Super Admin and stored in MongoDB.
+  const demos = useQuery({
+    queryKey: ['demo-accounts'],
+    queryFn: () => api.get<DemoAccountDTO[]>('/auth/demo-accounts', { branchId: null }),
+    staleTime: 0,
+    retry: false,
+  });
 
   if (!loading && user) return <Navigate to={user.role === 'SUPER_ADMIN' ? '/admin/restaurants' : '/billing'} replace />;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+  const run = async (key: string, action: () => Promise<void>) => {
+    setBusy(key);
     setError(null);
     try {
-      await login(email, password);
+      await action();
       const from = (location.state as { from?: string } | null)?.from;
       navigate(from && from !== '/login' ? from : '/', { replace: true });
     } catch (err) {
       setError(errorMessage(err));
+      void demos.refetch(); // a button may have been switched off meanwhile
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run('form', () => login(email, password));
   };
 
   return (
@@ -69,27 +82,18 @@ export function LoginPage() {
               </div>
             )}
           </Field>
-          <button className="btn btn-primary btn-lg" disabled={busy}>
-            {busy ? <Spinner /> : <LogIn />} Sign in
+          <button className="btn btn-primary btn-lg" disabled={busy !== null}>
+            {busy === 'form' ? <Spinner /> : <LogIn />} Sign in
           </button>
-          {DEMO_LOGINS_ENABLED && (
+          {(demos.data?.length ?? 0) > 0 && (
             <div className="demo-logins">
-              <div className="demo-logins-title">Demo – tap to fill the login</div>
+              <div className="demo-logins-title">Demo – tap to sign in</div>
               <div className="demo-logins-buttons">
-                {DEMO_LOGINS.map((d) => (
-                  <button
-                    key={d.email}
-                    type="button"
-                    className="demo-login"
-                    onClick={() => {
-                      setEmail(d.email);
-                      setPassword(d.password);
-                      setError(null);
-                    }}
-                  >
-                    {d.kind === 'super' ? <ShieldCheck /> : <Store />}
+                {demos.data!.map((d) => (
+                  <button key={d.id} type="button" className="demo-login" disabled={busy !== null} onClick={() => void run(d.id, () => demoLogin(d.id))}>
+                    {busy === d.id ? <Spinner /> : d.role === 'SUPER_ADMIN' ? <ShieldCheck /> : <Store />}
                     <span>
-                      <strong>{d.role}</strong>
+                      <strong>{d.label}</strong>
                       <small>{d.hint}</small>
                     </span>
                   </button>

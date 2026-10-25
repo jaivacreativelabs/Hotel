@@ -23,6 +23,7 @@ const AdminTransactionsPage = named(() => import('./pages/admin/AdminTransaction
 const ReportsPage = named(() => import('./pages/admin/ReportsPage'), 'ReportsPage');
 const AnalyticsPage = named(() => import('./pages/admin/AnalyticsPage'), 'AnalyticsPage');
 const AuditLogPage = named(() => import('./pages/admin/AuditLogPage'), 'AuditLogPage');
+const DemoLoginsPage = named(() => import('./pages/admin/DemoLoginsPage'), 'DemoLoginsPage');
 
 const homeFor = (role: Role) => (role === 'SUPER_ADMIN' ? '/admin/restaurants' : '/billing');
 
@@ -90,6 +91,7 @@ export function App() {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="audit" element={<AuditLogPage />} />
+        <Route path="demo-logins" element={<DemoLoginsPage />} />
       </Route>
       <Route path="*" element={<Home />} />
     </Routes>

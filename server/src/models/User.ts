@@ -13,6 +13,12 @@ const userSchema = new Schema(
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
     tokenVersion: { type: Number, default: 0 },
     lastLoginAt: { type: Date, default: null },
+    // One-tap demo sign-in from the login page, switched on per account by the Super Admin.
+    // No password is involved: the server issues the session itself while this is enabled.
+    demo: {
+      enabled: { type: Boolean, default: false },
+      label: { type: String, default: '', trim: true, maxlength: 40 },
+    },
   },
   { timestamps: true },
 );
