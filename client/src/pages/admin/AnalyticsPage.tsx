@@ -11,6 +11,20 @@ import { useAnalyticsFilters } from './useAnalyticsFilters';
 const monthFmt = new Intl.DateTimeFormat('en-IN', { month: 'short', year: '2-digit' });
 const dayFmt = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short' });
 
+/** "07" → "7 AM", "13" → "1 PM" */
+const hourLabel = (key: string) => {
+  const h = Number(key);
+  return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+/** Drops the empty hours before opening and after closing (keeps at least 6 AM–10 PM). */
+function trimHours<T extends { key: string; bills: number }>(hours: T[]): T[] {
+  const busy = hours.filter((h) => h.bills > 0).map((h) => Number(h.key));
+  const first = Math.min(6, ...busy);
+  const last = Math.max(22, ...busy);
+  return hours.filter((h) => Number(h.key) >= first && Number(h.key) <= last);
+}
+
 export function AnalyticsPage() {
   const { query, filters, valid } = useAnalyticsFilters('30d');
   const [showTable, setShowTable] = useState(false);
@@ -102,6 +116,27 @@ export function AnalyticsPage() {
                   </table>
                 </div>
               )}
+            </div>
+            <div className="card chart-card wide">
+              <div className="chart-head">
+                <span className="card-title">Sales by hour</span>
+                <span className="muted">busiest times of day</span>
+              </div>
+              <BarChart height={220} data={trimHours(o.hourly).map((h) => ({ key: h.key, label: hourLabel(h.key), value: h.sales, sub: `${h.bills} bills` }))} />
+            </div>
+            <div className="card chart-card">
+              <div className="chart-head">
+                <span className="card-title">Top-selling dishes</span>
+                <span className="muted">item sales</span>
+              </div>
+              <HBarList rows={o.topItems.map((i) => ({ key: i.key, label: i.name, value: i.sales, sub: `${i.quantity.toLocaleString('en-IN')} sold` }))} />
+            </div>
+            <div className="card chart-card">
+              <div className="chart-head">
+                <span className="card-title">Top categories</span>
+                <span className="muted">item sales</span>
+              </div>
+              <HBarList rows={o.topCategories.map((c) => ({ key: c.key, label: c.name, value: c.sales, sub: `${c.quantity.toLocaleString('en-IN')} sold` }))} />
             </div>
             <div className="card chart-card">
               <div className="chart-head">

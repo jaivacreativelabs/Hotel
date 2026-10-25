@@ -263,6 +263,19 @@ export interface AnalyticsOverviewDTO {
   byRestaurant: (AnalyticsPoint & { name: string })[];
   byBranch: (AnalyticsPoint & { name: string; restaurantName: string })[];
   byPaymentMethod: (AnalyticsPoint & { key: PaymentMethod })[];
+  /** Best-selling dishes by item sales (quantity × price, before bill-level discount/tax). */
+  topItems: AnalyticsRankRow[];
+  /** Item sales per category. */
+  topCategories: AnalyticsRankRow[];
+  /** Completed sales per hour of the day (key "00"–"23", restaurant time zone). */
+  hourly: AnalyticsPoint[];
+}
+
+export interface AnalyticsRankRow {
+  key: string;
+  name: string;
+  quantity: number;
+  sales: number;
 }
 
 export interface AuditLogDTO {

@@ -69,6 +69,9 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
     byBranch: (Bucket & { restaurantId: Types.ObjectId })[];
     byPaymentMethod: Bucket[];
     excluded: (Bucket & { _id: string })[];
+    topItems: { _id: Types.ObjectId; name: string; quantity: number; sales: number }[];
+    topCategories: { _id: string; quantity: number; sales: number }[];
+    hourly: Bucket[];
   }>([
     { $match: match },
     {
@@ -92,6 +95,38 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
         ],
         byPaymentMethod: [{ $match: { status: 'COMPLETED' } }, { $group: { _id: '$paymentMethod', ...sumStage } }],
         excluded: [{ $match: { status: { $ne: 'COMPLETED' } } }, { $group: { _id: '$status', ...sumStage } }],
+        // Item-level ranking uses the immutable item snapshots stored on each bill.
+        topItems: [
+          { $match: { status: 'COMPLETED' } },
+          { $unwind: '$items' },
+          {
+            $group: {
+              _id: '$items.menuItemId',
+              name: { $last: '$items.name' },
+              quantity: { $sum: '$items.quantity' },
+              sales: { $sum: '$items.lineTotal' },
+            },
+          },
+          { $sort: { sales: -1, quantity: -1 } },
+          { $limit: 10 },
+        ],
+        topCategories: [
+          { $match: { status: 'COMPLETED' } },
+          { $unwind: '$items' },
+          {
+            $group: {
+              _id: { $ifNull: [{ $cond: [{ $eq: ['$items.categoryName', ''] }, null, '$items.categoryName'] }, 'Other'] },
+              quantity: { $sum: '$items.quantity' },
+              sales: { $sum: '$items.lineTotal' },
+            },
+          },
+          { $sort: { sales: -1 } },
+          { $limit: 10 },
+        ],
+        hourly: [
+          { $match: { status: 'COMPLETED' } },
+          { $group: { _id: { $dateToString: { format: '%H', date: '$finalizedAt', timezone: tz } }, ...sumStage } },
+        ],
       },
     },
   ]);
@@ -137,7 +172,18 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
     byPaymentMethod: facets.byPaymentMethod
       .map((b) => ({ ...point(b), key: String(b._id) as PaymentMethod }))
       .sort(bySales),
+    topItems: facets.topItems.map((i) => ({ key: String(i._id), name: i.name, quantity: i.quantity, sales: i.sales })),
+    topCategories: facets.topCategories.map((c) => ({ key: c._id, name: c._id, quantity: c.quantity, sales: c.sales })),
+    hourly: fillHours(facets.hourly.map(point)),
   };
+}
+
+function fillHours(points: AnalyticsPoint[]): AnalyticsPoint[] {
+  const byKey = new Map(points.map((p) => [p.key, p]));
+  return Array.from({ length: 24 }, (_, h) => {
+    const key = String(h).padStart(2, '0');
+    return byKey.get(key) ?? { key, sales: 0, bills: 0 };
+  });
 }
 
 // ---------------- CSV reports ----------------

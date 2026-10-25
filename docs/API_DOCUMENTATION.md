@@ -79,7 +79,7 @@ Super Admin accounts cannot be read, modified or created through these endpoints
 ### Analytics & reports
 | Method | Path | Query |
 |---|---|---|
-| GET | `/admin/analytics/overview` | `from, to (YYYY-MM-DD), restaurantId?, branchId?` → `summary, daily, monthly, byRestaurant, byBranch, byPaymentMethod, statusBreakdown` |
+| GET | `/admin/analytics/overview` | `from, to (YYYY-MM-DD), restaurantId?, branchId?` → `summary, excluded, daily, monthly, hourly, byRestaurant, byBranch, byPaymentMethod, topItems, topCategories` |
 | GET | `/admin/reports/transactions.csv` | same filters as `/transactions` |
 | GET | `/admin/reports/sales.csv` | `granularity=day\|month`, `from, to, restaurantId?, branchId?` |
 | GET | `/admin/reports/restaurants.csv` | `from, to` |

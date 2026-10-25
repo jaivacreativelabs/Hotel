@@ -45,6 +45,24 @@ describe('Super Admin analytics', () => {
     expect(Object.fromEntries(o.byPaymentMethod.map((p) => [p.key, p.sales]))).toEqual({ UPI: 17000, CARD: 8000, CASH: 6000 });
   });
 
+  it('ranks top-selling dishes and categories from completed bills only', async () => {
+    const o = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}`));
+    expect(o.topItems.map((i) => [i.name, i.quantity, i.sales])).toEqual([
+      ['Meals', 1, 12000],
+      ['Biryani', 1, 8000],
+      ['Idly', 2, 6000],
+      ['Dosa', 1, 5000],
+    ]); // the voided Coffee bill is not counted
+    expect(o.topCategories.map((c) => [c.name, c.quantity, c.sales])).toEqual([
+      ['Main', 4, 19000],
+      ['Food', 1, 12000],
+    ]);
+    expect(o.hourly).toHaveLength(24);
+    expect(o.hourly.reduce((a, h) => a + h.bills, 0)).toBe(4);
+    const onlyA2 = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}&branchId=${w.branchA2}`));
+    expect(onlyA2.topItems.map((i) => i.name)).toEqual(['Biryani']);
+  });
+
   it('filters by restaurant and branch', async () => {
     const a = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}&restaurantId=${w.restaurantA}`));
     expect(a.summary.totalSales).toBe(19000);
