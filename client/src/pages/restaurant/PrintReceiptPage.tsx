@@ -4,7 +4,7 @@
  */
 import type { TransactionDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../../services/api';
 import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL } from '../../utils/format';
@@ -13,6 +13,7 @@ const css = `
 @page { size: 80mm auto; margin: 4mm; }
 body { background: #fff !important; }
 .receipt { width: 72mm; margin: 0 auto; padding: 8px 0; font-family: 'Courier New', ui-monospace, monospace; font-size: 12px; color: #000; line-height: 1.35; }
+.receipt .logo { display: block; width: 22mm; height: 22mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
 .receipt h1 { font-size: 16px; text-align: center; margin: 0; font-family: inherit; }
 .receipt .c { text-align: center; }
 .receipt .rule { border-top: 1px dashed #000; margin: 6px 0; }
@@ -33,12 +34,14 @@ export function PrintReceiptPage() {
     queryFn: () => api.get<TransactionDTO>(`/transactions/${id}`, { branchId: null }),
   });
 
+  // Print only once the logo has loaded (or failed), so it is never missing from the paper.
+  const [logoDone, setLogoDone] = useState(false);
   useEffect(() => {
-    if (tx.data && params.get('autoprint') === '1') {
+    if (tx.data && logoDone && params.get('autoprint') === '1') {
       const t = setTimeout(() => window.print(), 300);
       return () => clearTimeout(t);
     }
-  }, [tx.data, params]);
+  }, [tx.data, logoDone, params]);
 
   if (tx.isLoading) return <p style={{ padding: 20 }}>Loading bill…</p>;
   if (tx.isError) return <p style={{ padding: 20 }}>Could not load this bill: {errorMessage(tx.error)}</p>;
@@ -48,6 +51,7 @@ export function PrintReceiptPage() {
     <>
       <style>{css}</style>
       <div className="receipt">
+        <img className="logo" src="/logo.jpeg" alt="" onLoad={() => setLogoDone(true)} onError={() => setLogoDone(true)} />
         <h1>{t.restaurantSnapshot.name}</h1>
         <div className="c">{t.branchSnapshot.name}</div>
         {t.branchSnapshot.address && <div className="c">{t.branchSnapshot.address}</div>}
