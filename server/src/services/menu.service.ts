@@ -5,7 +5,7 @@
  *    for shared items only price/availability can change, stored as a branch override.
  */
 import type { Types } from 'mongoose';
-import type { CategoryCreateInput, MenuItemCreateInput, MenuItemUpdateInput, RecordStatus } from '@rb/shared';
+import type { CategoryCreateInput, MenuItemCreateInput, MenuItemUpdateInput, RecordStatus, VariantsInput } from '@rb/shared';
 import type { AuthUser } from '../middleware/auth.js';
 import type { Scope } from '../middleware/scope.js';
 import { CategoryModel, MenuItemModel, type Category, type MenuItem } from '../models/index.js';
@@ -263,6 +263,7 @@ export async function updateItem(actor: AuthUser, scope: Scope, id: string, inpu
     setOverride(item, branchId!, input);
   }
   await item.save();
+  if (owns(scope, item)) await syncVariantsWithDish(item.toObject() as MenuItemLean);
   await audit(actor, {
     ...auditBase(scope),
     action: owns(scope, item) ? 'MENU_ITEM_UPDATED' : 'MENU_ITEM_OVERRIDE_SET',
@@ -361,4 +362,111 @@ export async function setItemArchived(actor: AuthUser, scope: Scope, id: string,
     summary: `${archived ? 'Archived' : 'Restored'} item "${item.name}"`,
   });
   return toMenuItemDTO(item.toObject() as MenuItemLean, branchOf(scope));
+}
+
+// ---------------- Variants ----------------
+
+const variantFullName = (dish: string, variant: string) => `${dish} (${variant})`;
+
+/** Variants follow their dish's name, category and tax setting. */
+async function syncVariantsWithDish(dish: MenuItemLean) {
+  const variants = await MenuItemModel.find({ parentId: dish._id })
+    .select('variantName status')
+    .lean<{ _id: Types.ObjectId; variantName: string; status: string }[]>();
+  if (!variants.length) return;
+  try {
+    await MenuItemModel.bulkWrite(
+      variants.map((v) => {
+        const name = variantFullName(dish.name, v.variantName);
+        // Removed variants keep a unique key so they never block a live name.
+        const key = v.status === 'ACTIVE' ? nameKey(name) : `${nameKey(name)}#${String(v._id)}`;
+        return {
+          updateOne: {
+            filter: { _id: v._id },
+            update: { $set: { name, nameKey: key, categoryId: dish.categoryId, taxable: dish.taxable } },
+          },
+        };
+      }),
+    );
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) throw conflict('Another dish already has the name one of these variants would get. Rename it first.', 'DUPLICATE');
+    throw err;
+  }
+}
+
+/**
+ * Saves a dish's variants. In the dish's own menu the list is replaced (added, renamed,
+ * re-priced, removed); a branch looking at a shared dish only sets its own price and
+ * availability for the existing variants.
+ */
+export async function setItemVariants(actor: AuthUser, scope: Scope, id: string, input: VariantsInput) {
+  const dish = await getVisibleItem(scope, id);
+  if (dish.parentId) throw badRequest('A variant cannot have variants of its own');
+  const existing = await MenuItemModel.find({ parentId: dish._id });
+  const byId = new Map(existing.map((v) => [String(v._id), v]));
+  for (const row of input.variants) {
+    if (row.id && !byId.has(row.id)) throw badRequest(`“${row.name}” is not a variant of ${dish.name}`);
+  }
+
+  if (!owns(scope, dish)) {
+    const branchId = branchOf(scope)!;
+    const active = existing.filter((v) => v.status === 'ACTIVE');
+    if (input.variants.some((r) => !r.id) || input.variants.length !== active.length) {
+      throw forbidden('Variants of shared food are added or removed from the main menu. Here you can change their price and availability.');
+    }
+    for (const row of input.variants) {
+      const v = byId.get(row.id!)!;
+      setOverride(v, branchId, { price: row.price, ...(row.isAvailable !== undefined && { isAvailable: row.isAvailable }) });
+      await v.save();
+    }
+  } else {
+    const keep = new Set(input.variants.filter((r) => r.id).map((r) => r.id!));
+    try {
+      for (const v of existing) {
+        if (!keep.has(String(v._id)) && v.status === 'ACTIVE') {
+          v.status = 'ARCHIVED';
+          // Frees the name, so a removed variant can be added again later.
+          v.nameKey = `${v.nameKey}#${String(v._id)}`;
+          await v.save();
+        }
+      }
+      for (const row of input.variants) {
+        const name = variantFullName(dish.name, row.name);
+        const fields = { variantName: row.name, name, nameKey: nameKey(name), price: row.price, status: 'ACTIVE' as const };
+        if (row.id) {
+          const v = byId.get(row.id)!;
+          v.set({ ...fields, ...(row.isAvailable !== undefined && { isAvailable: row.isAvailable }) });
+          await v.save();
+        } else {
+          await MenuItemModel.create({
+            ...fields,
+            restaurantId: dish.restaurantId,
+            branchId: dish.branchId,
+            categoryId: dish.categoryId,
+            taxable: dish.taxable,
+            isAvailable: row.isAvailable ?? true,
+            parentId: dish._id,
+          });
+        }
+      }
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) throw conflict('A dish with one of these names already exists. Use another variant name.', 'DUPLICATE');
+      throw err;
+    }
+    // The dish shows its lowest price ("from ₹…") in lists and reports.
+    if (input.variants.length) {
+      dish.price = Math.min(...input.variants.map((r) => r.price));
+      await dish.save();
+    }
+  }
+
+  await audit(actor, {
+    ...auditBase(scope),
+    action: owns(scope, dish) ? 'MENU_ITEM_VARIANTS_SET' : 'MENU_ITEM_VARIANT_OVERRIDES_SET',
+    entityType: 'MenuItem',
+    entityId: dish._id,
+    summary: `Variants of "${dish.name}": ${input.variants.map((r) => `${r.name} ${r.price} paise`).join(', ') || 'none'}`,
+  });
+  const variants = await MenuItemModel.find({ parentId: dish._id, status: 'ACTIVE' }).sort({ price: 1 }).lean<MenuItemLean[]>();
+  return variants.map((v) => toMenuItemDTO(v, branchOf(scope)));
 }

@@ -158,6 +158,26 @@ export const menuItemCreateSchema = z.strictObject({
   isAvailable: z.boolean().optional(),
 });
 export const menuItemUpdateSchema = menuItemCreateSchema.partial();
+/**
+ * The full list of a dish's variants (sizes / types). Rows with an id update that variant, rows
+ * without one are added, and variants left out are removed. An empty list removes them all.
+ * For a shared dish seen from a branch only price and availability of existing variants change.
+ */
+export const variantsSchema = z.strictObject({
+  variants: z
+    .array(
+      z.strictObject({
+        id: objectIdSchema.optional(),
+        name: name(30),
+        price: pricePaiseSchema,
+        isAvailable: z.boolean().optional(),
+      }),
+    )
+    .max(LIMITS.maxVariants, `At most ${LIMITS.maxVariants} variants`)
+    .refine((v) => new Set(v.map((x) => x.name.trim().toLowerCase())).size === v.length, { message: 'Each variant name only once' }),
+});
+export type VariantsInput = z.infer<typeof variantsSchema>;
+
 export const availabilitySchema = z.strictObject({ isAvailable: z.boolean() });
 export const pinSchema = z.strictObject({ pinned: z.boolean() });
 

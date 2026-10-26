@@ -10,6 +10,7 @@ import { useAuth } from '../../store/auth';
 import type { LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { formatDateTime, formatMoney } from '../../utils/format';
+import { splitVariant } from '../../utils/menu';
 
 /** Minutes left to edit a bill (rounded up), ticking while the screen is open; 0 once closed. */
 export function useEditMinutesLeft(editableUntil: string | null): number {
@@ -142,7 +143,8 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
                   <FoodImage src={l.imageUrl} alt={l.name} />
                 </div>
                 <span className="group-line-name" title={l.name}>
-                  {l.name}
+                  {splitVariant(l.name).dish}
+                  {splitVariant(l.name).variant && <small className="line-variant">{splitVariant(l.name).variant}</small>}
                   <small>{formatMoney(l.unitPrice * l.quantity)}</small>
                 </span>
                 <div className="qty">

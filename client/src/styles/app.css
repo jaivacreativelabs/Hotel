@@ -1365,6 +1365,18 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The size / type of a variant, under the dish name so it is never cut off */
+.line-variant {
+  display: inline-block;
+  margin: 1px 0;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--color-secondary-soft);
+  color: #7a5c00;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
 .bill-line .price {
   color: var(--color-primary);
   font-weight: 700;
@@ -1711,6 +1723,9 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.group-line-name .line-variant {
+  display: table;
 }
 .group-line-name small {
   display: block;
@@ -3390,4 +3405,96 @@ a {
   color: var(--color-primary);
   font-size: 0.8125rem;
   font-weight: 600;
+}
+
+/* ============ Variants (sizes / types) ============ */
+.food-qty-badge.static {
+  position: static;
+}
+.variant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.variant-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+}
+.variant-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+.variant-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.variant-name {
+  flex: 1;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.variant-price {
+  color: var(--color-primary);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.variant-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.variant-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 44px 36px;
+  gap: 8px;
+  align-items: center;
+}
+.variant-head {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.variant-row .input {
+  padding: 0 10px;
+}
+.variant-row .input-prefix span {
+  left: 10px;
+}
+.variant-row .input-prefix .input {
+  padding-left: 26px;
+}
+.variant-stock {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.variant-stock.yes {
+  color: var(--color-primary);
+}
+.variant-stock.no {
+  color: var(--color-danger);
+  background: #fdf3f3;
+}
+.menu-card-variants {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

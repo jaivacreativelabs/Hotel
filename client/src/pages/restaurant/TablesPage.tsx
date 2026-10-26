@@ -29,6 +29,7 @@ import { acquireDraftSync, releaseDraftSync } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
+import { splitVariant } from '../../utils/menu';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { useDraftSync } from '../../hooks/useDraftSync';
@@ -277,7 +278,8 @@ function ActiveGroupCard({
                 <FoodImage src={l.imageUrl} alt={l.name} />
               </div>
               <span className="group-line-name" title={l.name}>
-                {l.name}
+                {splitVariant(l.name).dish}
+                {splitVariant(l.name).variant && <small className="line-variant">{splitVariant(l.name).variant}</small>}
                 <small>{formatMoney(l.unitPrice * l.quantity)}</small>
               </span>
               <div className="qty">

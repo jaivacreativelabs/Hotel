@@ -67,6 +67,17 @@ export async function priceLines(
   const cats = await CategoryModel.find({ _id: { $in: items.map((i) => i.categoryId) } })
     .session(session ?? null)
     .lean<(Category & { _id: Types.ObjectId })[]>();
+  // Variants take their photo and availability from their dish; a dish that has variants is
+  // ordered by variant, so it counts as unavailable itself.
+  const parentIds = items.filter((i) => i.parentId).map((i) => i.parentId!);
+  const [parents, withVariants] = await Promise.all([
+    parentIds.length
+      ? MenuItemModel.find({ _id: { $in: parentIds } }).session(session ?? null).lean<(MenuItem & { _id: Types.ObjectId })[]>()
+      : [],
+    MenuItemModel.distinct('parentId', { parentId: { $in: ids }, status: 'ACTIVE' }).session(session ?? null),
+  ]);
+  const parentById = new Map(parents.map((p) => [String(p._id), p]));
+  const hasVariants = new Set(withVariants.map(String));
   const itemById = new Map(items.map((i) => [String(i._id), i]));
   const catById = new Map(cats.map((c) => [String(c._id), c]));
 
@@ -75,11 +86,14 @@ export async function priceLines(
     if (!item) throw badRequest('An item on this bill is not on this branch’s menu', 'ITEM_NOT_FOUND');
     const eff = effectiveItem(item, scope.branch._id);
     const cat = catById.get(String(item.categoryId));
-    const available = item.status === 'ACTIVE' && eff.isAvailable && cat?.status === 'ACTIVE';
+    const parent = item.parentId ? parentById.get(String(item.parentId)) : undefined;
+    const parentEff = parent ? effectiveItem(parent, scope.branch._id) : undefined;
+    const parentOk = !item.parentId || Boolean(parent && parent.status === 'ACTIVE' && parentEff!.isAvailable);
+    const available = item.status === 'ACTIVE' && eff.isAvailable && cat?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
     return {
       menuItemId: item._id,
       name: item.name,
-      imageUrl: eff.imageUrl,
+      imageUrl: eff.imageUrl ?? parentEff?.imageUrl ?? null,
       unitPrice: eff.price,
       taxable: item.taxable,
       quantity: r.quantity,

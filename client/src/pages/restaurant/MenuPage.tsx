@@ -33,6 +33,7 @@ import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney } from '../../utils/format';
 import { shrinkImage } from '../../utils/image';
+import { groupVariants, priceLabel } from '../../utils/menu';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -41,6 +42,7 @@ function useScopedApi(scope: MenuScope) {
   return {
     post: <T,>(path: string, body?: unknown) => api.post<T>(path, body, opts),
     patch: <T,>(path: string, body?: unknown) => api.patch<T>(path, body, opts),
+    put: <T,>(path: string, body?: unknown) => api.put<T>(path, body, opts),
     del: <T,>(path: string) => api.delete<T>(path, opts),
     upload: <T,>(path: string, form: FormData) => api.upload<T>(path, form, opts),
   };
@@ -106,9 +108,99 @@ function CreateCategoryForm({ scope, onCreated, prominent }: { scope: MenuScope;
   );
 }
 
+// ---------------- Variants (sizes / types) ----------------
+
+interface VariantRow {
+  key: string;
+  id?: string;
+  name: string;
+  price: string;
+  isAvailable: boolean;
+}
+let rowSeq = 0;
+const toRow = (v: MenuItemDTO): VariantRow => ({ key: v.id, id: v.id, name: v.variantName, price: paiseToRupeesInput(v.price), isAvailable: v.isAvailable });
+
+/** Rows of name + price; a branch looking at a shared dish can change only price and stock. */
+function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; fixedNames: boolean; error?: string }) {
+  const update = (key: string, patch: Partial<VariantRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  return (
+    <div className="field">
+      <span className="field-label">
+        Sizes / variants <span className="muted">(optional – e.g. Half / Full, Plain / Masala)</span>
+      </span>
+      {rows.length > 0 && (
+        <div className="variant-rows">
+          <div className="variant-row variant-head" aria-hidden="true">
+            <span>Variant</span>
+            <span>Price</span>
+            <span>Stock</span>
+            {!fixedNames && <span />}
+          </div>
+          {rows.map((r) => (
+            <div key={r.key} className="variant-row">
+              <input
+                className="input"
+                value={r.name}
+                maxLength={30}
+                placeholder="e.g. Half"
+                disabled={fixedNames}
+                onChange={(e) => update(r.key, { name: e.target.value })}
+                aria-label="Variant name"
+              />
+              <div className="input-prefix">
+                <span>₹</span>
+                <input className="input" inputMode="decimal" value={r.price} placeholder="0" onChange={(e) => update(r.key, { price: e.target.value })} aria-label={`${r.name || 'Variant'} price`} />
+              </div>
+              <button
+                type="button"
+                className={cx('variant-stock', r.isAvailable ? 'yes' : 'no')}
+                onClick={() => update(r.key, { isAvailable: !r.isAvailable })}
+                aria-pressed={r.isAvailable}
+                aria-label={`${r.name || 'Variant'}: ${r.isAvailable ? 'in stock' : 'sold out'}`}
+                title={r.isAvailable ? 'Available – tap to mark sold out' : 'Sold out – tap to make available'}
+              >
+                {r.isAvailable ? <Check size={18} /> : <X size={18} />}
+              </button>
+              {!fixedNames && (
+                <button type="button" className="icon-btn plain danger-text" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.name || 'variant'}`}>
+                  <Trash2 />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {!fixedNames && rows.length < LIMITS.maxVariants && (
+        <button
+          type="button"
+          className="btn btn-soft btn-sm"
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', price: '', isAvailable: true }])}
+        >
+          <Plus size={16} /> Add a variant
+        </button>
+      )}
+      {fixedNames && <span className="field-hint">Variants come from the main menu – here you set this branch’s price and stock.</span>}
+      {error && <span className="field-error">{error}</span>}
+    </div>
+  );
+}
+
 // ---------------- Add / edit item ----------------
 
-function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; item: MenuItemDTO | null; categories: CategoryDTO[]; onClose: () => void }) {
+function ItemPanel({
+  scope,
+  item,
+  variants,
+  categories,
+  onClose,
+}: {
+  scope: MenuScope;
+  item: MenuItemDTO | null;
+  variants: MenuItemDTO[];
+  categories: CategoryDTO[];
+  onClose: () => void;
+}) {
   const scoped = useScopedApi(scope);
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -128,6 +220,8 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [rows, setRows] = useState<VariantRow[]>(() => variants.map(toRow));
+  const hasVariants = rows.length > 0;
 
   const pickFile = async (picked: File | null) => {
     if (!picked) return;
@@ -148,19 +242,31 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
     const paise = parseRupeesToPaise(price);
     if (!sharedOnly && !categoryId) next.category = 'Select a category';
     if (!sharedOnly && !name.trim()) next.name = 'Enter the item name';
-    if (paise === null) next.price = 'Enter a price like 30 or 49.50';
-    else if (paise > LIMITS.maxPricePaise) next.price = 'Price is too high';
+    if (!hasVariants && paise === null) next.price = 'Enter a price like 30 or 49.50';
+    else if (!hasVariants && paise! > LIMITS.maxPricePaise) next.price = 'Price is too high';
+    const variantRows = rows.map((r) => ({ ...r, paise: parseRupeesToPaise(r.price) }));
+    const names = variantRows.map((r) => r.name.trim().toLowerCase());
+    if (names.some((n) => !n)) next.variants = 'Give every variant a name, e.g. Half or Large';
+    else if (new Set(names).size !== names.length) next.variants = 'Each variant name only once';
+    else if (variantRows.some((r) => r.paise === null || r.paise > LIMITS.maxPricePaise)) next.variants = 'Enter a price for every variant, like 50 or 49.50';
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setBusy(true);
     try {
       let saved: MenuItemDTO;
+      // A dish with variants shows its lowest variant price.
+      const dishPrice = hasVariants ? Math.min(...variantRows.map((r) => r.paise!)) : paise!;
       if (sharedOnly) {
-        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, { price: paise, isAvailable });
+        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable } : { price: paise, isAvailable });
       } else {
-        const body = { categoryId, name: name.trim(), description: description.trim(), price: paise!, taxable, isAvailable };
+        const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxable, isAvailable };
         saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
+      }
+      if (hasVariants || variants.length) {
+        await scoped.put(`/menu/items/${saved.id}/variants`, {
+          variants: variantRows.map((r) => ({ ...(r.id && { id: r.id }), name: r.name.trim(), price: r.paise!, isAvailable: r.isAvailable })),
+        });
       }
       // For a shared item in a branch the server stores this as the branch's own photo.
       if (file) {
@@ -184,6 +290,7 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
         setDescription('');
         setFile(null);
         setPreview(null);
+        setRows([]);
       }
     } catch (err) {
       setErrors({ form: errorMessage(err) });
@@ -334,14 +441,17 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
         >
           {(id) => <input id={id} className="input input-xl" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} disabled={sharedOnly} placeholder="e.g. Masala Dosa" />}
         </Field>
-        <Field label={step(<>Price</>)} error={errors.price} hint={sharedOnly && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
-          {(id) => (
-            <div className="input-prefix">
-              <span>₹</span>
-              <input id={id} className="input input-xl" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
-            </div>
-          )}
-        </Field>
+        {!hasVariants && (
+          <Field label={step(<>Price</>)} error={errors.price} hint={sharedOnly && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
+            {(id) => (
+              <div className="input-prefix">
+                <span>₹</span>
+                <input id={id} className="input input-xl" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
+              </div>
+            )}
+          </Field>
+        )}
+        {(!sharedOnly || variants.length > 0) && <VariantsEditor rows={rows} onChange={setRows} fixedNames={sharedOnly} error={errors.variants} />}
 
         <div className="field">
           <span className="field-label">
@@ -529,12 +639,13 @@ export function MenuManager({
 
   const activeCategories = (categories.data ?? []).filter((c) => c.status === 'ACTIVE');
   const categoryIcon = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.icon])), [categories.data]);
+  const { dishes, variantsOf } = useMemo(() => groupVariants(items.data ?? []), [items.data]);
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (items.data ?? []).filter(
+    return dishes.filter(
       (i) => i.status === 'ACTIVE' && (category === 'all' || i.categoryId === category) && (!q || i.name.toLowerCase().includes(q)),
     );
-  }, [items.data, category, search]);
+  }, [dishes, category, search]);
 
   const run = async (fn: () => Promise<unknown>, success: string) => {
     try {
@@ -616,7 +727,12 @@ export function MenuManager({
                     <div className="food-name" title={item.name}>
                       {item.name}
                     </div>
-                    <div className="food-price">{formatMoney(item.price)}</div>
+                    <div className="food-price">{priceLabel(item, variantsOf.get(item.id))}</div>
+                    {variantsOf.get(item.id) && (
+                      <div className="menu-card-variants" title={variantsOf.get(item.id)!.map((v) => `${v.variantName} ${formatMoney(v.price)}`).join(' · ')}>
+                        {variantsOf.get(item.id)!.map((v) => v.variantName).join(' · ')}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="menu-card-actions">
@@ -636,7 +752,14 @@ export function MenuManager({
       </div>
 
       {panel?.kind === 'item' && (
-        <ItemPanel key={panel.item?.id ?? 'new'} scope={scope} item={panel.item} categories={categories.data ?? []} onClose={() => setPanel(null)} />
+        <ItemPanel
+          key={panel.item?.id ?? 'new'}
+          scope={scope}
+          item={panel.item}
+          variants={panel.item ? (variantsOf.get(panel.item.id) ?? []) : []}
+          categories={categories.data ?? []}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel?.kind === 'categories' && <CategoriesPanel scope={scope} onClose={() => setPanel(null)} />}
       {archiving && (

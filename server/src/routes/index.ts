@@ -123,6 +123,7 @@ export function createApiRouter(): Router {
   menuRouter.patch('/items/:id', menu.updateItem);
   menuRouter.patch('/items/:id/availability', menu.setAvailability);
   menuRouter.patch('/items/:id/pin', menu.setPinned);
+  menuRouter.put('/items/:id/variants', menu.setVariants);
   menuRouter.delete('/items/:id/override', menu.removeOverride);
   menuRouter.post('/items/:id/image', imageUpload, menu.uploadImage);
   menuRouter.delete('/items/:id/image', menu.removeImage);

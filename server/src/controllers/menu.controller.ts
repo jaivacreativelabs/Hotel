@@ -8,6 +8,7 @@ import {
   pinSchema,
   reorderSchema,
   statusSchema,
+  variantsSchema,
 } from '@rb/shared';
 import { currentUser } from '../middleware/auth.js';
 import { getScope } from '../middleware/scope.js';
@@ -65,4 +66,7 @@ export const archiveItem = async (req: Request, res: Response) => {
 };
 export const restoreItem = async (req: Request, res: Response) => {
   res.json({ data: await menu.setItemArchived(currentUser(req), getScope(req), id(req), false) });
+};
+export const setVariants = async (req: Request, res: Response) => {
+  res.json({ data: await menu.setItemVariants(currentUser(req), getScope(req), id(req), parse(variantsSchema, req.body)) });
 };

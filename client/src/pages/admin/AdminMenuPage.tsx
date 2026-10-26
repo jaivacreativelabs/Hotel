@@ -7,7 +7,8 @@ import { FoodImage } from '../../components/FoodImage';
 import { Empty, Loading, PageHeader } from '../../components/ui';
 import { useCategories, useMenuItems } from '../../services/queries';
 import { usePageSearch } from '../../store/topbar';
-import { cx, formatMoney } from '../../utils/format';
+import { cx } from '../../utils/format';
+import { groupVariants, priceLabel } from '../../utils/menu';
 import { MenuManager } from '../restaurant/MenuPage';
 import { ScopeSelect, useRestaurants } from './adminShared';
 
@@ -28,7 +29,8 @@ function RestaurantMenuSection({
   const categories = useCategories(scope);
   const categoryIcon = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.icon])), [categories.data]);
   const q = search.trim().toLowerCase();
-  const visible = (items.data ?? []).filter((i) => i.status === 'ACTIVE' && (!q || i.name.toLowerCase().includes(q)));
+  const { dishes, variantsOf } = groupVariants(items.data ?? []);
+  const visible = dishes.filter((i) => i.status === 'ACTIVE' && (!q || i.name.toLowerCase().includes(q)));
   if (q && !items.isLoading && visible.length === 0) return null; // hide sections with no search match
 
   return (
@@ -67,7 +69,7 @@ function RestaurantMenuSection({
                   <div className="food-name" title={item.name}>
                     {item.name}
                   </div>
-                  <div className="food-price">{formatMoney(item.price)}</div>
+                  <div className="food-price">{priceLabel(item, variantsOf.get(item.id))}</div>
                 </div>
               </div>
               <div className="menu-card-actions">

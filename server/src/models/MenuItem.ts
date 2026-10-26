@@ -34,12 +34,18 @@ const menuItemSchema = new Schema(
     status: { type: String, enum: ITEM_STATUSES, default: 'ACTIVE' },
     branchOverrides: { type: [overrideSchema], default: [] },
     displayOrder: { type: Number, default: 0 },
+    // A variant (size / type, e.g. "Masala" of "Dosa") is its own orderable item pointing at the
+    // dish it belongs to; its name is "<dish> (<variant>)". Dishes with variants are not ordered
+    // themselves.
+    parentId: { type: Schema.Types.ObjectId, ref: 'MenuItem', default: null },
+    variantName: { type: String, default: '', maxlength: 30 },
   },
   { timestamps: true },
 );
 
 menuItemSchema.index({ restaurantId: 1, branchId: 1, nameKey: 1 }, { unique: true });
 menuItemSchema.index({ restaurantId: 1, categoryId: 1 });
+menuItemSchema.index({ parentId: 1 });
 
 export type MenuItem = InferSchemaType<typeof menuItemSchema>;
 export type MenuItemDoc = HydratedDocument<MenuItem>;

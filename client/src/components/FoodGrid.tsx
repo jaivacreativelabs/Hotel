@@ -5,8 +5,9 @@ import { Link } from 'react-router-dom';
 import { useCategories, useMenuItems } from '../services/queries';
 import type { LocalBill } from '../store/draftSync';
 import { cx, formatMoney } from '../utils/format';
+import { groupVariants, priceLabel } from '../utils/menu';
 import { FoodImage } from './FoodImage';
-import { Empty, Loading } from './ui';
+import { Empty, Loading, Modal } from './ui';
 
 /** Adds one of `item` to a bill (or increases its quantity). */
 export function addItemToBill(bill: LocalBill, item: MenuItemDTO): LocalBill {
@@ -31,6 +32,38 @@ export function setBillQuantity(bill: LocalBill, menuItemId: string, quantity: n
   };
 }
 
+/** One tap picks the size / type of a dish and adds it to the bill. */
+function VariantPicker({
+  dish,
+  variants,
+  qtyById,
+  onPick,
+  onClose,
+}: {
+  dish: MenuItemDTO;
+  variants: MenuItemDTO[];
+  qtyById: Map<string, number>;
+  onPick: (variant: MenuItemDTO) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title={dish.name} onClose={onClose} width={480}>
+      <div className="variant-list" role="list">
+        {variants.map((v) => {
+          const qty = qtyById.get(v.id);
+          return (
+            <button key={v.id} type="button" className="variant-btn" disabled={!v.isAvailable} onClick={() => onPick(v)} aria-label={`Add ${v.name}`}>
+              <span className="variant-name">{v.variantName}</span>
+              {!v.isAvailable ? <span className="muted">Sold out</span> : qty ? <span className="food-qty-badge static">{qty}</span> : null}
+              <span className="variant-price">{formatMoney(v.price)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
 /** Category chips + food cards for the branch menu. Used by New Bill and table ordering. */
 export function FoodGrid({
   branchId,
@@ -49,19 +82,24 @@ export function FoodGrid({
   const categories = useCategories(scope);
   const items = useMenuItems(scope);
   const [category, setCategory] = useState<string>('all');
+  const [picking, setPicking] = useState<MenuItemDTO | null>(null);
 
   const activeCategoryIds = useMemo(() => new Set((categories.data ?? []).map((c) => c.id)), [categories.data]);
   // Category picture for dishes without a photo, so they stay recognisable.
   const categoryIcon = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.icon])), [categories.data]);
+  const { dishes, variantsOf } = useMemo(() => groupVariants(items.data ?? []), [items.data]);
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (items.data ?? []).filter(
-      (i) => activeCategoryIds.has(i.categoryId) && (category === 'all' || i.categoryId === category) && (!q || i.name.toLowerCase().includes(q)),
-    );
-  }, [items.data, activeCategoryIds, category, search]);
+    const matches = (i: MenuItemDTO) => i.name.toLowerCase().includes(q) || (variantsOf.get(i.id) ?? []).some((v) => v.variantName.toLowerCase().includes(q));
+    return dishes.filter((i) => activeCategoryIds.has(i.categoryId) && (category === 'all' || i.categoryId === category) && (!q || matches(i)));
+  }, [dishes, variantsOf, activeCategoryIds, category, search]);
 
+  const variantsFor = (item: MenuItemDTO) => variantsOf.get(item.id);
+  const orderable = (item: MenuItemDTO) => item.isAvailable && (!variantsFor(item) || variantsFor(item)!.some((v) => v.isAvailable));
   const add = (item: MenuItemDTO) => {
-    if (editable && item.isAvailable) onAdd(item);
+    if (!editable || !orderable(item)) return;
+    if (variantsFor(item)) setPicking(item);
+    else onAdd(item);
   };
 
   return (
@@ -87,24 +125,26 @@ export function FoodGrid({
       ) : (
         <div className="food-grid">
           {visibleItems.map((item) => {
-            const qty = qtyById.get(item.id);
+            const variants = variantsFor(item);
+            const qty = variants ? variants.reduce((a, v) => a + (qtyById.get(v.id) ?? 0), 0) : qtyById.get(item.id);
+            const available = orderable(item);
             return (
               <div
                 key={item.id}
-                className={cx('food-card', !item.isAvailable && 'disabled')}
+                className={cx('food-card', !available && 'disabled')}
                 onClick={() => add(item)}
                 role="button"
-                tabIndex={item.isAvailable ? 0 : -1}
-                aria-disabled={!item.isAvailable}
-                aria-label={`Add ${item.name}`}
+                tabIndex={available ? 0 : -1}
+                aria-disabled={!available}
+                aria-label={variants ? `Choose ${item.name}` : `Add ${item.name}`}
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), add(item))}
               >
                 <div className="food-media">
                   <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
                 </div>
                 {qty ? <span className="food-qty-badge">{qty}</span> : null}
-                {!item.isAvailable && <span className="unavailable-tag">Unavailable</span>}
-                {item.isAvailable && item.pinned && (
+                {!available && <span className="unavailable-tag">Unavailable</span>}
+                {available && item.pinned && (
                   <span className="pin-mark" title="Pinned">
                     <Pin size={14} />
                   </span>
@@ -112,24 +152,37 @@ export function FoodGrid({
                 <div className="food-body">
                   <div style={{ minWidth: 0 }}>
                     <div className="food-name">{item.name}</div>
-                    <div className="food-price">{formatMoney(item.price)}</div>
+                    <div className="food-price">{priceLabel(item, variants)}</div>
                   </div>
                   <button
                     className="btn btn-primary"
                     tabIndex={-1}
-                    disabled={!item.isAvailable || !editable}
+                    disabled={!available || !editable}
                     onClick={(e) => {
                       e.stopPropagation();
                       add(item);
                     }}
                   >
-                    Add
+                    {variants ? 'Choose' : 'Add'}
                   </button>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+      {picking && (
+        <VariantPicker
+          dish={picking}
+          variants={variantsFor(picking) ?? []}
+          qtyById={qtyById}
+          onClose={() => setPicking(null)}
+          onPick={(v) => {
+            // A variant without its own photo shows the dish's photo on the bill.
+            onAdd({ ...v, imageUrl: v.imageUrl ?? picking.imageUrl });
+            setPicking(null);
+          }}
+        />
       )}
     </>
   );

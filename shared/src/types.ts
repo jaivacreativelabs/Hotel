@@ -156,6 +156,10 @@ export interface MenuItemDTO {
   hasOverride: boolean;
   /** true when name/category/description/image may be edited in this scope */
   editable: boolean;
+  /** Set on a variant: the dish it belongs to. Dishes with variants are ordered by variant. */
+  parentId: string | null;
+  /** "Masala", "Half" … ("" for dishes) */
+  variantName: string;
 }
 
 export interface DraftItemDTO {

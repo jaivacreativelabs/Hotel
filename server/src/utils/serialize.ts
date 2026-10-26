@@ -123,6 +123,8 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     isShared: !item.branchId && scopeBranchId !== null,
     hasOverride: eff.hasOverride,
     editable: owned,
+    parentId: item.parentId ? String(item.parentId) : null,
+    variantName: item.variantName ?? '',
   };
 }
 

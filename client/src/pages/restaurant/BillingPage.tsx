@@ -40,6 +40,7 @@ import type { DraftSyncState, LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
+import { splitVariant } from '../../utils/menu';
 
 function SyncStatus({ state }: { state: DraftSyncState }) {
   const map: Partial<Record<DraftSyncState['status'], [string, string]>> = {
@@ -332,8 +333,9 @@ export function BillingView({
                 </div>
                 <div className="info">
                   <div className="name" title={line.name}>
-                    {line.name}
+                    {splitVariant(line.name).dish}
                   </div>
+                  {splitVariant(line.name).variant && <div className="line-variant">{splitVariant(line.name).variant}</div>}
                   <div className="price">{formatMoney(line.unitPrice)}</div>
                   {line.unavailable ? (
                     <div className="field-error">Unavailable – remove to bill</div>
