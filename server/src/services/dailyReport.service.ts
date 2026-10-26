@@ -1,16 +1,23 @@
 /**
  * Emailed daily sales report for the Super Admin: today's sales across all branches, the
- * Cash / UPI (GPay) / Card split and item-wise sales. Sent once a day at DAILY_REPORT_TIME by the
+ * Cash / UPI (GPay) / Card split, item-wise sales, and the day's expenses with sale minus expenses. Sent once a day at DAILY_REPORT_TIME by the
  * in-process timer (long-running server) or by Vercel Cron (serverless), whichever comes first.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import nodemailer from 'nodemailer';
 import type { Types } from 'mongoose';
-import { formatMoney, PAYMENT_METHODS, type DailyReportSettingsDTO, type DailyReportSettingsInput, type PaymentMethod } from '@rb/shared';
+import {
+  formatMoney,
+  PAYMENT_METHODS,
+  type DailyReportSettingsDTO,
+  type DailyReportSettingsInput,
+  type ExpenseCategory,
+  type PaymentMethod,
+} from '@rb/shared';
 import { env, serverRoot } from '../config/env.js';
 import type { AuthUser } from '../middleware/auth.js';
-import { BranchModel, ReportSettingModel, RestaurantModel, TransactionModel, type ReportSetting } from '../models/index.js';
+import { BranchModel, ExpenseModel, ReportSettingModel, RestaurantModel, TransactionModel, type ReportSetting } from '../models/index.js';
 import { dayRange, todayIn } from '../utils/dates.js';
 import { AppError } from '../utils/errors.js';
 import { audit } from './audit.service.js';
@@ -28,6 +35,12 @@ export interface ItemTotal {
   quantity: number;
   sales: number;
 }
+export interface ExpenseLine {
+  category: ExpenseCategory;
+  amount: number;
+  note: string;
+  paymentMethod: PaymentMethod;
+}
 export interface BranchReport {
   restaurantName: string;
   branchName: string;
@@ -35,6 +48,9 @@ export interface BranchReport {
   bills: number;
   payments: PaymentTotal[];
   items: ItemTotal[];
+  /** Total spent today and each expense, largest first */
+  expenses: number;
+  expenseLines: ExpenseLine[];
 }
 
 export interface DailyReport {
@@ -44,6 +60,9 @@ export interface DailyReport {
   billCount: number;
   averageBill: number;
   taxTotal: number;
+  /** Expenses recorded for the day across all branches, and sale minus expenses */
+  totalExpenses: number;
+  net: number;
   payments: PaymentTotal[];
   /** Every active branch (also those without bills today), highest sale first. */
   branches: BranchReport[];
@@ -99,10 +118,18 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     },
   ]);
 
+  const expenses = await ExpenseModel.find({ date, status: 'ACTIVE' })
+    .sort({ amount: -1 })
+    .select('branchId category amount note paymentMethod')
+    .lean<(ExpenseLine & { branchId: Types.ObjectId })[]>();
+
   // Active branches of active restaurants are always listed, so a branch with no bills stands out.
   const activeRestaurants = await RestaurantModel.find({ status: 'ACTIVE' }).select('_id').lean<{ _id: Types.ObjectId }[]>();
   const branchDocs = await BranchModel.find({
-    $or: [{ _id: { $in: f.branches.map((b) => b._id) } }, { status: 'ACTIVE', restaurantId: { $in: activeRestaurants.map((r) => r._id) } }],
+    $or: [
+      { _id: { $in: [...f.branches.map((b) => b._id), ...expenses.map((e) => e.branchId)] } },
+      { status: 'ACTIVE', restaurantId: { $in: activeRestaurants.map((r) => r._id) } },
+    ],
   })
     .select('name restaurantId')
     .lean<{ _id: Types.ObjectId; name: string; restaurantId: Types.ObjectId }[]>();
@@ -114,6 +141,9 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
   const branchReports = branchDocs.map((b): BranchReport => {
     const key = String(b._id);
     const total = f.branches.find((x) => String(x._id) === key);
+    const expenseLines = expenses
+      .filter((e) => String(e.branchId) === key)
+      .map((e) => ({ category: e.category, amount: e.amount, note: e.note ?? '', paymentMethod: e.paymentMethod }));
     return {
       restaurantName: rName.get(String(b.restaurantId)) ?? 'Unknown',
       branchName: b.name,
@@ -121,6 +151,8 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
       bills: total?.bills ?? 0,
       payments: byMethod(f.payments.filter((p) => String(p._id.b) === key).map((p) => ({ method: p._id.m, sales: p.sales, bills: p.bills }))),
       items: f.items.filter((i) => String(i._id.b) === key).map((i) => ({ name: i.name, quantity: i.quantity, sales: i.sales })),
+      expenses: expenseLines.reduce((a, e) => a + e.amount, 0),
+      expenseLines,
     };
   });
   branchReports.sort((a, b) => b.sales - a.sales || a.restaurantName.localeCompare(b.restaurantName) || a.branchName.localeCompare(b.branchName));
@@ -131,6 +163,7 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     totals.set(p._id.m, { sales: t.sales + p.sales, bills: t.bills + p.bills });
   }
   const s = f.summary[0] ?? { sales: 0, bills: 0, tax: 0 };
+  const totalExpenses = expenses.reduce((a, e) => a + e.amount, 0);
   const excluded = (status: string) => {
     const e = f.excluded.find((x) => x._id === status);
     return { bills: e?.bills ?? 0, amount: e?.sales ?? 0 };
@@ -143,6 +176,8 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     billCount: s.bills,
     averageBill: s.bills ? Math.round(s.sales / s.bills) : 0,
     taxTotal: s.tax,
+    totalExpenses,
+    net: s.sales - totalExpenses,
     payments: byMethod([...totals].map(([method, t]) => ({ method, ...t }))),
     branches: branchReports,
     voided: excluded('VOIDED'),

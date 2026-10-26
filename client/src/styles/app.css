@@ -2242,6 +2242,19 @@ a {
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
+/* Expenses */
+.expense-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.expense-cat svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+}
 .stat-foot {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
@@ -2695,7 +2708,8 @@ a {
     background: var(--color-primary-soft);
     border-radius: 999px;
     padding: 2px 14px;
-    width: 52px;
+    /* narrower when six tabs share a phone screen */
+    width: min(52px, calc(100% - 28px));
     box-sizing: content-box;
   }
 
@@ -2846,7 +2860,8 @@ a {
   .data-table tbody tr.selected td:first-child {
     box-shadow: none;
   }
-  .tx-layout .data-table-wrap {
+  /* a list with phone cards hides its wide table */
+  .data-table-wrap:has(+ .tx-cards) {
     display: none;
   }
   /* Ordering at a table: the menu fills the screen; the table panel opens from the bottom bar. */

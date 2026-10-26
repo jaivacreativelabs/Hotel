@@ -170,6 +170,15 @@ export function createApiRouter(): Router {
   txRouter.post('/:id/refund', ops.refundTransaction);
   api.use('/transactions', txRouter);
 
+  // ---- Expenses (role-filtered in the service; adding one needs the branch) ----
+  const expenseRouter = Router();
+  expenseRouter.use(authenticate);
+  expenseRouter.get('/', ops.listExpenses);
+  expenseRouter.post('/', requireBranchScope, ops.createExpense);
+  expenseRouter.put('/:id', ops.updateExpense);
+  expenseRouter.delete('/:id', ops.deleteExpense);
+  api.use('/expenses', expenseRouter);
+
   api.use(apiNotFound);
   return api;
 }

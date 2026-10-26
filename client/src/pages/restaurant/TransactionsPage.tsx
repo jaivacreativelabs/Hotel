@@ -22,7 +22,7 @@ const PRESETS: [DatePreset, string][] = [
   ['month', 'This Month'],
 ];
 
-function DateRangePicker({ from, to, active, onApply }: { from?: string; to?: string; active: boolean; onApply: (from: string, to: string) => void }) {
+export function DateRangePicker({ from, to, active, onApply }: { from?: string; to?: string; active: boolean; onApply: (from: string, to: string) => void }) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState(from ?? '');
   const [t, setT] = useState(to ?? '');

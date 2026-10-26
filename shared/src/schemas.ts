@@ -6,8 +6,10 @@
 import { z } from 'zod';
 import {
   DISCOUNT_TYPES,
+  EXPENSE_CATEGORIES,
   KITCHEN_STATUSES,
   LIMITS,
+  MAX_EXPENSE_PAISE,
   PAYMENT_METHODS,
   RECORD_STATUSES,
   STAFF_ROLES,
@@ -237,11 +239,32 @@ export const transactionStatusChangeSchema = z.strictObject({
   reason: z.string().trim().min(3, 'Give a reason').max(200),
 });
 
+// ---------- Expenses ----------
+/** Adding or correcting an expense. The branch comes from the request's branch scope. */
+export const expenseSchema = z.strictObject({
+  /** Day the money was spent (restaurant time zone); not in the future – checked by the server */
+  date: dateStringSchema,
+  category: z.enum(EXPENSE_CATEGORIES),
+  amount: z.number().int('Amount must be whole paise').min(1, 'Enter an amount').max(MAX_EXPENSE_PAISE, 'Amount is too high'),
+  paymentMethod: z.enum(PAYMENT_METHODS),
+  note: z.string().trim().max(200).optional(),
+});
+
 // ---------- Queries ----------
 const pageQuery = {
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(LIMITS.maxPageSize).default(20),
 };
+
+export const expenseQuerySchema = z.object({
+  ...pageQuery,
+  q: z.string().trim().max(50).optional(),
+  from: dateStringSchema.optional(),
+  to: dateStringSchema.optional(),
+  category: z.enum(EXPENSE_CATEGORIES).optional(),
+  restaurantId: objectIdSchema.optional(),
+  branchId: objectIdSchema.optional(),
+});
 
 export const transactionQuerySchema = z.object({
   ...pageQuery,
@@ -284,4 +307,6 @@ export type DraftUpdateInput = z.infer<typeof draftUpdateSchema>;
 export type FinalizeInput = z.infer<typeof finalizeSchema>;
 export type TransactionEditInput = z.infer<typeof transactionEditSchema>;
 export type TransactionQuery = z.infer<typeof transactionQuerySchema>;
+export type ExpenseInput = z.infer<typeof expenseSchema>;
+export type ExpenseQuery = z.infer<typeof expenseQuerySchema>;
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;

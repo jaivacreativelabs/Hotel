@@ -3,6 +3,8 @@ import type { Request, Response } from 'express';
 import {
   createGroupSchema,
   draftUpdateSchema,
+  expenseQuerySchema,
+  expenseSchema,
   finalizeSchema,
   kitchenAdvanceSchema,
   kitchenPrioritySchema,
@@ -16,6 +18,7 @@ import { env } from '../config/env.js';
 import { currentUser } from '../middleware/auth.js';
 import { getBranchScope } from '../middleware/scope.js';
 import * as bills from '../services/bills.service.js';
+import * as expenses from '../services/expenses.service.js';
 import * as kitchen from '../services/kitchen.service.js';
 import * as tables from '../services/tables.service.js';
 import * as transactions from '../services/transactions.service.js';
@@ -110,4 +113,19 @@ export const voidTransaction = async (req: Request, res: Response) => {
 export const refundTransaction = async (req: Request, res: Response) => {
   const { reason } = parse(transactionStatusChangeSchema, req.body);
   res.json({ data: await transactions.changeTransactionStatus(currentUser(req), id(req), 'REFUNDED', reason) });
+};
+
+// Expenses
+export const listExpenses = async (req: Request, res: Response) => {
+  res.json({ data: await expenses.listExpenses(currentUser(req), parse(expenseQuerySchema, req.query)) });
+};
+export const createExpense = async (req: Request, res: Response) => {
+  res.status(201).json({ data: await expenses.createExpense(currentUser(req), getBranchScope(req), parse(expenseSchema, req.body)) });
+};
+export const updateExpense = async (req: Request, res: Response) => {
+  res.json({ data: await expenses.updateExpense(currentUser(req), id(req), parse(expenseSchema, req.body)) });
+};
+export const deleteExpense = async (req: Request, res: Response) => {
+  await expenses.deleteExpense(currentUser(req), id(req));
+  res.status(204).end();
 };

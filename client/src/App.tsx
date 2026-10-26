@@ -6,6 +6,7 @@ import { Empty, Spinner } from './components/ui';
 import { AppLayout } from './layouts/AppLayout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { BillingPage } from './pages/restaurant/BillingPage';
+import { ExpensesPage } from './pages/restaurant/ExpensesPage';
 import { MenuPage } from './pages/restaurant/MenuPage';
 import { PrintReceiptPage } from './pages/restaurant/PrintReceiptPage';
 import { KitchenPage, PrintKitchenTicketPage } from './pages/restaurant/KitchenPage';
@@ -22,6 +23,7 @@ const RestaurantDetailPage = named(() => import('./pages/admin/RestaurantDetailP
 const AdminsPage = named(() => import('./pages/admin/AdminsPage'), 'AdminsPage');
 const AdminMenuPage = named(() => import('./pages/admin/AdminMenuPage'), 'AdminMenuPage');
 const AdminTransactionsPage = named(() => import('./pages/admin/AdminTransactionsPage'), 'AdminTransactionsPage');
+const AdminExpensesPage = named(() => import('./pages/admin/AdminExpensesPage'), 'AdminExpensesPage');
 const ReportsPage = named(() => import('./pages/admin/ReportsPage'), 'ReportsPage');
 const AnalyticsPage = named(() => import('./pages/admin/AnalyticsPage'), 'AnalyticsPage');
 const AuditLogPage = named(() => import('./pages/admin/AuditLogPage'), 'AuditLogPage');
@@ -75,6 +77,7 @@ export function App() {
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/tables" element={<TablesPage />} />
+        <Route path="/expenses" element={<ExpensesPage />} />
       </Route>
       <Route
         element={
@@ -99,6 +102,7 @@ export function App() {
         <Route path="users" element={<AdminsPage />} />
         <Route path="menu" element={<AdminMenuPage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
+        <Route path="expenses" element={<AdminExpensesPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="analytics" element={<AnalyticsPage />} />
         <Route path="audit" element={<AuditLogPage />} />

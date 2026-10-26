@@ -19,6 +19,7 @@ import {
   UserRound,
   Users,
   Utensils,
+  Wallet,
 } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ const RESTAURANT_NAV: NavItem[] = [
   { to: '/menu', label: 'Menu', icon: Utensils },
   { to: '/transactions', label: 'Transactions', icon: FileText },
   { to: '/tables', label: 'Tables', icon: TableIcon },
+  { to: '/expenses', label: 'Expenses', icon: Wallet },
 ];
 // Shown only when the Super Admin has switched the Kitchen Display on for the branch.
 const KITCHEN_NAV: NavItem = { to: '/kitchen', label: 'Kitchen', icon: ChefHat };
@@ -53,6 +55,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/users', label: 'Admins', icon: Users },
   { to: '/admin/menu', label: 'Menu', icon: Utensils },
   { to: '/admin/transactions', label: 'Transactions', icon: FileText },
+  { to: '/admin/expenses', label: 'Expenses', icon: Wallet },
   { to: '/admin/reports', label: 'Reports', icon: ChartLine },
   { to: '/admin/analytics', label: 'Analytics', icon: ChartColumn },
   { to: '/admin/daily-report', label: 'Daily Report', icon: Mail },

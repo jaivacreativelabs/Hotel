@@ -68,6 +68,25 @@ export const LIMITS = {
 /** A generated (paid) bill can be corrected for this long; every edit keeps the old version. */
 export const BILL_EDIT_WINDOW_MINUTES = 30;
 
+/** What a branch spends money on (shown in the Expenses page and the daily report). */
+export const EXPENSE_CATEGORIES = ['GROCERIES', 'VEGETABLES', 'MILK', 'GAS', 'SALARY', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'OTHER'] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
+  GROCERIES: 'Groceries',
+  VEGETABLES: 'Vegetables',
+  MILK: 'Milk',
+  GAS: 'Gas',
+  SALARY: 'Salary',
+  RENT: 'Rent',
+  ELECTRICITY: 'Electricity',
+  MAINTENANCE: 'Maintenance',
+  OTHER: 'Other',
+};
+/** Restaurant Admins can correct or delete an expense for this long; the Super Admin any time. */
+export const EXPENSE_EDIT_WINDOW_MINUTES = 30;
+/** ₹1,00,00,000 per expense (rent and salaries are larger than any menu price). */
+export const MAX_EXPENSE_PAISE = 1_000_000_000;
+
 export const CSRF_HEADER = 'x-requested-with';
 export const CSRF_HEADER_VALUE = 'rb-client';
 export const BRANCH_HEADER = 'x-branch-id';

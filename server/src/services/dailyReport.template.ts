@@ -2,7 +2,7 @@
  * Daily report email. Table layout with inline styles so it renders the same in Gmail, Outlook
  * and phone mail apps. Colours follow the app theme (client/src/styles/theme.css).
  */
-import { formatMoney, type PaymentMethod } from '@rb/shared';
+import { EXPENSE_CATEGORY_LABEL, formatMoney, type PaymentMethod } from '@rb/shared';
 import { env } from '../config/env.js';
 import type { BranchReport, DailyReport, ItemTotal, PaymentTotal } from './dailyReport.service.js';
 
@@ -22,6 +22,7 @@ const C = {
   page: '#f2f4ef',
   surfaceMuted: '#f7f8f4',
   danger: '#d43c3c',
+  dangerSoft: '#fdf3f3',
 };
 const FONT = `-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif`;
 
@@ -93,7 +94,7 @@ function branchSummary(r: DailyReport): string {
           <div style="font:400 12px/16px ${FONT};color:${C.muted};">${esc(b.restaurantName)}</div></td>
         <td align="right" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">${
           b.bills ? `${b.bills} bill${b.bills === 1 ? '' : 's'}` : 'No bills'
-        }</td>
+        }${b.expenses ? `<div style="font:400 12px/16px ${FONT};color:${C.danger};">Spent ${formatMoney(b.expenses)}</div>` : ''}</td>
         <td align="right" width="110" style="padding:10px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${b.bills ? C.text : C.subtle};white-space:nowrap;">${formatMoney(b.sales)}</td>
       </tr>`,
     )
@@ -138,7 +139,33 @@ function itemTable(items: ItemTotal[]): string {
     </table>`;
 }
 
-/** Full detail of one branch: its total, payment split and item-wise sale. */
+function expenseTable(b: BranchReport): string {
+  if (!b.expenseLines.length) return '';
+  const cell = (i: number) => `padding:9px 12px;${i ? `border-top:1px solid ${C.border};` : ''}`;
+  const rows = b.expenseLines
+    .map(
+      (e, i) => `<tr>
+        <td style="${cell(i)}font:400 14px/20px ${FONT};color:${C.text};">${EXPENSE_CATEGORY_LABEL[e.category]}${
+          e.note ? `<div style="font:400 12px/16px ${FONT};color:${C.muted};">${esc(e.note)}</div>` : ''
+        }</td>
+        <td align="center" width="90" style="${cell(i)}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">${PAYMENT_NAME[e.paymentMethod]}</td>
+        <td align="right" width="100" style="${cell(i)}font:500 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(e.amount)}</td>
+      </tr>`,
+    )
+    .join('');
+  const head = (label: string, align: string) =>
+    `<td align="${align}" style="padding:8px 12px;font:600 12px/16px ${FONT};color:${C.muted};border-bottom:1px solid ${C.border};">${label}</td>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;border:1px solid ${C.border};border-radius:8px;border-collapse:separate;">
+      <tr style="background:${C.surfaceMuted};">${head('Expense', 'left')}${head('Paid by', 'center')}${head('Amount', 'right')}</tr>
+      ${rows}
+      <tr style="background:${C.dangerSoft};">
+        <td colspan="2" style="padding:9px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.text};">Total expenses · Net ${formatMoney(b.sales - b.expenses)}</td>
+        <td align="right" style="padding:9px 12px;border-top:1px solid ${C.border};font:600 14px/20px ${FONT};color:${C.danger};white-space:nowrap;">${formatMoney(b.expenses)}</td>
+      </tr>
+    </table>`;
+}
+
+/** Full detail of one branch: its total, payment split, item-wise sale and expenses. */
 function branchDetail(b: BranchReport): string {
   return `<tr><td style="padding:24px 24px 0 24px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.primarySoft};border-radius:8px;"><tr>
@@ -151,8 +178,8 @@ function branchDetail(b: BranchReport): string {
         <div style="font:400 12px/16px ${FONT};color:${C.muted};white-space:nowrap;">${b.bills} bill${b.bills === 1 ? '' : 's'}</div>
       </td>
     </tr></table>
-    ${branchPayments(b)}
-    ${itemTable(b.items)}
+    ${b.bills ? branchPayments(b) + itemTable(b.items) : ''}
+    ${expenseTable(b)}
   </td></tr>`;
 }
 
@@ -163,7 +190,7 @@ function notCountedNote(r: DailyReport): string {
   ].filter(Boolean);
   if (!parts.length) return '';
   return `<tr><td style="padding:20px 24px 0 24px;">
-    <div style="background:#fdf3f3;border-radius:8px;padding:10px 14px;font:400 13px/18px ${FONT};color:${C.text};">
+    <div style="background:${C.dangerSoft};border-radius:8px;padding:10px 14px;font:400 13px/18px ${FONT};color:${C.text};">
       Not counted in the total: ${parts.join(' and ')}.
     </div>
   </td></tr>`;
@@ -210,6 +237,18 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
       </tr></table>
     </td></tr></table>
   </td></tr>
+  <tr><td style="padding:8px 20px 4px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${C.border};border-radius:8px;border-collapse:separate;"><tr>
+      <td width="50%" style="padding:12px 14px;">
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};">Expenses</div>
+        <div style="font:600 16px/22px ${FONT};color:${r.totalExpenses ? C.danger : C.text};padding-top:2px;">${formatMoney(r.totalExpenses)}</div>
+      </td>
+      <td width="50%" align="right" style="padding:12px 14px;border-left:1px solid ${C.border};">
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};">Net (sale − expenses)</div>
+        <div style="font:700 16px/22px ${FONT};color:${r.net < 0 ? C.danger : C.primary};padding-top:2px;">${formatMoney(r.net)}</div>
+      </td>
+    </tr></table>
+  </td></tr>
 
   ${
     empty
@@ -218,11 +257,11 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   }
   ${r.branches.length ? branchSummary(r) : ''}
   ${notCountedNote(r)}
-  ${r.branches.filter((b) => b.bills > 0).map(branchDetail).join('')}
+  ${r.branches.filter((b) => b.bills > 0 || b.expenses > 0).map(branchDetail).join('')}
 
   <tr><td style="padding:28px 24px 26px 24px;">
     <div style="border-top:1px solid ${C.border};padding-top:16px;font:400 12px/18px ${FONT};color:${C.subtle};">
-      Paid bills only. Totals include tax; item amounts are before discount and tax. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
+      Paid bills only. Totals include tax; item amounts are before discount and tax. Expenses are those recorded for this date in each branch. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
       To change who gets this email, open Super Admin &rsaquo; Daily Report.
     </div>
   </td></tr>
@@ -242,6 +281,8 @@ export function renderDailyReportText(r: DailyReport): string {
     line('Bills', String(r.billCount)),
     line('Average bill', formatMoney(r.averageBill)),
     line('Tax collected', formatMoney(r.taxTotal)),
+    line('Expenses', formatMoney(r.totalExpenses)),
+    line('Net (sale - expenses)', formatMoney(r.net)),
     '',
     'Payment split',
     ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, `${formatMoney(p.sales)}  (${p.bills} bills)`)),
@@ -250,13 +291,19 @@ export function renderDailyReportText(r: DailyReport): string {
     ...r.branches.map((b) => line(`  ${b.branchName} (${b.restaurantName})`, `${formatMoney(b.sales)}  (${b.bills} bills)`)),
   ];
   if (r.voided.bills || r.refunded.bills) out.push('', `Not counted: ${r.voided.bills} voided, ${r.refunded.bills} refunded.`);
-  for (const b of r.branches.filter((x) => x.bills > 0)) {
+  for (const b of r.branches.filter((x) => x.bills > 0 || x.expenses > 0)) {
     out.push(
       '',
       `${b.branchName} – ${formatMoney(b.sales)} (${b.bills} bills)`,
       ...b.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, formatMoney(p.sales))),
       ...b.items.map((i) => line(`  ${i.name} x${i.quantity}`, formatMoney(i.sales))),
     );
+    if (b.expenses) {
+      out.push(
+        `  Expenses – ${formatMoney(b.expenses)} (net ${formatMoney(b.sales - b.expenses)})`,
+        ...b.expenseLines.map((e) => line(`    ${EXPENSE_CATEGORY_LABEL[e.category]}${e.note ? ` (${e.note})` : ''}`, formatMoney(e.amount))),
+      );
+    }
   }
   return out.join('\n');
 }

@@ -2,6 +2,7 @@
 import type {
   DraftStatus,
   DraftType,
+  ExpenseCategory,
   ItemStatus,
   KitchenStatus,
   PaymentMethod,
@@ -296,6 +297,34 @@ export interface TransactionDTO {
   editedByName: string;
   /** Until when the bill can still be edited; null when no longer editable. */
   editableUntil: string | null;
+}
+
+/** Money a branch spent (groceries, gas, salary …). */
+export interface ExpenseDTO {
+  id: string;
+  restaurantId: string;
+  branchId: string;
+  branchName: string;
+  /** YYYY-MM-DD in the restaurant time zone */
+  date: string;
+  category: ExpenseCategory;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note: string;
+  createdByName: string;
+  createdAt: string;
+  editedByName: string;
+  editedAt: string | null;
+  /** End of the Restaurant Admin edit/delete window; null once over (the Super Admin can any time). */
+  editableUntil: string | null;
+}
+
+export interface ExpenseListDTO {
+  expenses: ExpenseDTO[];
+  meta: PageMeta;
+  /** Over every expense matching the filters (not just this page) */
+  totalAmount: number;
+  byCategory: { category: ExpenseCategory; amount: number; count: number }[];
 }
 
 export interface AnalyticsPoint {
