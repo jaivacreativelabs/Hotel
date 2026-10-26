@@ -1,6 +1,6 @@
 import { PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Calendar, ChevronDown, Download, Eye, FileText, Pencil, Printer, Undo2 } from 'lucide-react';
+import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBadge, TableBadge, TxStatusBadge } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
@@ -11,7 +11,7 @@ import { api, downloadFile } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
-import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, PAYMENT_LABEL, presetRange, STATUS_LABEL, type DatePreset } from '../../utils/format';
+import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, type DatePreset } from '../../utils/format';
 import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
@@ -253,6 +253,132 @@ function BillDetails({
   );
 }
 
+const dayHeadingFmt = new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+
+/** Bills grouped by the local day they were paid, newest first (the API already sorts them). */
+function groupByDay(txs: TransactionDTO[]): { day: string; label: string; txs: TransactionDTO[] }[] {
+  const today = isoDay(new Date());
+  const yesterday = isoDay(shiftDays(new Date(), -1));
+  const groups: { day: string; label: string; txs: TransactionDTO[] }[] = [];
+  for (const t of txs) {
+    const day = isoDay(new Date(t.finalizedAt));
+    let g = groups[groups.length - 1];
+    if (!g || g.day !== day) {
+      const label = day === today ? 'Today' : day === yesterday ? 'Yesterday' : dayHeadingFmt.format(new Date(`${day}T00:00:00`));
+      g = { day, label, txs: [] };
+      groups.push(g);
+    }
+    g.txs.push(t);
+  }
+  return groups;
+}
+
+const CARD_ITEMS = 3;
+
+function TxCard({
+  tx,
+  selected,
+  showBranch,
+  onOpen,
+  onEdit,
+  onChange,
+}: {
+  tx: TransactionDTO;
+  selected: boolean;
+  showBranch: boolean;
+  onOpen: () => void;
+  onEdit: () => void;
+  onChange: (kind: 'void' | 'refund') => void;
+}) {
+  const { user } = useAuth();
+  const anyTime = user?.role === 'SUPER_ADMIN';
+  const completed = tx.status === 'COMPLETED';
+  const minutesLeft = useEditMinutesLeft(completed && !anyTime ? tx.editableUntil : null);
+  const canEdit = completed && (anyTime || minutesLeft > 0);
+  const takeaway = !tx.tableLabel;
+  const TypeIcon = takeaway ? ShoppingBag : UtensilsCrossed;
+  const hidden = tx.items.length - CARD_ITEMS;
+  return (
+    <article className={cx('bill-card', selected && 'selected', !completed && 'closed')}>
+      <header className="bill-card-head">
+        <span className={cx('bill-card-icon', takeaway && 'takeaway')}>
+          <TypeIcon />
+        </span>
+        {tx.editCount > 0 && <span className="badge badge-sm badge-gray">Edited</span>}
+        <span className="spacer" />
+        <TxStatusBadge status={tx.status} />
+      </header>
+      <div>
+        <div className="bill-card-title">{tx.customerName || (takeaway ? 'Takeaway' : `Table ${tx.tableLabel}`)}</div>
+        <div className="bill-card-sub">
+          #{tx.billNumber} / {takeaway ? 'Takeaway' : 'Dine in'}
+          {tx.groupName && ` · ${tx.groupName}`}
+          {showBranch && ` · ${tx.branchSnapshot.name}`}
+        </div>
+      </div>
+      <div className="bill-card-when">
+        <span>{formatDate(tx.finalizedAt)}</span>
+        <span>{formatTime(tx.finalizedAt)}</span>
+      </div>
+      <table className="bill-card-items">
+        <thead>
+          <tr>
+            <th>Order items</th>
+            <th className="center">Qty</th>
+            <th className="right">Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tx.items.slice(0, CARD_ITEMS).map((i) => (
+            <tr key={i.menuItemId}>
+              <td>{i.name}</td>
+              <td className="center num">{i.quantity}</td>
+              <td className="right num">{formatMoney(i.lineTotal)}</td>
+            </tr>
+          ))}
+          {hidden > 0 && (
+            <tr>
+              <td colSpan={3} className="bill-card-more">
+                + {hidden} more item{hidden === 1 ? '' : 's'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="bill-card-total">
+        <span>Total</span>
+        <span className="spacer" />
+        <PaymentBadge method={tx.paymentMethod} />
+        <strong className="num">{formatMoney(tx.grandTotal)}</strong>
+      </div>
+      <footer className="bill-card-actions">
+        <button type="button" className="link-btn" onClick={onOpen}>
+          <SquareArrowOutUpRight size={15} /> See details
+        </button>
+        <span className="spacer" />
+        <button type="button" className="icon-btn" onClick={() => openReceipt(tx.id)} aria-label={`Print bill #${tx.billNumber}`} title="Print bill">
+          <Printer />
+        </button>
+        {canEdit && (
+          <button type="button" className="icon-btn" onClick={onEdit} aria-label={`Edit bill #${tx.billNumber}`} title={anyTime ? 'Edit bill' : `Edit bill (${minutesLeft} min left)`}>
+            <Pencil />
+          </button>
+        )}
+        {completed && (
+          <>
+            <button type="button" className="icon-btn danger" onClick={() => onChange('void')} aria-label={`Void bill #${tx.billNumber}`} title="Void bill">
+              <Ban />
+            </button>
+            <button type="button" className="icon-btn danger" onClick={() => onChange('refund')} aria-label={`Refund bill #${tx.billNumber}`} title="Refund">
+              <Undo2 />
+            </button>
+          </>
+        )}
+      </footer>
+    </article>
+  );
+}
+
 /**
  * Transaction history. `scopeFilters` lets the Super Admin page add restaurant/branch
  * selectors; for Restaurant Admins the active branch is applied automatically.
@@ -277,6 +403,7 @@ export function TransactionsView({
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TransactionDTO | null>(null);
+  const [change, setChange] = useState<{ tx: TransactionDTO; kind: 'void' | 'refund' } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const range = preset === 'custom' && custom ? custom : presetRange(preset);
@@ -383,107 +510,43 @@ export function TransactionsView({
           </select>
         </div>
 
-        <div className="card">
-          {list.isLoading ? (
+        {list.isLoading ? (
+          <div className="card">
             <Loading label="Loading transactions…" />
-          ) : list.isError ? (
+          </div>
+        ) : list.isError ? (
+          <div className="card">
             <Empty title="Could not load transactions">{(list.error as Error).message}</Empty>
-          ) : list.data!.data.length === 0 ? (
+          </div>
+        ) : list.data!.data.length === 0 ? (
+          <div className="card">
             <Empty icon={<FileText />} title="No bills found">
               Try another date range or search.
             </Empty>
-          ) : (
-            <>
-              <div className="data-table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Bill No.</th>
-                      <th>Date &amp; Time</th>
-                      {showBranch && <th>Branch</th>}
-                      <th className="center">Table</th>
-                      <th className="center">Items</th>
-                      <th>Total Amount</th>
-                      <th>Payment Mode</th>
-                      <th className="center">Status</th>
-                      <th className="center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {list.data!.data.map((t) => (
-                      <tr key={t.id} className={cx('clickable', t.id === selectedId && 'selected')} onClick={() => setSelectedId(t.id)}>
-                        <td className="bill-no">
-                          #{t.billNumber}
-                          {t.editCount > 0 && <span className="cell-sub">Edited</span>}
-                        </td>
-                        <td className="nowrap">
-                          {formatDate(t.finalizedAt)}
-                          <span className="cell-sub">{formatTime(t.finalizedAt)}</span>
-                        </td>
-                        {showBranch && (
-                          <td>
-                            {t.branchSnapshot.name}
-                            <span className="cell-sub">{t.restaurantSnapshot.name}</span>
-                          </td>
-                        )}
-                        <td className="center">
-                          <TableBadge label={t.tableLabel} />
-                        </td>
-                        <td className="center num">{t.itemCount}</td>
-                        <td className="num nowrap">
-                          <strong>{formatMoney(t.grandTotal)}</strong>
-                        </td>
-                        <td>
-                          <PaymentBadge method={t.paymentMethod} />
-                        </td>
-                        <td className="center">
-                          <TxStatusBadge status={t.status} />
-                        </td>
-                        <td className="center">
-                          <button
-                            className="btn btn-primary btn-sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedId(t.id);
-                            }}
-                          >
-                            <Eye size={16} /> View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {/* Phones: one card per bill instead of a wide table */}
-              <ul className="tx-cards">
-                {list.data!.data.map((t) => (
-                  <li key={t.id}>
-                    <button type="button" className={cx('tx-card', t.id === selectedId && 'selected')} onClick={() => setSelectedId(t.id)}>
-                      <span className="tx-card-top">
-                        <span className="bill-no">
-                          #{t.billNumber}
-                          {t.editCount > 0 && <small className="muted"> · Edited</small>}
-                        </span>
-                        <span className="tx-card-total num">{formatMoney(t.grandTotal)}</span>
-                      </span>
-                      <span className="tx-card-meta">
-                        {formatDate(t.finalizedAt)} · {formatTime(t.finalizedAt)} · {t.itemCount} item{t.itemCount === 1 ? '' : 's'}
-                        {showBranch && ` · ${t.branchSnapshot.name}`}
-                      </span>
-                      <span className="tx-card-badges">
-                        <TableBadge label={t.tableLabel} />
-                        <PaymentBadge method={t.paymentMethod} />
-                        <TxStatusBadge status={t.status} />
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <Pagination meta={list.data!.meta} onPage={setPage} />
-            </>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            {groupByDay(list.data!.data).map((g) => (
+              <section key={g.day} className="bill-day">
+                <h2 className="bill-day-title">{g.label}</h2>
+                <div className="bill-grid">
+                  {g.txs.map((t) => (
+                    <TxCard
+                      key={t.id}
+                      tx={t}
+                      selected={t.id === selectedId}
+                      showBranch={showBranch}
+                      onOpen={() => setSelectedId(t.id)}
+                      onEdit={() => setEditing(t)}
+                      onChange={(kind) => setChange({ tx: t, kind })}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+            <Pagination meta={list.data!.meta} onPage={setPage} />
+          </>
+        )}
       </div>
       {selected && (
         <BillDetails
@@ -493,6 +556,18 @@ export function TransactionsView({
           onClose={() => setSelectedId(null)}
           onEdit={() => setEditing(selected)}
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transactions'] })}
+        />
+      )}
+      {change && (
+        <StatusChangeModal
+          tx={change.tx}
+          kind={change.kind}
+          onClose={() => setChange(null)}
+          onDone={(t) => {
+            setChange(null);
+            toast.success(`Bill #${t.billNumber} ${t.status === 'VOIDED' ? 'voided' : 'refunded'}`);
+            void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+          }}
         />
       )}
     </div>

@@ -2214,6 +2214,133 @@ a {
   min-width: 0;
   flex: 1;
 }
+
+/* Transactions: bills as cards, grouped by day */
+.bill-day + .bill-day {
+  margin-top: 22px;
+}
+.bill-day-title {
+  margin: 0 0 10px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.bill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.bill-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  min-width: 0;
+}
+.bill-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-soft), var(--shadow-card);
+}
+.bill-card.closed {
+  background: var(--color-surface-muted);
+}
+.bill-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bill-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: inline-grid;
+  place-items: center;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+.bill-card-icon.takeaway {
+  background: var(--color-accent-purple);
+}
+.bill-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.bill-card-title {
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bill-card-sub {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}
+.bill-card-when {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.bill-card-items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-md);
+}
+.bill-card-items th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  padding: 0 0 4px;
+}
+.bill-card-items td {
+  padding: 3px 0;
+  vertical-align: top;
+}
+.bill-card-items td:first-child {
+  padding-right: 8px;
+  overflow-wrap: anywhere;
+}
+.bill-card-items .center {
+  text-align: center;
+  width: 40px;
+}
+.bill-card-items .right {
+  text-align: right;
+  white-space: nowrap;
+}
+.bill-card-more {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+}
+.bill-card-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-strong);
+  font-weight: 600;
+}
+.bill-card-total strong {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+}
+.bill-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
 .filters {
   display: flex;
   gap: 12px;
