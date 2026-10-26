@@ -1,5 +1,4 @@
 import { PAYMENT_METHODS, type PaymentMethod, type TransactionDTO } from '@rb/shared';
-import { CircleCheck, Printer } from 'lucide-react';
 import { useState } from 'react';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
@@ -74,23 +73,7 @@ export function openReceipt(transactionId: string) {
   window.open(`/print/transactions/${transactionId}?autoprint=1`, '_blank', 'noopener,width=420,height=720');
 }
 
-export function BillDoneModal({ tx, onClose, closeLabel = 'Done' }: { tx: TransactionDTO; onClose: () => void; closeLabel?: string }) {
-  return (
-    <Modal title="Bill generated" onClose={onClose}>
-      <div className="alert alert-success">
-        <CircleCheck />
-        <span>
-          Bill <strong>#{tx.billNumber}</strong> for <strong>{formatMoney(tx.grandTotal)}</strong> was saved ({PAYMENT_LABEL[tx.paymentMethod]}).
-        </span>
-      </div>
-      <div className="modal-actions">
-        <button className="btn btn-outline" onClick={() => openReceipt(tx.id)}>
-          <Printer /> Print Bill
-        </button>
-        <button className="btn btn-primary" onClick={onClose}>
-          {closeLabel}
-        </button>
-      </div>
-    </Modal>
-  );
+/** Toast text once a bill is generated (it can be printed later from Transactions). */
+export function billSavedMessage(tx: TransactionDTO) {
+  return `Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]})`;
 }

@@ -14,12 +14,12 @@ import {
   type TransactionDTO,
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Check, ChevronUp, CirclePlus, FileText, Minus, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
+import { ArrowLeft, ChevronUp, CirclePlus, FileText, Minus, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
-import { BillDoneModal, PaymentModal } from '../../components/PaymentButtons';
+import { billSavedMessage, PaymentModal } from '../../components/PaymentButtons';
 import { TableIllustration } from '../../components/TableIllustration';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner, Stepper } from '../../components/ui';
 import { api, ApiError, errorMessage } from '../../services/api';
@@ -297,7 +297,7 @@ function ActiveGroupCard({
       )}
       <div className="group-actions">
         <button className="btn btn-outline-primary" onClick={onDone}>
-          <Check /> Done
+          <Utensils /> Add Items
         </button>
         <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={lines.length === 0}>
           <FileText /> Generate Bill
@@ -471,7 +471,6 @@ function TableDetail({
   const [busy, setBusy] = useState(false);
   const [paying, setPaying] = useState<TableGroupSummaryDTO | null>(null);
   const [deleting, setDeleting] = useState<TableGroupSummaryDTO | null>(null);
-  const [done, setDone] = useState<TransactionDTO | null>(null);
   const free = Math.max(0, table.seats - table.seatsUsed);
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
   // Show "All items sent" straight away; the refresh then brings the server's numbers.
@@ -521,7 +520,7 @@ function TableDetail({
         api.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, { version: d.version, paymentMethod, idempotencyKey: newIdempotencyKey() }),
       );
       setPaying(null);
-      setDone(res.transaction);
+      toast.success(billSavedMessage(res.transaction));
       if (group.draftId === activeDraftId) onExitOrder();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     } catch (err) {
@@ -662,7 +661,6 @@ function TableDetail({
           onConfirm={() => removeGroup(deleting)}
         />
       )}
-      {done && <BillDoneModal tx={done} onClose={() => setDone(null)} />}
     </SidePanel>
   );
 }
@@ -723,7 +721,7 @@ export function TablesPage() {
   };
   const refresh = () => queryClient.invalidateQueries({ queryKey: tableKeys.list(branchId) });
   const exitOrder = () => {
-    // Kitchen Display branches: "Done" saves the order and sends what was added to the kitchen.
+    // Kitchen Display branches: "Add Items" saves the order and sends what was added to the kitchen.
     if (activeBranch!.kitchenDisplay && order && live.sync) {
       const draftId = order;
       live.sync

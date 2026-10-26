@@ -29,7 +29,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FoodImage } from '../../components/FoodImage';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
-import { BillDoneModal, PaymentButtons } from '../../components/PaymentButtons';
+import { billSavedMessage, PaymentButtons } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
@@ -163,7 +163,6 @@ export function BillingView({
   const [payment, setPayment] = useState<PaymentMethod | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [done, setDone] = useState<TransactionDTO | null>(null);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
   const [billOpen, setBillOpen] = useState(false);
   const keyRef = useRef<{ draftId: string; key: string } | null>(null);
@@ -214,10 +213,11 @@ export function BillingView({
         idempotencyKey: keyRef.current.key,
       });
       keyRef.current = null;
-      setDone(res.transaction);
+      toast.success(billSavedMessage(res.transaction));
       void sync.load();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
       void queryClient.invalidateQueries({ queryKey: ['tables'] });
+      finishBill(current);
     } catch (err) {
       toast.error(err);
       if (err instanceof ApiError && err.status === 409) void sync.load();
@@ -226,12 +226,11 @@ export function BillingView({
     }
   };
 
-  const finishDone = () => {
-    setDone(null);
+  const finishBill = (billed: DraftDTO) => {
     setPayment(null);
     setBillOpen(false);
-    if (draft?.type === 'TABLE') {
-      onBackToTables(draft.tableId);
+    if (billed.type === 'TABLE') {
+      onBackToTables(billed.tableId);
     } else {
       void queryClient.invalidateQueries({ queryKey: ['counter-draft', branchId] });
     }
@@ -420,7 +419,6 @@ export function BillingView({
           }}
         />
       )}
-      {done && <BillDoneModal tx={done} onClose={finishDone} closeLabel={draft?.type === 'TABLE' ? 'Back to tables' : 'New Bill'} />}
       {counter.isError && !tableDraftId && <div className="toast error">{errorMessage(counter.error)}</div>}
     </div>
   );

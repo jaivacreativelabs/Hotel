@@ -1,6 +1,6 @@
 /**
  * Kitchen Display: live order tickets of the branch in three columns – New, Preparing,
- * Ready. Tickets arrive when an order is sent from a table ("Done") or a bill is generated.
+ * Ready. Tickets arrive when an order is sent from a table ("Add Items") or a bill is generated.
  */
 import { KITCHEN_BOARD_STATUSES, type KitchenTicketDTO } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
