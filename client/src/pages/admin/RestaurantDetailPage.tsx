@@ -1,5 +1,7 @@
 import {
   bpsToPercent,
+  defaultBillPrefix,
+  formatBillNumber,
   LIMITS,
   parsePercentToBps,
   type BranchDTO,
@@ -25,7 +27,8 @@ interface Detail {
   admins: UserDTO[];
 }
 
-function BranchForm({ restaurantId, initial, onClose }: { restaurantId: string; initial?: BranchDTO; onClose: () => void }) {
+function BranchForm({ restaurant, initial, onClose }: { restaurant: RestaurantDTO; initial?: BranchDTO; onClose: () => void }) {
+  const restaurantId = restaurant.id;
   const queryClient = useQueryClient();
   const toast = useToast();
   const [form, setForm] = useState({
@@ -34,7 +37,9 @@ function BranchForm({ restaurantId, initial, onClose }: { restaurantId: string; 
     address: initial?.address ?? '',
     phone: initial?.phone ?? '',
     email: initial?.email ?? '',
+    billPrefix: initial?.billPrefix ?? '',
   });
+  const prefix = form.billPrefix.trim().toUpperCase() || defaultBillPrefix(restaurant.name);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -62,6 +67,23 @@ function BranchForm({ restaurantId, initial, onClose }: { restaurantId: string; 
         <Field label="Branch name">{(id) => <input id={id} className="input" value={form.name} onChange={set('name')} maxLength={100} required autoFocus />}</Field>
         <Field label="Branch code" hint="Short code, letters and digits (e.g. AN1)">
           {(id) => <input id={id} className="input" value={form.code} onChange={set('code')} maxLength={10} required style={{ textTransform: 'uppercase' }} />}
+        </Field>
+        <Field
+          label="Bill number prefix"
+          hint={`Bills are numbered ${formatBillNumber(prefix, 1)}, ${formatBillNumber(prefix, 2)} … Left empty it uses the restaurant’s initials (${defaultBillPrefix(restaurant.name)}).`}
+        >
+          {(id) => (
+            <input
+              id={id}
+              className="input"
+              value={form.billPrefix}
+              onChange={set('billPrefix')}
+              maxLength={6}
+              pattern="[A-Za-z0-9]*"
+              placeholder={defaultBillPrefix(restaurant.name)}
+              style={{ textTransform: 'uppercase' }}
+            />
+          )}
         </Field>
         <Field label="Address">{(id) => <textarea id={id} className="textarea" value={form.address} onChange={set('address')} maxLength={300} />}</Field>
         <Field label="Phone">{(id) => <input id={id} className="input" value={form.phone} onChange={set('phone')} maxLength={20} />}</Field>
@@ -274,7 +296,10 @@ export function RestaurantDetailPage() {
                           <strong>{b.name}</strong>
                           <span className="cell-sub">{b.address}</span>
                         </td>
-                        <td data-label="Code">{b.code}</td>
+                        <td data-label="Code">
+                          {b.code}
+                          <span className="cell-sub">Bills {formatBillNumber(b.billPrefix || defaultBillPrefix(restaurant.name), 1)}…</span>
+                        </td>
                         <td data-label="Contact" className="muted">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
                         <td data-label="Status">
                           <ActiveBadge status={b.status} />
@@ -318,7 +343,7 @@ export function RestaurantDetailPage() {
         {tab === 'settings' && <SettingsTab key={restaurant.id} restaurant={restaurant} />}
       </div>
 
-      {panel?.kind === 'branch' && <BranchForm restaurantId={restaurant.id} initial={panel.branch} onClose={() => setPanel(null)} />}
+      {panel?.kind === 'branch' && <BranchForm restaurant={restaurant} initial={panel.branch} onClose={() => setPanel(null)} />}
       {panel?.kind === 'admin' && <AdminForm restrictTo={restaurant.id} onClose={() => setPanel(null)} />}
       {panel?.kind === 'edit' && (
         <RestaurantForm

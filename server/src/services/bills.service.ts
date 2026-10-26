@@ -10,7 +10,7 @@
  *    idempotency key; it runs in a MongoDB transaction when available.
  */
 import type { ClientSession, Types } from 'mongoose';
-import { calculateBill, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
+import { calculateBill, defaultBillPrefix, formatBillNumber, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
 import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchScope } from '../middleware/scope.js';
@@ -330,7 +330,6 @@ export async function deleteDraft(actor: AuthUser, scope: BranchScope, id: strin
 
 // ---------------- Finalising ----------------
 
-const formatBillNumber = (seq: number) => `B${String(seq).padStart(5, '0')}`;
 
 async function existingFor(draftId: Types.ObjectId): Promise<TransactionLean | null> {
   return TransactionModel.findOne({ sourceDraftId: draftId }).lean<TransactionLean>();
@@ -397,11 +396,13 @@ export async function finalizeDraft(
       }
 
       try {
-        const seq = await nextSequence(`bill:${scope.branch._id}`, session);
+        // One running number per prefix, so changing the prefix starts again at 0001 safely.
+        const prefix = scope.branch.billPrefix || defaultBillPrefix(scope.restaurant.name);
+        const seq = await nextSequence(`bill:${scope.branch._id}:${prefix}`, session);
         const [tx] = await TransactionModel.create(
           [
             {
-              billNumber: formatBillNumber(seq),
+              billNumber: formatBillNumber(prefix, seq),
               restaurantId: scope.restaurant._id,
               branchId: scope.branch._id,
               tableId: draft.tableId ?? null,

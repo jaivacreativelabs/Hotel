@@ -21,7 +21,7 @@ let w: World;
 let dosa: Item;
 let variants: Item[];
 const menuOf = (r: string) => `/api/v1/menu/items?restaurantId=${r}`;
-const putVariants = (c: Client, itemId: string, rows: { id?: string; name: string; price: number; isAvailable?: boolean }[], q = '') =>
+const putVariants = (c: Client, itemId: string, rows: { id?: string; name: string; qty?: string; price: number; isAvailable?: boolean }[], q = '') =>
   c.put(`/api/v1/menu/items/${itemId}/variants${q}`, { variants: rows });
 const byName = (list: Item[], v: string) => list.find((x) => x.variantName === v)!;
 async function counter(c: Client) {

@@ -13,6 +13,8 @@ const branchSchema = new Schema(
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
     // Orders are sent to a Kitchen Display board for this branch (Super Admin setting)
     kitchenDisplay: { type: Boolean, default: false },
+    // Bill numbers start with this (e.g. ITH0001); empty → the restaurant's initials
+    billPrefix: { type: String, default: '', uppercase: true, trim: true, maxlength: 6 },
   },
   { timestamps: true },
 );

@@ -28,14 +28,14 @@ describe('transaction history', () => {
     const p1 = await w.adminA1.get('/api/v1/transactions?limit=10&page=1');
     expect(p1.body.meta).toEqual({ page: 1, limit: 10, total: 25, totalPages: 3 });
     expect(p1.body.data).toHaveLength(10);
-    expect(p1.body.data[0].billNumber).toBe('B00025');
+    expect(p1.body.data[0].billNumber).toBe('RA0025');
     const p3 = await w.adminA1.get('/api/v1/transactions?limit=10&page=3');
     expect(p3.body.data).toHaveLength(5);
   });
 
   it('searches by bill number', async () => {
-    const res = await w.adminA1.get('/api/v1/transactions?q=%23B00007');
-    expect(res.body.data.map((t: { billNumber: string }) => t.billNumber)).toEqual(['B00007']);
+    const res = await w.adminA1.get('/api/v1/transactions?q=%23RA0007');
+    expect(res.body.data.map((t: { billNumber: string }) => t.billNumber)).toEqual(['RA0007']);
   });
 
   it('filters by payment method and date', async () => {
