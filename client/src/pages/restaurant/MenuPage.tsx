@@ -214,7 +214,8 @@ function ItemPanel({
   const [price, setPrice] = useState(item ? paiseToRupeesInput(item.price) : '');
   const [description, setDescription] = useState(item?.description ?? '');
   const [taxable, setTaxable] = useState(item?.taxable ?? true);
-  const [isAvailable, setAvailable] = useState(item?.isAvailable ?? true);
+  // There is no sold-out switch in this form: saving a dish keeps it orderable.
+  const isAvailable = true;
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -303,7 +304,7 @@ function ItemPanel({
     try {
       await scoped.del(`/menu/items/${item!.id}/override`);
       await refresh();
-      toast.success('Restored the shared price and availability');
+      toast.success('Restored the main menu price');
       onClose();
     } catch (err) {
       toast.error(err);
@@ -351,7 +352,7 @@ function ItemPanel({
       {sharedOnly && (
         <div className="alert alert-info">
           <Info />
-          <span>This food comes from the main menu. Here you can change its photo, price and availability for this branch only.</span>
+          <span>This food comes from the main menu. Here you can change its photo and price for this branch only.</span>
         </div>
       )}
 
@@ -453,20 +454,6 @@ function ItemPanel({
         )}
         {(!sharedOnly || variants.length > 0) && <VariantsEditor rows={rows} onChange={setRows} fixedNames={sharedOnly} error={errors.variants} />}
 
-        <div className="field">
-          <span className="field-label">
-            {step(<>Can customers order it now?</>)}
-          </span>
-          <div className="avail-toggle" role="radiogroup" aria-label="Availability">
-            <button type="button" role="radio" aria-checked={isAvailable} className={cx('avail-btn yes', isAvailable && 'active')} onClick={() => setAvailable(true)}>
-              <Check /> Yes, available
-            </button>
-            <button type="button" role="radio" aria-checked={!isAvailable} className={cx('avail-btn no', !isAvailable && 'active')} onClick={() => setAvailable(false)}>
-              <X /> No, sold out
-            </button>
-          </div>
-        </div>
-
         {!sharedOnly && (
           <details className="more-options">
             <summary>More options (description, tax)</summary>
@@ -486,7 +473,7 @@ function ItemPanel({
         </div>
         {sharedOnly && item!.hasOverride && (
           <button type="button" className="btn btn-outline btn-block" onClick={resetOverride}>
-            Use main menu price &amp; availability
+            Use main menu price
           </button>
         )}
         {isEdit && item!.editable && (

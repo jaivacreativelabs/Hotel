@@ -35,7 +35,6 @@ import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSen
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { MergeGroupModal, MoveGroupModal, SplitGroupModal, type GroupAction, type SplitChoice } from './TableGroupActions';
 
-const ALL_FLOORS = '__all__';
 /** Same default naming as the server: the first free "Group N". */
 function nextGroupName(existing: string[]): string {
   const used = new Set(existing);
@@ -760,7 +759,6 @@ export function TablesPage() {
   const selectedId = params.get('table');
   const panel = params.get('panel'); // 'add' | 'edit'
   const order = params.get('order');
-  const [floor, setFloor] = useState<string>(ALL_FLOORS);
   // Phones: while ordering, the menu fills the screen and the table panel opens from a bottom bar.
   const [panelOnPhone, setPanelOnPhone] = useState(false);
 
@@ -776,11 +774,10 @@ export function TablesPage() {
   );
 
   const floors = tables.data?.floors ?? [];
-  const effectiveFloor = floor !== ALL_FLOORS && !floors.includes(floor) ? ALL_FLOORS : floor;
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (tables.data?.tables ?? []).filter((t) => (effectiveFloor === ALL_FLOORS || t.floor === effectiveFloor) && (!q || t.label.toLowerCase().includes(q)));
-  }, [tables.data, effectiveFloor, search]);
+    return (tables.data?.tables ?? []).filter((t) => !q || t.label.toLowerCase().includes(q));
+  }, [tables.data, search]);
   const selected = tables.data?.tables.find((t) => t.id === selectedId) ?? null;
 
   const suggestedLabel = useMemo(() => {
@@ -830,19 +827,9 @@ export function TablesPage() {
           title="Tables"
           subtitle="View and manage restaurant tables"
           actions={
-            <>
-              <select className="select" style={{ width: 200 }} value={effectiveFloor} onChange={(e) => setFloor(e.target.value)} aria-label="Floor">
-                <option value={ALL_FLOORS}>All Floors</option>
-                {floors.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-              <button className="btn btn-primary btn-lg" onClick={() => setPanel({ panel: 'add', table: null })}>
-                <CirclePlus /> Add Table
-              </button>
-            </>
+            <button className="btn btn-primary btn-lg" onClick={() => setPanel({ panel: 'add', table: null })}>
+              <CirclePlus /> Add Table
+            </button>
           }
         />
         <div className="legend">
@@ -892,7 +879,7 @@ export function TablesPage() {
       {panel === 'add' && (
         <TableForm
           floors={floors}
-          defaultFloor={effectiveFloor === ALL_FLOORS ? (floors[0] ?? 'Ground Floor') : effectiveFloor}
+          defaultFloor={floors[0] ?? 'Ground Floor'}
           suggestedLabel={suggestedLabel}
           onClose={() => setPanel({ panel: null })}
           onSaved={(t) => {
