@@ -73,7 +73,23 @@ export function openReceipt(transactionId: string) {
   window.open(`/print/transactions/${transactionId}?autoprint=1`, '_blank', 'noopener,width=420,height=720');
 }
 
-/** Toast text once a bill is generated (it can be printed later from Transactions). */
-export function billSavedMessage(tx: TransactionDTO) {
-  return `Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]})`;
+/**
+ * Prints a bill without leaving the page: a hidden frame loads the receipt, which prints itself.
+ * Used right after a bill is generated, where a new window would be stopped by popup blockers.
+ */
+export function printReceipt(transactionId: string) {
+  document.getElementById('receipt-print-frame')?.remove();
+  const frame = document.createElement('iframe');
+  frame.id = 'receipt-print-frame';
+  frame.title = 'Bill';
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+  frame.src = `/print/transactions/${transactionId}?autoprint=1`;
+  document.body.appendChild(frame);
+}
+
+/** A bill was generated: say so and print it. */
+export function billGenerated(tx: TransactionDTO, toast: { success: (m: string) => void }) {
+  toast.success(`Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]}) – printing…`);
+  printReceipt(tx.id);
 }

@@ -19,7 +19,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
-import { billSavedMessage, PaymentModal } from '../../components/PaymentButtons';
+import { billGenerated, PaymentModal } from '../../components/PaymentButtons';
 import { TableIllustration } from '../../components/TableIllustration';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner, Stepper } from '../../components/ui';
 import { api, ApiError, errorMessage } from '../../services/api';
@@ -520,7 +520,7 @@ function TableDetail({
         api.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, { version: d.version, paymentMethod, idempotencyKey: newIdempotencyKey() }),
       );
       setPaying(null);
-      toast.success(billSavedMessage(res.transaction));
+      billGenerated(res.transaction, toast);
       if (group.draftId === activeDraftId) onExitOrder();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     } catch (err) {

@@ -29,7 +29,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FoodImage } from '../../components/FoodImage';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
-import { billSavedMessage, PaymentButtons } from '../../components/PaymentButtons';
+import { billGenerated, PaymentButtons } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
@@ -213,7 +213,7 @@ export function BillingView({
         idempotencyKey: keyRef.current.key,
       });
       keyRef.current = null;
-      toast.success(billSavedMessage(res.transaction));
+      billGenerated(res.transaction, toast);
       void sync.load();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
       void queryClient.invalidateQueries({ queryKey: ['tables'] });
