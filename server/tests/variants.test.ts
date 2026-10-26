@@ -87,18 +87,39 @@ describe('adding variants to a dish', () => {
     variants = list.filter((i) => i.parentId === dosa.id);
   });
 
-  it('lets a branch change only price and availability of shared variants', async () => {
+  it('lets a branch price main-menu variants and add its own, but not remove shared ones', async () => {
     const rows = variants.map((v) => ({ id: v.id, name: v.variantName, price: v.price }));
-    expect((await putVariants(w.adminA1, dosa.id, [...rows, { name: 'Paneer', price: 9900 }])).status).toBe(403);
     expect((await putVariants(w.adminA1, dosa.id, rows.slice(1))).status).toBe(403);
 
     const plain = byName(variants, 'Plain');
     const cheaper = rows.map((r) => (r.id === plain.id ? { ...r, price: 4500 } : r));
-    ok(await putVariants(w.adminA1, dosa.id, cheaper));
+    const mine = ok<Item[]>(await putVariants(w.adminA1, dosa.id, [...cheaper, { name: 'Paneer', price: 9900 }]));
+    expect(mine.map((v) => v.variantName)).toContain('Paneer');
     const a1 = ok<Item[]>(await w.adminA1.get('/api/v1/menu/items'));
     const a2 = ok<Item[]>(await w.adminA2.get('/api/v1/menu/items'));
     expect(a1.find((i) => i.id === plain.id)!.price).toBe(4500);
     expect(a2.find((i) => i.id === plain.id)!.price).toBe(5500);
+    // The branch's own variant is only on its own menu.
+    expect(a1.some((i) => i.name === 'Roast Dosa (Paneer)')).toBe(true);
+    expect(a2.some((i) => i.name === 'Roast Dosa (Paneer)')).toBe(false);
+  });
+
+  it('lets a branch give a shared dish variants without changing other branches', async () => {
+    const idly = await w.adminA1.put(`/api/v1/menu/items/${w.items.idly}/variants`, {
+      variants: [
+        { name: 'Mini', price: 2000 },
+        { name: 'Ghee', price: 4000 },
+      ],
+    });
+    const mini = ok<Item[]>(idly).find((v) => v.variantName === 'Mini')!;
+    expect(mini.name).toBe('Idly (Mini)');
+    // A1 now orders Idly by variant; A2 still orders plain Idly.
+    const d1 = await counter(w.adminA1);
+    expect((await save(w.adminA1, d1, [[w.items.idly, 1]])).status).toBe(400);
+    expect((await save(w.adminA1, d1, [[mini.id, 2]])).status).toBe(200);
+    const d2 = await counter(w.adminA2);
+    expect((await save(w.adminA2, d2, [[w.items.idly, 1]])).status).toBe(200);
+    expect((await save(w.adminA2, await counter(w.adminA2), [[mini.id, 1]])).status).toBe(400);
   });
 
   it('makes every variant unavailable when the dish is sold out', async () => {

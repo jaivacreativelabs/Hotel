@@ -115,13 +115,14 @@ interface VariantRow {
   id?: string;
   name: string;
   price: string;
-  isAvailable: boolean;
+  /** A main-menu variant seen from a branch: only its price can change here. */
+  fixed: boolean;
 }
 let rowSeq = 0;
-const toRow = (v: MenuItemDTO): VariantRow => ({ key: v.id, id: v.id, name: v.variantName, price: paiseToRupeesInput(v.price), isAvailable: v.isAvailable });
+const toRow = (v: MenuItemDTO): VariantRow => ({ key: v.id, id: v.id, name: v.variantName, price: paiseToRupeesInput(v.price), fixed: !v.editable });
 
-/** Rows of name + price; a branch looking at a shared dish can change only price and stock. */
-function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; fixedNames: boolean; error?: string }) {
+/** Rows of name + price. A branch adds its own variants and sets its price for main-menu ones. */
+function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; error?: string }) {
   const update = (key: string, patch: Partial<VariantRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   return (
     <div className="field">
@@ -133,8 +134,7 @@ function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRo
           <div className="variant-row variant-head" aria-hidden="true">
             <span>Variant</span>
             <span>Price</span>
-            <span>Stock</span>
-            {!fixedNames && <span />}
+            <span />
           </div>
           {rows.map((r) => (
             <div key={r.key} className="variant-row">
@@ -143,7 +143,8 @@ function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRo
                 value={r.name}
                 maxLength={30}
                 placeholder="e.g. Half"
-                disabled={fixedNames}
+                disabled={r.fixed}
+                title={r.fixed ? 'From the main menu – only the price can change for this branch' : undefined}
                 onChange={(e) => update(r.key, { name: e.target.value })}
                 aria-label="Variant name"
               />
@@ -151,17 +152,9 @@ function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRo
                 <span>₹</span>
                 <input className="input" inputMode="decimal" value={r.price} placeholder="0" onChange={(e) => update(r.key, { price: e.target.value })} aria-label={`${r.name || 'Variant'} price`} />
               </div>
-              <button
-                type="button"
-                className={cx('variant-stock', r.isAvailable ? 'yes' : 'no')}
-                onClick={() => update(r.key, { isAvailable: !r.isAvailable })}
-                aria-pressed={r.isAvailable}
-                aria-label={`${r.name || 'Variant'}: ${r.isAvailable ? 'in stock' : 'sold out'}`}
-                title={r.isAvailable ? 'Available – tap to mark sold out' : 'Sold out – tap to make available'}
-              >
-                {r.isAvailable ? <Check size={18} /> : <X size={18} />}
-              </button>
-              {!fixedNames && (
+              {r.fixed ? (
+                <span />
+              ) : (
                 <button type="button" className="icon-btn plain danger-text" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.name || 'variant'}`}>
                   <Trash2 />
                 </button>
@@ -170,17 +163,17 @@ function VariantsEditor({ rows, onChange, fixedNames, error }: { rows: VariantRo
           ))}
         </div>
       )}
-      {!fixedNames && rows.length < LIMITS.maxVariants && (
+      {rows.length < LIMITS.maxVariants && (
         <button
           type="button"
           className="btn btn-soft btn-sm"
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', price: '', isAvailable: true }])}
+          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', price: '', fixed: false }])}
         >
           <Plus size={16} /> Add a variant
         </button>
       )}
-      {fixedNames && <span className="field-hint">Variants come from the main menu – here you set this branch’s price and stock.</span>}
+      {rows.some((r) => r.fixed) && <span className="field-hint">Grey variants come from the main menu – here you set this branch’s price.</span>}
       {error && <span className="field-error">{error}</span>}
     </div>
   );
@@ -266,7 +259,7 @@ function ItemPanel({
       }
       if (hasVariants || variants.length) {
         await scoped.put(`/menu/items/${saved.id}/variants`, {
-          variants: variantRows.map((r) => ({ ...(r.id && { id: r.id }), name: r.name.trim(), price: r.paise!, isAvailable: r.isAvailable })),
+          variants: variantRows.map((r) => ({ ...(r.id && { id: r.id }), name: r.name.trim(), price: r.paise!, isAvailable: true })),
         });
       }
       // For a shared item in a branch the server stores this as the branch's own photo.
@@ -452,7 +445,7 @@ function ItemPanel({
             )}
           </Field>
         )}
-        {(!sharedOnly || variants.length > 0) && <VariantsEditor rows={rows} onChange={setRows} fixedNames={sharedOnly} error={errors.variants} />}
+        <VariantsEditor rows={rows} onChange={setRows} error={errors.variants} />
 
         {!sharedOnly && (
           <details className="more-options">

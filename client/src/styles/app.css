@@ -3453,7 +3453,7 @@ a {
 }
 .variant-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 96px 44px 36px;
+  grid-template-columns: minmax(0, 1fr) 110px 36px;
   gap: 8px;
   align-items: center;
 }
@@ -3470,26 +3470,6 @@ a {
 }
 .variant-row .input-prefix .input {
   padding-left: 26px;
-}
-.variant-stock {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 40px;
-  padding: 0;
-  border-radius: var(--radius);
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.variant-stock.yes {
-  color: var(--color-primary);
-}
-.variant-stock.no {
-  color: var(--color-danger);
-  background: #fdf3f3;
 }
 .menu-card-variants {
   color: var(--color-text-muted);

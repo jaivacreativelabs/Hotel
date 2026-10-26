@@ -74,7 +74,8 @@ export async function priceLines(
     parentIds.length
       ? MenuItemModel.find({ _id: { $in: parentIds } }).session(session ?? null).lean<(MenuItem & { _id: Types.ObjectId })[]>()
       : [],
-    MenuItemModel.distinct('parentId', { parentId: { $in: ids }, status: 'ACTIVE' }).session(session ?? null),
+    // Only variants this branch sees count: another branch's own variants do not apply here.
+    MenuItemModel.distinct('parentId', { parentId: { $in: ids }, status: 'ACTIVE', branchId: { $in: [null, scope.branch._id] } }).session(session ?? null),
   ]);
   const parentById = new Map(parents.map((p) => [String(p._id), p]));
   const hasVariants = new Set(withVariants.map(String));
