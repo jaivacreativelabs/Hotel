@@ -82,6 +82,8 @@ export function createApiRouter(): Router {
   adminRouter.patch('/restaurants/:id', admin.updateRestaurant);
   adminRouter.patch('/restaurants/:id/status', admin.setRestaurantStatus);
   adminRouter.patch('/restaurants/:id/settings', admin.updateRestaurantSettings);
+  adminRouter.post('/restaurants/:id/logo', imageUpload, admin.uploadRestaurantLogo);
+  adminRouter.delete('/restaurants/:id/logo', admin.removeRestaurantLogo);
   adminRouter.get('/branches', admin.listBranches);
   adminRouter.post('/branches', admin.createBranch);
   adminRouter.patch('/branches/:id', admin.updateBranch);

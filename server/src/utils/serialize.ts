@@ -51,6 +51,7 @@ export function toRestaurantDTO(r: RestaurantLean & { createdAt?: Date }, branch
     email: r.email ?? '',
     address: r.address ?? '',
     gstin: r.gstin ?? '',
+    logoUrl: r.logoUrl ?? null,
     status: r.status,
     settings: restaurantSettings(r),
     ...(branchCount !== undefined && { branchCount }),
@@ -188,6 +189,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
       phone: rs.phone ?? '',
       gstin: rs.gstin ?? '',
       receiptFooter: rs.receiptFooter ?? '',
+      logoUrl: rs.logoUrl ?? '',
     },
     branchSnapshot: { name: bs.name ?? '', code: bs.code ?? '', address: bs.address ?? '', phone: bs.phone ?? '' },
     items: t.items.map((i) => ({

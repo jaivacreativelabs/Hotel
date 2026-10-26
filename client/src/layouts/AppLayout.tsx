@@ -173,6 +173,10 @@ export function AppLayout() {
   const { placeholder, query, setQuery, extra } = useTopbar();
   const isSuper = user?.role === 'SUPER_ADMIN';
   const isKitchen = user?.role === 'KITCHEN';
+  // Branch staff see their restaurant's own logo and name (set by the Super Admin).
+  const ownRestaurant = isSuper ? null : activeBranch?.restaurant;
+  const brandLogo = ownRestaurant?.logoUrl || '/logo.jpeg';
+  const brandName = ownRestaurant?.name ?? 'Tiffin House';
   const nav = isSuper ? ADMIN_NAV : isKitchen ? [KITCHEN_NAV] : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
   // Phones: Restaurant Admins get a bottom tab bar, the Super Admin a slide-in menu; a Kitchen
   // login has a single page and needs neither.
@@ -184,9 +188,11 @@ export function AppLayout() {
   return (
     <div className={cx('app', bottomNav && 'has-bottom-nav')}>
       <div className="brand">
-        <img src="/logo.jpeg" alt="" />
-        <div>
-          <div className="brand-name">Tiffin House</div>
+        <img src={brandLogo} alt="" />
+        <div style={{ minWidth: 0 }}>
+          <div className="brand-name" title={brandName}>
+            {brandName}
+          </div>
           <div className="brand-sub">{isSuper ? 'Super Admin Panel' : isKitchen ? 'Kitchen Display' : 'Billing & POS'}</div>
         </div>
       </div>
@@ -196,7 +202,7 @@ export function AppLayout() {
             <MenuIcon />
           </button>
         )}
-        <img className="topbar-logo" src="/logo.jpeg" alt="Tiffin House" />
+        <img className="topbar-logo" src={brandLogo} alt={brandName} />
         {placeholder ? (
           <div className="search">
             <Search />

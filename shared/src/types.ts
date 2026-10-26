@@ -85,6 +85,8 @@ export interface RestaurantDTO {
   email: string;
   address: string;
   gstin: string;
+  /** Uploaded logo ("/uploads/…"), or null to use the Tiffin House logo */
+  logoUrl: string | null;
   status: RecordStatus;
   settings: RestaurantSettings;
   branchCount?: number;
@@ -111,7 +113,7 @@ export interface BranchContextDTO {
   code: string;
   /** The branch uses the Kitchen Display (orders are sent to the kitchen board). */
   kitchenDisplay: boolean;
-  restaurant: { id: string; name: string; settings: RestaurantSettings };
+  restaurant: { id: string; name: string; logoUrl: string | null; settings: RestaurantSettings };
 }
 
 export interface MeDTO {
@@ -281,7 +283,8 @@ export interface TransactionDTO {
   groupName: string;
   guestCount: number;
   customerName: string;
-  restaurantSnapshot: { name: string; address: string; phone: string; gstin: string; receiptFooter: string };
+  /** logoUrl "" → the Tiffin House logo */
+  restaurantSnapshot: { name: string; address: string; phone: string; gstin: string; receiptFooter: string; logoUrl: string };
   branchSnapshot: { name: string; code: string; address: string; phone: string };
   items: TransactionItemDTO[];
   itemCount: number;

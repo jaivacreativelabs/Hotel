@@ -17,6 +17,7 @@ import { toBranchDTO, toRestaurantDTO, toUserDTO } from '../utils/serialize.js';
 import { nameKey, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { hashPassword } from './auth.service.js';
+import { saveImage } from './storage.service.js';
 
 // ---------------- Restaurants ----------------
 
@@ -111,6 +112,22 @@ export async function updateRestaurant(actor: AuthUser, id: string, input: Parti
     restaurantId: r._id,
     summary: `Updated restaurant "${r.name}"`,
     meta: { fields: Object.keys(input) },
+  });
+  return toRestaurantDTO(r.toObject() as RestaurantLean);
+}
+
+/** Sets (file) or removes (null) the restaurant's logo. Old files stay: past bills point at them. */
+export async function setRestaurantLogo(actor: AuthUser, id: string, file: Express.Multer.File | null | undefined) {
+  if (file === undefined) throw badRequest('Choose an image file', 'NO_FILE');
+  const r = await getRestaurantOr404(id);
+  r.logoUrl = file ? await saveImage(file.buffer) : null;
+  await r.save();
+  await audit(actor, {
+    action: file ? 'RESTAURANT_LOGO_SET' : 'RESTAURANT_LOGO_REMOVED',
+    entityType: 'Restaurant',
+    entityId: r._id,
+    restaurantId: r._id,
+    summary: `${file ? 'Set' : 'Removed'} the logo of "${r.name}"`,
   });
   return toRestaurantDTO(r.toObject() as RestaurantLean);
 }

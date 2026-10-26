@@ -32,6 +32,7 @@ const transactionSchema = new Schema(
       phone: String,
       gstin: String,
       receiptFooter: String,
+      logoUrl: String,
     },
     branchSnapshot: { name: String, code: String, address: String, phone: String },
     items: { type: [itemSnapshotSchema], required: true },

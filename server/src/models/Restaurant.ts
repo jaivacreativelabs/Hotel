@@ -17,6 +17,8 @@ const restaurantSchema = new Schema(
     email: { type: String, default: '' },
     address: { type: String, default: '' },
     gstin: { type: String, default: '' },
+    // Shown at the top-left for the restaurant's branches and printed on its bills
+    logoUrl: { type: String, default: null },
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
     settings: {
       taxes: { type: [taxSchema], default: [] },

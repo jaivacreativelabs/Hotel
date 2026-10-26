@@ -41,6 +41,12 @@ export const createRestaurant = async (req: Request, res: Response) => {
 export const getRestaurant = async (req: Request, res: Response) => {
   res.json({ data: await admin.getRestaurantDetail(id(req)) });
 };
+export const uploadRestaurantLogo = async (req: Request, res: Response) => {
+  res.json({ data: await admin.setRestaurantLogo(currentUser(req), id(req), req.file) });
+};
+export const removeRestaurantLogo = async (req: Request, res: Response) => {
+  res.json({ data: await admin.setRestaurantLogo(currentUser(req), id(req), null) });
+};
 export const updateRestaurant = async (req: Request, res: Response) => {
   res.json({ data: await admin.updateRestaurant(currentUser(req), id(req), parse(restaurantUpdateSchema, req.body)) });
 };

@@ -421,6 +421,7 @@ export async function finalizeDraft(
                 phone: scope.restaurant.phone ?? '',
                 gstin: scope.restaurant.gstin ?? '',
                 receiptFooter: settings.receiptFooter,
+                logoUrl: scope.restaurant.logoUrl ?? '',
               },
               branchSnapshot: {
                 name: scope.branch.name,

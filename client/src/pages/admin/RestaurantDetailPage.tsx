@@ -8,7 +8,7 @@ import {
   type UserDTO,
 } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Building2, CirclePlus, FileText, Pencil, Plus, Power, Trash2, Utensils } from 'lucide-react';
+import { ArrowLeft, Building2, Camera, CirclePlus, FileText, Pencil, Plus, Power, Trash2, Utensils } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveBadge } from '../../components/badges';
@@ -16,6 +16,7 @@ import { ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } 
 import { api, errorMessage } from '../../services/api';
 import { useToast } from '../../store/toast';
 import { cx } from '../../utils/format';
+import { shrinkImage } from '../../utils/image';
 import { AdminForm, AdminsTable } from './AdminsPage';
 import { adminKeys } from './adminShared';
 import { RestaurantForm } from './RestaurantsPage';
@@ -82,6 +83,52 @@ function BranchForm({ restaurant, initial, onClose }: { restaurant: RestaurantDT
         </button>
       </form>
     </SidePanel>
+  );
+}
+
+/** The restaurant's logo: shown to its branches and printed on its bills. Tap to change. */
+function RestaurantLogo({ restaurant }: { restaurant: RestaurantDTO }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const run = async (work: () => Promise<unknown>, done: string) => {
+    setBusy(true);
+    try {
+      await work();
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success(done);
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const upload = (file: File | undefined) => {
+    if (!file) return;
+    void run(async () => {
+      const form = new FormData();
+      form.append('image', await shrinkImage(file));
+      await api.upload(`/admin/restaurants/${restaurant.id}/logo`, form, { branchId: null });
+    }, 'Logo updated – it shows for the branches and on new bills');
+  };
+  return (
+    <span className="restaurant-logo-edit">
+      <label className={cx('restaurant-logo-pick', busy && 'busy')} title="Change logo">
+        <img src={restaurant.logoUrl || '/logo.jpeg'} alt={`${restaurant.name} logo`} />
+        <span className="restaurant-logo-cam">{busy ? <Spinner /> : <Camera size={16} />}</span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
+      </label>
+      {restaurant.logoUrl && (
+        <button
+          type="button"
+          className="link-btn danger"
+          disabled={busy}
+          onClick={() => void run(() => api.delete(`/admin/restaurants/${restaurant.id}/logo`, { branchId: null }), 'Logo removed')}
+        >
+          Remove
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -216,6 +263,7 @@ export function RestaurantDetailPage() {
         <PageHeader
           title={
             <span className="row">
+              <RestaurantLogo restaurant={restaurant} />
               {restaurant.name} <ActiveBadge status={restaurant.status} />
             </span>
           }

@@ -109,9 +109,13 @@ export function RestaurantsPage() {
                 onKeyDown={(e) => e.key === 'Enter' && navigate(`/admin/restaurants/${r.id}`)}
               >
                 <div className="row">
-                  <span className="group-icon" style={{ background: 'var(--color-secondary-soft)', color: 'var(--color-primary)', width: 46, height: 46 }}>
-                    <Store size={24} />
-                  </span>
+                  {r.logoUrl ? (
+                    <img className="restaurant-logo" src={r.logoUrl} alt="" />
+                  ) : (
+                    <span className="group-icon" style={{ background: 'var(--color-secondary-soft)', color: 'var(--color-primary)', width: 46, height: 46 }}>
+                      <Store size={24} />
+                    </span>
+                  )}
                   <div style={{ minWidth: 0 }}>
                     <div className="card-title">{r.name}</div>
                     <ActiveBadge status={r.status} />

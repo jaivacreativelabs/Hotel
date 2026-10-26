@@ -51,7 +51,7 @@ export function PrintReceiptPage() {
     <>
       <style>{css}</style>
       <div className="receipt">
-        <img className="logo" src="/logo.jpeg" alt="" onLoad={() => setLogoDone(true)} onError={() => setLogoDone(true)} />
+        <img className="logo" src={t.restaurantSnapshot.logoUrl || '/logo.jpeg'} alt="" onLoad={() => setLogoDone(true)} onError={() => setLogoDone(true)} />
         <h1>{t.restaurantSnapshot.name}</h1>
         <div className="c">{t.branchSnapshot.name}</div>
         {t.branchSnapshot.address && <div className="c">{t.branchSnapshot.address}</div>}

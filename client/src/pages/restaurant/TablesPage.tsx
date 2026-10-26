@@ -211,6 +211,7 @@ function ActiveGroupCard({
   onGenerate,
   onDelete,
   onSent,
+  onAction,
 }: {
   group: TableGroupSummaryDTO;
   index: number;
@@ -219,6 +220,7 @@ function ActiveGroupCard({
   onDone: () => void;
   onGenerate: (liveTotal: number) => void;
   onDelete: () => void;
+  onAction: (action: GroupAction) => void;
 }) {
   const { activeBranch } = useAuth();
   const settings = activeBranch!.restaurant.settings;
@@ -306,6 +308,7 @@ function ActiveGroupCard({
         </button>
       </div>
       {activeBranch!.kitchenDisplay && lines.length > 0 && <KitchenSendButton pending={pending} sending={sending} onSend={() => void sendToKitchen()} />}
+      <GroupMoreActions itemCount={lines.reduce((a, l) => a + l.quantity, 0)} guestCount={group.guestCount} onAction={onAction} />
     </div>
   );
 }
@@ -407,19 +410,29 @@ function GroupCard({
       {activeBranch!.kitchenDisplay && group.itemCount > 0 && (
         <KitchenSendButton pending={group.kitchenPending} sending={sending} onSend={() => void send(group.draftId).then((ok) => ok && onSent())} />
       )}
-      <div className="group-more-actions">
-        <button className="link-btn" onClick={() => onAction('move')} title="Move this group to another table">
-          <ArrowRightLeft size={15} /> Move
-        </button>
-        <button className="link-btn" onClick={() => onAction('merge')} title="Add this group's bill to another group's bill">
-          <Merge size={15} /> Merge
-        </button>
-        <button className="link-btn" onClick={() => onAction('split')} disabled={group.itemCount < 2 || group.guestCount < 2}
-          title={group.guestCount < 2 ? 'Needs at least 2 guests to split' : 'Move some dishes into a new group at this table'}
-        >
-          <Split size={15} /> Split
-        </button>
-      </div>
+      <GroupMoreActions itemCount={group.itemCount} guestCount={group.guestCount} onAction={onAction} />
+    </div>
+  );
+}
+
+/** Move · Merge · Split under a group (also while adding items to it). */
+function GroupMoreActions({ itemCount, guestCount, onAction }: { itemCount: number; guestCount: number; onAction: (action: GroupAction) => void }) {
+  return (
+    <div className="group-more-actions">
+      <button className="link-btn" onClick={() => onAction('move')} title="Move this group to another table">
+        <ArrowRightLeft size={15} /> Move
+      </button>
+      <button className="link-btn" onClick={() => onAction('merge')} title="Add this group's bill to another group's bill">
+        <Merge size={15} /> Merge
+      </button>
+      <button
+        className="link-btn"
+        onClick={() => onAction('split')}
+        disabled={itemCount < 2 || guestCount < 2}
+        title={guestCount < 2 ? 'Needs at least 2 guests to split' : 'Move some dishes into a new group at this table'}
+      >
+        <Split size={15} /> Split
+      </button>
     </div>
   );
 }
@@ -467,6 +480,7 @@ function TableDetail({
   onOrder,
   activeDraftId,
   onExitOrder,
+  onLeaveOrder,
   hiddenOnPhone,
 }: {
   table: TableDTO;
@@ -477,6 +491,8 @@ function TableDetail({
   /** The group currently being served (menu open on the left), if any. */
   activeDraftId: string | null;
   onExitOrder: () => void;
+  /** Leaves (or moves) the order without sending it to the kitchen – after a move or merge. */
+  onLeaveOrder: (next: { table?: string; order: string | null }) => void;
   /** Phones while ordering: the menu takes the screen until the bottom bar is tapped. */
   hiddenOnPhone?: boolean;
 }) {
@@ -582,12 +598,15 @@ function TableDetail({
   const moveGroup = (g: TableGroupSummaryDTO, tableId: string) =>
     runAction(async () => {
       const moved = await withLatestDraft(g.draftId, (d) => api.post<DraftDTO>(`/bills/${d.id}/move`, { version: d.version, tableId }));
+      // Adding items to this group: carry on at its new table.
+      if (g.draftId === activeDraftId) onLeaveOrder({ table: tableId, order: moved.id });
       return `${g.groupName} moved to ${moved.tableLabel}${moved.groupName !== g.groupName ? ` as ${moved.groupName}` : ''}`;
     });
   const mergeGroup = (g: TableGroupSummaryDTO, intoDraftId: string) =>
     runAction(async () => {
       const merged = await withLatestDraft(g.draftId, (d) => api.post<DraftDTO>(`/bills/${d.id}/merge`, { version: d.version, intoDraftId }));
       reloadIfOpen(intoDraftId);
+      if (g.draftId === activeDraftId) onLeaveOrder({ order: null }); // its bill is closed now
       return `${g.groupName} merged into ${merged.tableLabel} ${merged.groupName} – ${formatMoney(merged.totals.grandTotal)}`;
     });
   const splitGroup = (g: TableGroupSummaryDTO, choice: SplitChoice) =>
@@ -659,6 +678,7 @@ function TableDetail({
             onSent={() => void refresh()}
             onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
             onDelete={() => setDeleting(g)}
+            onAction={(kind) => setAction({ kind, group: g })}
           />
         ) : (
           <GroupCard
@@ -917,6 +937,7 @@ export function TablesPage() {
           onEdit={() => setPanel({ panel: 'edit', order: null })}
           activeDraftId={ordering ? order : null}
           onExitOrder={exitOrder}
+          onLeaveOrder={(next) => setPanel(next)}
           onOrder={(draftId) => {
             setPanelOnPhone(false);
             // A new history entry, so the browser's Back button returns to the table.
