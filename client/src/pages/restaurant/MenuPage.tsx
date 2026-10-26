@@ -117,8 +117,6 @@ interface VariantRow {
   /** How much it is, e.g. "2 pcs" */
   qty: string;
   price: string;
-  /** A main-menu variant seen from a branch: only its price can change here. */
-  fixed: boolean;
 }
 let rowSeq = 0;
 const toRow = (v: MenuItemDTO): VariantRow => ({
@@ -127,11 +125,10 @@ const toRow = (v: MenuItemDTO): VariantRow => ({
   name: v.variantName,
   qty: v.variantQty,
   price: paiseToRupeesInput(v.price),
-  fixed: !v.editable,
 });
 
-/** Rows of name + price. A branch adds its own variants and sets its price for main-menu ones. */
-function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; error?: string }) {
+/** Rows of name, quantity and price. For a main-menu dish seen from a branch, changes apply to that branch only. */
+function VariantsEditor({ rows, onChange, branchOnly, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; branchOnly: boolean; error?: string }) {
   const update = (key: string, patch: Partial<VariantRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   return (
     <div className="field">
@@ -153,8 +150,6 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
                 value={r.name}
                 maxLength={30}
                 placeholder="e.g. Half"
-                disabled={r.fixed}
-                title={r.fixed ? 'From the main menu – only the price can change for this branch' : undefined}
                 onChange={(e) => update(r.key, { name: e.target.value })}
                 aria-label="Variant name"
               />
@@ -163,7 +158,6 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
                 value={r.qty}
                 maxLength={20}
                 placeholder="2 pcs"
-                disabled={r.fixed}
                 onChange={(e) => update(r.key, { qty: e.target.value })}
                 aria-label={`${r.name || 'Variant'} quantity`}
               />
@@ -171,13 +165,9 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
                 <span>₹</span>
                 <input className="input" inputMode="decimal" value={r.price} placeholder="0" onChange={(e) => update(r.key, { price: e.target.value })} aria-label={`${r.name || 'Variant'} price`} />
               </div>
-              {r.fixed ? (
-                <span />
-              ) : (
-                <button type="button" className="icon-btn plain danger-text" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.name || 'variant'}`}>
-                  <Trash2 />
-                </button>
-              )}
+              <button type="button" className="icon-btn plain danger-text" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.name || 'variant'}`}>
+                <Trash2 />
+              </button>
             </div>
           ))}
         </div>
@@ -187,12 +177,12 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
           type="button"
           className="btn btn-soft btn-sm"
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', qty: '', price: '', fixed: false }])}
+          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', qty: '', price: '' }])}
         >
           <Plus size={16} /> Add a variant
         </button>
       )}
-      {rows.some((r) => r.fixed) && <span className="field-hint">Grey variants come from the main menu – here you set this branch’s price.</span>}
+      {branchOnly && <span className="field-hint">This food is from the main menu – variant changes here apply to this branch only.</span>}
       {error && <span className="field-error">{error}</span>}
     </div>
   );
@@ -464,7 +454,7 @@ function ItemPanel({
             )}
           </Field>
         )}
-        <VariantsEditor rows={rows} onChange={setRows} error={errors.variants} />
+        <VariantsEditor rows={rows} onChange={setRows} branchOnly={sharedOnly} error={errors.variants} />
 
         {!sharedOnly && (
           <details className="more-options">

@@ -74,11 +74,15 @@ export async function priceLines(
     parentIds.length
       ? MenuItemModel.find({ _id: { $in: parentIds } }).session(session ?? null).lean<(MenuItem & { _id: Types.ObjectId })[]>()
       : [],
-    // Only variants this branch sees count: another branch's own variants do not apply here.
-    MenuItemModel.distinct('parentId', { parentId: { $in: ids }, status: 'ACTIVE', branchId: { $in: [null, scope.branch._id] } }).session(session ?? null),
+    // Only variants this branch sees count: another branch's own ones and main-menu ones this
+    // branch removed do not apply here.
+    MenuItemModel.find({ parentId: { $in: ids }, status: 'ACTIVE', branchId: { $in: [null, scope.branch._id] } })
+      .select('parentId branchOverrides')
+      .session(session ?? null)
+      .lean<(MenuItem & { _id: Types.ObjectId })[]>(),
   ]);
   const parentById = new Map(parents.map((p) => [String(p._id), p]));
-  const hasVariants = new Set(withVariants.map(String));
+  const hasVariants = new Set(withVariants.filter((v) => !effectiveItem(v, scope.branch._id).hidden).map((v) => String(v.parentId)));
   const itemById = new Map(items.map((i) => [String(i._id), i]));
   const catById = new Map(cats.map((c) => [String(c._id), c]));
 
@@ -90,7 +94,7 @@ export async function priceLines(
     const parent = item.parentId ? parentById.get(String(item.parentId)) : undefined;
     const parentEff = parent ? effectiveItem(parent, scope.branch._id) : undefined;
     const parentOk = !item.parentId || Boolean(parent && parent.status === 'ACTIVE' && parentEff!.isAvailable);
-    const available = item.status === 'ACTIVE' && eff.isAvailable && cat?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
+    const available = item.status === 'ACTIVE' && eff.isAvailable && !eff.hidden && cat?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
     return {
       menuItemId: item._id,
       name: item.name,

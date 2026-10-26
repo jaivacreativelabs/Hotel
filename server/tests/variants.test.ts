@@ -87,10 +87,8 @@ describe('adding variants to a dish', () => {
     variants = list.filter((i) => i.parentId === dosa.id);
   });
 
-  it('lets a branch price main-menu variants and add its own, but not remove shared ones', async () => {
+  it('lets a branch price main-menu variants and add its own', async () => {
     const rows = variants.map((v) => ({ id: v.id, name: v.variantName, price: v.price }));
-    expect((await putVariants(w.adminA1, dosa.id, rows.slice(1))).status).toBe(403);
-
     const plain = byName(variants, 'Plain');
     const cheaper = rows.map((r) => (r.id === plain.id ? { ...r, price: 4500 } : r));
     const mine = ok<Item[]>(await putVariants(w.adminA1, dosa.id, [...cheaper, { name: 'Paneer', price: 9900 }]));
@@ -102,6 +100,26 @@ describe('adding variants to a dish', () => {
     // The branch's own variant is only on its own menu.
     expect(a1.some((i) => i.name === 'Roast Dosa (Paneer)')).toBe(true);
     expect(a2.some((i) => i.name === 'Roast Dosa (Paneer)')).toBe(false);
+  });
+
+  it('lets a branch remove or rename main-menu variants for itself only', async () => {
+    const uttapam = ok<Item>(await w.sa.post(menuOf(w.restaurantA), { categoryId: w.categoryId, name: 'Uttapam', price: 6000 }), 201);
+    const shared = ok<(Item & { variantQty: string })[]>(
+      await putVariants(w.sa, uttapam.id, [{ name: 'Small', qty: '1 pc', price: 6000 }, { name: 'Large', qty: '1 pc', price: 9000 }], `?restaurantId=${w.restaurantA}`),
+    );
+    const small = shared.find((v) => v.variantName === 'Small')!;
+    const large = shared.find((v) => v.variantName === 'Large')!;
+    // A1 drops Small and changes Large's quantity.
+    const mine = ok<(Item & { variantQty: string })[]>(await putVariants(w.adminA1, uttapam.id, [{ id: large.id, name: 'Large', qty: '2 pcs', price: 9500 }]));
+    expect(mine.map((v) => [v.name, v.price])).toEqual([['Uttapam (Large, 2 pcs)', 9500]]);
+
+    const a1 = ok<Item[]>(await w.adminA1.get('/api/v1/menu/items')).filter((i) => i.parentId === uttapam.id);
+    const a2 = ok<Item[]>(await w.adminA2.get('/api/v1/menu/items')).filter((i) => i.parentId === uttapam.id);
+    expect(a1.map((i) => i.name)).toEqual(['Uttapam (Large, 2 pcs)']);
+    expect(a2.map((i) => i.name).sort()).toEqual(['Uttapam (Large, 1 pc)', 'Uttapam (Small, 1 pc)']);
+    // The hidden main-menu variant cannot be billed in A1, but still can in A2.
+    expect((await save(w.adminA1, await counter(w.adminA1), [[small.id, 1]])).status).toBe(400);
+    expect((await save(w.adminA2, await counter(w.adminA2), [[small.id, 1]])).status).toBe(200);
   });
 
   it('lets a branch give a shared dish variants without changing other branches', async () => {

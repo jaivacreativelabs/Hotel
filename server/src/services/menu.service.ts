@@ -10,7 +10,7 @@ import type { AuthUser } from '../middleware/auth.js';
 import type { Scope } from '../middleware/scope.js';
 import { CategoryModel, MenuItemModel, type Category, type MenuItem } from '../models/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
-import { toCategoryDTO, toMenuItemDTO } from '../utils/serialize.js';
+import { effectiveItem, toCategoryDTO, toMenuItemDTO } from '../utils/serialize.js';
 import { escapeRegex, nameKey, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { saveImage } from './storage.service.js';
@@ -156,7 +156,11 @@ export async function listItems(
   }
   const items = await MenuItemModel.find(filter).sort({ displayOrder: 1, name: 1 }).lean<MenuItemLean[]>();
   // Pinned dishes first; Array.sort is stable, so the menu order is kept within each group.
-  return items.map((i) => toMenuItemDTO(i, branchOf(scope))).sort((a, b) => Number(b.pinned) - Number(a.pinned));
+  const branchId = branchOf(scope);
+  return items
+    .filter((i) => !effectiveItem(i, branchId).hidden) // main-menu variants this branch removed
+    .map((i) => toMenuItemDTO(i, branchId))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
 
 async function getVisibleItem(scope: Scope, id: string) {
@@ -214,7 +218,7 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
 function setOverride(
   item: InstanceType<typeof MenuItemModel>,
   branchId: Types.ObjectId,
-  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean },
+  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean },
 ) {
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) {
@@ -222,6 +226,7 @@ function setOverride(
     if (patch.isAvailable !== undefined) existing.isAvailable = patch.isAvailable;
     if (patch.imageUrl !== undefined) existing.imageUrl = patch.imageUrl;
     if (patch.pinned !== undefined) existing.pinned = patch.pinned;
+    if (patch.hidden !== undefined) existing.hidden = patch.hidden;
   } else {
     item.branchOverrides.push({
       branchId,
@@ -229,6 +234,7 @@ function setOverride(
       isAvailable: patch.isAvailable ?? null,
       imageUrl: patch.imageUrl ?? null,
       pinned: patch.pinned ?? null,
+      hidden: patch.hidden ?? null,
     });
   }
 }
@@ -285,7 +291,7 @@ export async function removeOverride(actor: AuthUser, scope: Scope, id: string) 
   if (!branchId) throw badRequest('Overrides exist only for branches');
   const item = await getVisibleItem(scope, id);
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
-  if (existing?.imageUrl || existing?.pinned) {
+  if (existing?.imageUrl || existing?.pinned || existing?.hidden) {
     existing.price = null;
     existing.isAvailable = null;
   } else {
@@ -396,9 +402,10 @@ async function syncVariantsWithDish(dish: MenuItemLean) {
 }
 
 /**
- * Saves the variants a menu sees for a dish. The main menu manages the shared variants; a branch
- * adds, renames and removes its own variants (only that branch sees them) and sets its own
- * price and stock for the main-menu ones, which it cannot remove.
+ * Saves the variants a menu sees for a dish. The main menu manages the shared variants. A branch
+ * can change everything for itself only: its own variants are added, renamed and removed; a
+ * main-menu variant gets a branch price, is hidden when removed, and is replaced by a branch copy
+ * when its name or quantity changes. Other branches and the main menu are not affected.
  */
 export async function setItemVariants(actor: AuthUser, scope: Scope, id: string, input: VariantsInput) {
   const dish = await getVisibleItem(scope, id);
@@ -410,29 +417,32 @@ export async function setItemVariants(actor: AuthUser, scope: Scope, id: string,
     if (row.id && !byId.has(row.id)) throw badRequest(`“${row.name}” is not a variant of ${dish.name}`);
   }
   const keep = new Set(input.variants.filter((r) => r.id).map((r) => r.id!));
-  const lockedGone = existing.filter((v) => v.status === 'ACTIVE' && !owns(scope, v) && !keep.has(String(v._id)));
-  if (lockedGone.length) {
-    throw forbidden(
-      `${lockedGone.map((v) => v.variantName).join(', ')} come${lockedGone.length === 1 ? 's' : ''} from the main menu and cannot be removed here – mark it sold out instead.`,
-    );
-  }
 
   try {
     for (const v of existing) {
-      if (owns(scope, v) && v.status === 'ACTIVE' && !keep.has(String(v._id))) {
+      if (v.status !== 'ACTIVE' || keep.has(String(v._id))) continue;
+      if (owns(scope, v)) {
         v.status = 'ARCHIVED';
         // Frees the name, so a removed variant can be added again later.
         v.nameKey = `${v.nameKey}#${String(v._id)}`;
-        await v.save();
+      } else {
+        setOverride(v, branchId!, { hidden: true }); // removed from this branch's menu only
       }
+      await v.save();
     }
     for (const row of input.variants) {
-      const v = row.id ? byId.get(row.id)! : null;
+      let v = row.id ? byId.get(row.id)! : null;
       if (v && !owns(scope, v)) {
-        // A main-menu variant seen from a branch: only this branch's price and stock change.
-        setOverride(v, branchId!, { price: row.price, ...(row.isAvailable !== undefined && { isAvailable: row.isAvailable }) });
+        if (row.name === v.variantName && (row.qty ?? '') === (v.variantQty ?? '')) {
+          // Same main-menu variant: this branch's own price.
+          setOverride(v, branchId!, { price: row.price, hidden: false, ...(row.isAvailable !== undefined && { isAvailable: row.isAvailable }) });
+          await v.save();
+          continue;
+        }
+        // Renamed here: hide the main-menu one in this branch and add the branch's own instead.
+        setOverride(v, branchId!, { hidden: true });
         await v.save();
-        continue;
+        v = null;
       }
       const name = variantFullName(dish.name, row.name, row.qty);
       const fields = { variantName: row.name, variantQty: row.qty ?? '', name, nameKey: nameKey(name), price: row.price, status: 'ACTIVE' as const };
@@ -471,5 +481,5 @@ export async function setItemVariants(actor: AuthUser, scope: Scope, id: string,
   const variants = await MenuItemModel.find({ parentId: dish._id, status: 'ACTIVE', ...visibleFilter(scope) })
     .sort({ price: 1 })
     .lean<MenuItemLean[]>();
-  return variants.map((v) => toMenuItemDTO(v, branchId));
+  return variants.filter((v) => !effectiveItem(v, branchId).hidden).map((v) => toMenuItemDTO(v, branchId));
 }

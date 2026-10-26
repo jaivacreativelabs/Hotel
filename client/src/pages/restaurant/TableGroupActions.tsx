@@ -5,6 +5,7 @@
 import type { TableDTO, TableGroupSummaryDTO } from '@rb/shared';
 import { useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
+import { TableIllustration } from '../../components/TableIllustration';
 import { CancelButton, ConfirmButton, Field, Loading, Modal, Stepper } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { cx, formatMoney } from '../../utils/format';
@@ -33,11 +34,11 @@ export function MoveGroupModal({
   const others = tables.filter((t) => t.id !== table.id);
   const chosen = others.find((t) => t.id === target);
   return (
-    <Modal title={`Move ${group.groupName} to another table`} onClose={busy ? () => undefined : onClose} width={560}>
+    <Modal title={`Move ${group.groupName} to another table`} onClose={busy ? () => undefined : onClose} width={720}>
       <p className="muted" style={{ margin: 0 }}>
         {plural(group.guestCount, 'guest')} and their bill move together. Tables without enough free seats are greyed out.
       </p>
-      <div className="pick-grid" role="radiogroup" aria-label="Table">
+      <div className="pick-grid pick-grid-tables" role="radiogroup" aria-label="Table">
         {others.map((t) => {
           const free = freeSeats(t);
           const blocked = t.status === 'RESERVED' && t.seatsUsed === 0 ? 'Reserved' : free < group.guestCount ? (free > 0 ? `${free} free` : 'Full') : null;
@@ -47,12 +48,14 @@ export function MoveGroupModal({
               key={t.id}
               role="radio"
               aria-checked={target === t.id}
-              className={cx('pick-tile', target === t.id && 'active')}
+              className={cx('pick-tile pick-table', `occ-${t.occupancy.toLowerCase()}`, target === t.id && 'active')}
               disabled={Boolean(blocked) || busy}
               onClick={() => setTarget(t.id)}
+              aria-label={`${t.label}, ${blocked ?? `${free} of ${t.seats} seats free`}`}
             >
               <strong>{t.label}</strong>
-              <small>{blocked ?? `${free} of ${t.seats} free`}</small>
+              <TableIllustration shape={t.shape} seats={t.seats} tone={t.occupancy} className="table-illus-sm" />
+              <span className="pick-table-pill">{blocked ?? `${free} of ${t.seats} free`}</span>
             </button>
           );
         })}
@@ -101,20 +104,18 @@ export function MergeGroupModal({
   return (
     <Modal title={`Merge ${group.groupName} into another bill`} onClose={busy ? () => undefined : onClose} width={560}>
       <p className="muted" style={{ margin: 0 }}>
-        {group.groupName}’s dishes and {plural(group.guestCount, 'guest')} are added to the bill you choose, and {group.groupName} closes. Food already sent
-        to the kitchen is not sent again.
+        {group.groupName}’s dishes are added to the bill you choose – at this table or any other – and {group.groupName}’s bill closes. Food already
+        sent to the kitchen is not sent again.
       </p>
       {withGroups.length === 0 ? (
         <div className="alert alert-info">There is no other open bill to merge with.</div>
       ) : (
         <div className="stack" style={{ gap: 12, maxHeight: '50vh', overflowY: 'auto' }}>
           {withGroups.map(({ t, groups }) => {
-            const roomy = t.id === table.id || freeSeats(t) >= group.guestCount;
             return (
               <div key={t.id}>
                 <div className="field-label" style={{ marginBottom: 6 }}>
                   {t.id === table.id ? `This table (${t.label})` : t.label}
-                  {!roomy && <span className="muted"> – not enough free seats</span>}
                 </div>
                 <div className="pick-grid">
                   {groups.map((g) => (
@@ -124,7 +125,7 @@ export function MergeGroupModal({
                       role="radio"
                       aria-checked={into === g.draftId}
                       className={cx('pick-tile', into === g.draftId && 'active')}
-                      disabled={!roomy || busy}
+                      disabled={busy}
                       onClick={() => setInto(g.draftId)}
                     >
                       <strong>{g.groupName}</strong>

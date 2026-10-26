@@ -3,7 +3,7 @@
  * only and keeps what was already sent to the kitchen, so no dish is cooked twice.
  *
  *  - Move:  a group and its bill go to another table with enough free seats.
- *  - Merge: a group's dishes and guests are added to another group's bill; it then closes.
+ *  - Merge: a group's dishes are added to another group's bill (any table); it then closes.
  *  - Split: some dishes and guests leave a group as a new group at the same table.
  */
 import type { ClientSession, Types } from 'mongoose';
@@ -125,12 +125,9 @@ export async function mergeGroup(actor: AuthUser, scope: BranchScope, id: string
     assertTableGroup(target);
 
     const table = await loadTable(scope, target.tableId!, session);
-    if (!source.tableId!.equals(target.tableId!)) {
-      const used = (await openGroups(target.tableId!, session)).reduce((a, d) => a + d.guestCount, 0);
-      if (used + source.guestCount > table.seats) {
-        throw conflict(`${table.label} has only ${table.seats - used} free seats for ${source.guestCount} more guests`, 'SEATS_UNAVAILABLE');
-      }
-    }
+    // Merging only joins the bills: at the same table the guests join the group; from another
+    // table they are not moved, so no free seats are needed and their table is freed.
+    const sameTable = source.tableId!.equals(target.tableId!);
 
     const items = sumQty(target.items, source.items);
     if (items.length > LIMITS.maxBillLines) throw badRequest('The merged bill would have too many dishes');
@@ -156,7 +153,7 @@ export async function mergeGroup(actor: AuthUser, scope: BranchScope, id: string
         $set: {
           items: lines.map(stripCategory),
           totals: totalsFor(scope, lines, discount),
-          guestCount: target.guestCount + source.guestCount,
+          guestCount: sameTable ? target.guestCount + source.guestCount : target.guestCount,
           customerName: target.customerName || source.customerName || '',
           kitchenSent: sumQty(target.kitchenSent ?? [], source.kitchenSent ?? []),
           updatedBy: actor._id,

@@ -97,6 +97,7 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
     isAvailable,
     imageUrl,
     pinned: Boolean(override?.pinned),
+    hidden: Boolean(override?.hidden),
     hasOverride: override?.price != null || override?.isAvailable != null,
     imageOverridden: override?.imageUrl != null,
   };

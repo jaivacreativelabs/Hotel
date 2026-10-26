@@ -9,6 +9,8 @@ const overrideSchema = new Schema(
     imageUrl: { type: String, default: null },
     // Pinned dishes are listed first in this branch's menu and New Bill screen.
     pinned: { type: Boolean, default: null },
+    // A main-menu variant this branch removed from its own menu.
+    hidden: { type: Boolean, default: null },
   },
   { _id: false },
 );

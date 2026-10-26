@@ -94,13 +94,14 @@ describe('merge two groups', () => {
     expect((await c.post(`/api/v1/bills/${a.id}/merge`, { version: a.version + 1, intoDraftId: b.id })).status).toBe(409);
   });
 
-  it('merges across tables only when the guests fit', async () => {
+  it('joins bills across tables without needing free seats', async () => {
     const small = await seat(w.tables.t3, 2, 'Small'); // T3 has 2 seats, now full
-    const four = await seat(w.tables.t1, 1, 'Solo');
-    const full = await c.post(`/api/v1/bills/${four.id}/merge`, { version: four.version, intoDraftId: small.id });
-    expect([full.status, full.body.error.code]).toEqual([409, 'SEATS_UNAVAILABLE']);
-    const intoT1 = ok<Draft>(await c.post(`/api/v1/bills/${small.id}/merge`, { version: small.version, intoDraftId: four.id }));
-    expect([intoT1.tableLabel, intoT1.guestCount]).toEqual(['T1', 3]);
+    const solo = await seat(w.tables.t1, 1, 'Solo');
+    // Into the full table: only the bills join; Solo's seat at T1 is freed.
+    const merged = ok<Draft>(await c.post(`/api/v1/bills/${solo.id}/merge`, { version: solo.version, intoDraftId: small.id }));
+    expect([merged.tableLabel, merged.guestCount]).toEqual(['T3', 2]);
+    const { tables } = ok<{ tables: { id: string; seatsUsed: number }[] }>(await c.get('/api/v1/tables'));
+    expect(tables.find((t) => t.id === w.tables.t3)?.seatsUsed).toBe(2);
   });
 });
 
