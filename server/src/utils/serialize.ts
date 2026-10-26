@@ -69,7 +69,6 @@ export function toBranchDTO(b: BranchLean & { createdAt?: Date }): BranchDTO {
     email: b.email ?? '',
     status: b.status,
     kitchenDisplay: b.kitchenDisplay ?? false,
-    billPrefix: b.billPrefix ?? '',
     createdAt: iso(b.createdAt) ?? '',
   };
 }

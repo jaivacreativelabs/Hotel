@@ -101,8 +101,6 @@ export interface BranchDTO {
   email: string;
   status: RecordStatus;
   kitchenDisplay: boolean;
-  /** Bill number prefix set for this branch ("" → the restaurant's initials) */
-  billPrefix: string;
   createdAt: string;
 }
 

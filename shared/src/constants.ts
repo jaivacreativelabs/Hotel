@@ -93,16 +93,8 @@ export const CSRF_HEADER_VALUE = 'rb-client';
 export const BRANCH_HEADER = 'x-branch-id';
 
 /**
- * Bill numbers are "<prefix><4+ digits>", e.g. ITH0001. Without a branch prefix the restaurant's
- * initials are used ("Idly Tiffin House" → "ITH").
+ * Bill numbers are the branch code + a running number, e.g. ITH0001. A code ending in a digit
+ * gets a dash (AN1-0001) so the series stays readable.
  */
-export function defaultBillPrefix(restaurantName: string): string {
-  const initials = restaurantName
-    .split(/\s+/)
-    .map((w) => w.replace(/[^A-Za-z0-9]/g, '').charAt(0))
-    .join('')
-    .toUpperCase()
-    .slice(0, 6);
-  return initials || 'B';
-}
-export const formatBillNumber = (prefix: string, seq: number) => `${prefix}${String(seq).padStart(4, '0')}`;
+export const formatBillNumber = (branchCode: string, seq: number) =>
+  `${branchCode}${/\d$/.test(branchCode) ? '-' : ''}${String(seq).padStart(4, '0')}`;

@@ -124,7 +124,7 @@ describe('finalising bills', () => {
     const res = await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod: 'UPI', idempotencyKey: key() });
     expect(res.status).toBe(201);
     const tx = res.body.data.transaction as Tx;
-    expect(tx.billNumber).toBe('RA0001'); // "Restaurant A" → RA
+    expect(tx.billNumber).toBe('A1-0001'); // branch code A1 (ends in a digit → dash)
     expect(tx.grandTotal).toBe(7560);
     expect(tx.items[0]).toMatchObject({ name: 'Biryani', unitPrice: 8000, quantity: 1, lineTotal: 8000 });
     const draft = await DraftModel.findById(d.id).lean();
@@ -200,18 +200,16 @@ describe('finalising bills', () => {
 });
 
 describe('bill number series', () => {
-  it('uses the branch prefix and starts a new series when it changes', async () => {
+  it('numbers bills by branch code and starts a new series when the code changes', async () => {
     const bill = async () => {
       let d = ok<{ id: string; version: number }>(await w.adminA2.get('/api/v1/bills/counter'));
       d = ok(await w.adminA2.put(`/api/v1/bills/${d.id}`, { version: d.version, items: [{ menuItemId: w.items.idly, quantity: 1 }] }));
       const res = await w.adminA2.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod: 'CASH', idempotencyKey: key() });
       return (res.body.data.transaction as Tx).billNumber;
     };
-    expect(await bill()).toBe('RA0001'); // each branch has its own series
-    expect((await w.sa.patch(`/api/v1/admin/branches/${w.branchA2}`, { billPrefix: 'it h' })).status).toBe(400);
-    expect(ok<{ billPrefix: string }>(await w.sa.patch(`/api/v1/admin/branches/${w.branchA2}`, { billPrefix: 'ith' })).billPrefix).toBe('ITH');
+    expect(await bill()).toBe('A2-0001'); // each branch has its own series
+    ok(await w.sa.patch(`/api/v1/admin/branches/${w.branchA2}`, { code: 'ith' }));
     expect(await bill()).toBe('ITH0001');
     expect(await bill()).toBe('ITH0002');
-    expect((await w.adminA2.patch(`/api/v1/admin/branches/${w.branchA2}`, { billPrefix: 'X' })).status).toBe(403);
   });
 });

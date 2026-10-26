@@ -10,7 +10,7 @@
  *    idempotency key; it runs in a MongoDB transaction when available.
  */
 import type { ClientSession, Types } from 'mongoose';
-import { calculateBill, defaultBillPrefix, formatBillNumber, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
+import { calculateBill, formatBillNumber, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
 import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchScope } from '../middleware/scope.js';
@@ -396,8 +396,8 @@ export async function finalizeDraft(
       }
 
       try {
-        // One running number per prefix, so changing the prefix starts again at 0001 safely.
-        const prefix = scope.branch.billPrefix || defaultBillPrefix(scope.restaurant.name);
+        // Numbered by branch code (ITH0001 …); a new code starts its own series at 0001.
+        const prefix = scope.branch.code;
         const seq = await nextSequence(`bill:${scope.branch._id}:${prefix}`, session);
         const [tx] = await TransactionModel.create(
           [

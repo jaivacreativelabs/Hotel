@@ -93,13 +93,6 @@ export const branchCreateSchema = z.strictObject({
   email: optionalEmail,
   /** Kitchen Display (order tickets board) for this branch */
   kitchenDisplay: z.boolean().optional(),
-  /** Bill numbers start with this, e.g. ITH → ITH0001; empty uses the restaurant's initials */
-  billPrefix: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9]{0,6}$/, 'Letters and digits only, max 6')
-    .optional(),
 });
 export const branchUpdateSchema = branchCreateSchema.omit({ restaurantId: true }).partial();
 

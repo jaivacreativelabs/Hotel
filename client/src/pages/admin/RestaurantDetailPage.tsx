@@ -1,6 +1,5 @@
 import {
   bpsToPercent,
-  defaultBillPrefix,
   formatBillNumber,
   LIMITS,
   parsePercentToBps,
@@ -37,9 +36,8 @@ function BranchForm({ restaurant, initial, onClose }: { restaurant: RestaurantDT
     address: initial?.address ?? '',
     phone: initial?.phone ?? '',
     email: initial?.email ?? '',
-    billPrefix: initial?.billPrefix ?? '',
   });
-  const prefix = form.billPrefix.trim().toUpperCase() || defaultBillPrefix(restaurant.name);
+  const code = form.code.trim().toUpperCase();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -65,25 +63,15 @@ function BranchForm({ restaurant, initial, onClose }: { restaurant: RestaurantDT
     <SidePanel title={initial ? 'Edit Branch' : 'Add Branch'} onClose={onClose}>
       <form className="stack" style={{ gap: 18 }} onSubmit={submit}>
         <Field label="Branch name">{(id) => <input id={id} className="input" value={form.name} onChange={set('name')} maxLength={100} required autoFocus />}</Field>
-        <Field label="Branch code" hint="Short code, letters and digits (e.g. AN1)">
-          {(id) => <input id={id} className="input" value={form.code} onChange={set('code')} maxLength={10} required style={{ textTransform: 'uppercase' }} />}
-        </Field>
         <Field
-          label="Bill number prefix"
-          hint={`Bills are numbered ${formatBillNumber(prefix, 1)}, ${formatBillNumber(prefix, 2)} … Left empty it uses the restaurant’s initials (${defaultBillPrefix(restaurant.name)}).`}
+          label="Branch code"
+          hint={
+            code
+              ? `Short code, letters and digits. Bills are numbered ${formatBillNumber(code, 1)}, ${formatBillNumber(code, 2)} …`
+              : 'Short code, letters and digits (e.g. ITH). Bills are numbered with it, e.g. ITH0001.'
+          }
         >
-          {(id) => (
-            <input
-              id={id}
-              className="input"
-              value={form.billPrefix}
-              onChange={set('billPrefix')}
-              maxLength={6}
-              pattern="[A-Za-z0-9]*"
-              placeholder={defaultBillPrefix(restaurant.name)}
-              style={{ textTransform: 'uppercase' }}
-            />
-          )}
+          {(id) => <input id={id} className="input" value={form.code} onChange={set('code')} maxLength={10} required style={{ textTransform: 'uppercase' }} />}
         </Field>
         <Field label="Address">{(id) => <textarea id={id} className="textarea" value={form.address} onChange={set('address')} maxLength={300} />}</Field>
         <Field label="Phone">{(id) => <input id={id} className="input" value={form.phone} onChange={set('phone')} maxLength={20} />}</Field>
@@ -298,7 +286,7 @@ export function RestaurantDetailPage() {
                         </td>
                         <td data-label="Code">
                           {b.code}
-                          <span className="cell-sub">Bills {formatBillNumber(b.billPrefix || defaultBillPrefix(restaurant.name), 1)}…</span>
+                          <span className="cell-sub">Bills {formatBillNumber(b.code, 1)}…</span>
                         </td>
                         <td data-label="Contact" className="muted">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
                         <td data-label="Status">
