@@ -3544,3 +3544,76 @@ a {
 .pick-table.occ-reserved {
   background: var(--status-reserved-soft);
 }
+
+/* Move: "Move from" table → arrow → "Move to" (the grid, then just the chosen table) */
+.move-flow {
+  display: grid;
+  grid-template-columns: 200px 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.move-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.move-side-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+}
+.move-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 18px 12px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-surface-muted);
+  text-align: center;
+  min-height: 220px;
+}
+.move-table strong {
+  font-size: 1.4rem;
+}
+.move-table.chosen {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.table-illus-lg {
+  width: 130px;
+  height: 112px;
+}
+.move-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--color-primary);
+}
+.move-arrow svg {
+  width: 40px;
+  height: 40px;
+}
+.move-side.to .pick-grid-tables {
+  max-height: 46vh;
+}
+@media (max-width: 768px) {
+  .move-flow {
+    grid-template-columns: 1fr;
+  }
+  .move-table {
+    min-height: 0;
+  }
+  .move-arrow svg {
+    transform: rotate(90deg);
+  }
+}

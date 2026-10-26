@@ -3,6 +3,7 @@
  * checks seats and versions again and keeps what was already sent to the kitchen.
  */
 import type { TableDTO, TableGroupSummaryDTO } from '@rb/shared';
+import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
 import { TableIllustration } from '../../components/TableIllustration';
@@ -34,32 +35,71 @@ export function MoveGroupModal({
   const others = tables.filter((t) => t.id !== table.id);
   const chosen = others.find((t) => t.id === target);
   return (
-    <Modal title={`Move ${group.groupName} to another table`} onClose={busy ? () => undefined : onClose} width={720}>
+    <Modal title={`Move ${group.groupName} to another table`} onClose={busy ? () => undefined : onClose} width={900}>
+      <div className="move-flow">
+        {/* Move from: the table the group sits at now */}
+        <div className="move-side">
+          <div className="move-side-title">Move from</div>
+          <div className="move-table from">
+            <TableIllustration shape={table.shape} seats={table.seats} tone={table.occupancy} className="table-illus-lg" />
+            <strong>{table.label}</strong>
+            <span className="muted">
+              {group.groupName} · {plural(group.guestCount, 'guest')}
+            </span>
+          </div>
+        </div>
+
+        <div className="move-arrow" aria-hidden="true">
+          <ArrowRight />
+        </div>
+
+        {/* Move to: pick a table; once picked, only that table is shown */}
+        <div className="move-side to">
+          <div className="move-side-title">
+            Move to
+            {chosen && (
+              <button type="button" className="link-btn" onClick={() => setTarget(null)} disabled={busy}>
+                Change
+              </button>
+            )}
+          </div>
+          {chosen ? (
+            <div className="move-table chosen">
+              <TableIllustration shape={chosen.shape} seats={chosen.seats} tone={chosen.occupancy} className="table-illus-lg" />
+              <strong>{chosen.label}</strong>
+              <span className="muted">
+                {freeSeats(chosen)} of {chosen.seats} seats free · {chosen.floor}
+              </span>
+            </div>
+          ) : (
+            <div className="pick-grid pick-grid-tables" role="radiogroup" aria-label="Table">
+              {others.map((t) => {
+                const free = freeSeats(t);
+                const blocked = t.status === 'RESERVED' && t.seatsUsed === 0 ? 'Reserved' : free < group.guestCount ? (free > 0 ? `${free} free` : 'Full') : null;
+                return (
+                  <button
+                    type="button"
+                    key={t.id}
+                    role="radio"
+                    aria-checked={false}
+                    className={cx('pick-tile pick-table', `occ-${t.occupancy.toLowerCase()}`)}
+                    disabled={Boolean(blocked) || busy}
+                    onClick={() => setTarget(t.id)}
+                    aria-label={`${t.label}, ${blocked ?? `${free} of ${t.seats} seats free`}`}
+                  >
+                    <strong>{t.label}</strong>
+                    <TableIllustration shape={t.shape} seats={t.seats} tone={t.occupancy} className="table-illus-sm" />
+                    <span className="pick-table-pill">{blocked ?? `${free} of ${t.seats} free`}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
       <p className="muted" style={{ margin: 0 }}>
         {plural(group.guestCount, 'guest')} and their bill move together. Tables without enough free seats are greyed out.
       </p>
-      <div className="pick-grid pick-grid-tables" role="radiogroup" aria-label="Table">
-        {others.map((t) => {
-          const free = freeSeats(t);
-          const blocked = t.status === 'RESERVED' && t.seatsUsed === 0 ? 'Reserved' : free < group.guestCount ? (free > 0 ? `${free} free` : 'Full') : null;
-          return (
-            <button
-              type="button"
-              key={t.id}
-              role="radio"
-              aria-checked={target === t.id}
-              className={cx('pick-tile pick-table', `occ-${t.occupancy.toLowerCase()}`, target === t.id && 'active')}
-              disabled={Boolean(blocked) || busy}
-              onClick={() => setTarget(t.id)}
-              aria-label={`${t.label}, ${blocked ?? `${free} of ${t.seats} seats free`}`}
-            >
-              <strong>{t.label}</strong>
-              <TableIllustration shape={t.shape} seats={t.seats} tone={t.occupancy} className="table-illus-sm" />
-              <span className="pick-table-pill">{blocked ?? `${free} of ${t.seats} free`}</span>
-            </button>
-          );
-        })}
-      </div>
       <div className="modal-actions">
         <CancelButton onClick={onClose} disabled={busy} />
         <ConfirmButton
