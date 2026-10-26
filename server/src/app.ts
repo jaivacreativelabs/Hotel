@@ -49,6 +49,8 @@ export function createApp(): express.Express {
       if (!image) return next();
       res.setHeader('Content-Type', image.contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // names are never reused
+      // Lets Vercel's edge keep the photo too, so new devices do not each wait for MongoDB.
+      res.setHeader('CDN-Cache-Control', 'public, max-age=31536000, immutable');
       res.send(image.data);
     },
     express.static(env.UPLOAD_DIR, { dotfiles: 'deny', index: false, maxAge: '7d' }),

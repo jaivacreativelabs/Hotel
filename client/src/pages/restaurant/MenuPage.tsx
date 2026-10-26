@@ -32,6 +32,7 @@ import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney } from '../../utils/format';
+import { shrinkImage } from '../../utils/image';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -128,9 +129,11 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
   const [busy, setBusy] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
 
-  const pickFile = (f: File | null) => {
-    if (!f) return;
-    if (!ACCEPTED.includes(f.type)) return setErrors((e) => ({ ...e, image: 'Use a JPEG, PNG or WebP image' }));
+  const pickFile = async (picked: File | null) => {
+    if (!picked) return;
+    if (!ACCEPTED.includes(picked.type)) return setErrors((e) => ({ ...e, image: 'Use a JPEG, PNG or WebP image' }));
+    // Shrunk first, so large phone photos are accepted and the menu stays quick to load.
+    const f = await shrinkImage(picked);
     if (f.size > LIMITS.maxImageBytes) return setErrors((e) => ({ ...e, image: 'Image must be 2 MB or smaller' }));
     setErrors(({ image: _i, ...rest }) => rest);
     setFile(f);
@@ -269,7 +272,7 @@ function ItemPanel({ scope, item, categories, onClose }: { scope: MenuScope; ite
                 <small>Take a picture or choose one</small>
               </span>
             )}
-            <input type="file" accept={ACCEPTED.join(',')} hidden onChange={(e) => pickFile(e.target.files?.[0] ?? null)} />
+            <input type="file" accept={ACCEPTED.join(',')} hidden onChange={(e) => void pickFile(e.target.files?.[0] ?? null)} />
           </label>
           {file && <span className="field-hint">New photo selected – press {isEdit ? 'Save' : 'Add Food'} to keep it.</span>}
           {isEdit && !file && (sharedOnly ? item!.imageOverridden : item?.imageUrl) && (
