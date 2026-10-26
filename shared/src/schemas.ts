@@ -209,6 +209,35 @@ export const draftUpdateSchema = z.strictObject({
   groupTag: z.string().trim().max(30).optional(),
 });
 
+/** Move a group's open bill (and its guests) to another table of the branch. */
+export const moveGroupSchema = z.strictObject({
+  version: z.number().int().min(0),
+  tableId: objectIdSchema,
+});
+
+/** Add a group's open bill to another group's bill; the merged group closes. */
+export const mergeGroupSchema = z.strictObject({
+  version: z.number().int().min(0),
+  intoDraftId: objectIdSchema,
+});
+
+/** Move some dishes and guests of a group into a new group at the same table. */
+export const splitGroupSchema = z.strictObject({
+  version: z.number().int().min(0),
+  items: z
+    .array(
+      z.strictObject({
+        menuItemId: objectIdSchema,
+        quantity: z.number().int().min(1).max(LIMITS.maxQuantity),
+      }),
+    )
+    .min(1, 'Choose at least one dish to split off')
+    .max(LIMITS.maxBillLines)
+    .refine((items) => new Set(items.map((i) => i.menuItemId)).size === items.length, { message: 'Duplicate items' }),
+  guestCount: z.number().int().min(1).max(LIMITS.maxSeats),
+  groupName: z.string().trim().max(40).optional(),
+});
+
 export const finalizeSchema = z.strictObject({
   version: z.number().int().min(0),
   paymentMethod: z.enum(PAYMENT_METHODS),
@@ -305,6 +334,9 @@ export type MenuItemUpdateInput = z.infer<typeof menuItemUpdateSchema>;
 export type TableCreateInput = z.infer<typeof tableCreateSchema>;
 export type DraftUpdateInput = z.infer<typeof draftUpdateSchema>;
 export type FinalizeInput = z.infer<typeof finalizeSchema>;
+export type MoveGroupInput = z.infer<typeof moveGroupSchema>;
+export type MergeGroupInput = z.infer<typeof mergeGroupSchema>;
+export type SplitGroupInput = z.infer<typeof splitGroupSchema>;
 export type TransactionEditInput = z.infer<typeof transactionEditSchema>;
 export type TransactionQuery = z.infer<typeof transactionQuerySchema>;
 export type ExpenseInput = z.infer<typeof expenseSchema>;

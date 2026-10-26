@@ -89,7 +89,7 @@ export async function priceLines(
   });
 }
 
-function totalsFor(scope: BranchScope, lines: PricedLine[], discount: DraftUpdateInput['discount'] | null | undefined) {
+export function totalsFor(scope: BranchScope, lines: PricedLine[], discount: DraftUpdateInput['discount'] | null | undefined) {
   const t = calculateBill(lines, restaurantSettings(scope.restaurant), discount ?? null);
   return {
     subtotal: t.subtotal,
@@ -100,7 +100,7 @@ function totalsFor(scope: BranchScope, lines: PricedLine[], discount: DraftUpdat
   };
 }
 
-async function tableLabelOf(draft: Pick<Draft, 'tableId'>): Promise<string> {
+export async function tableLabelOf(draft: Pick<Draft, 'tableId'>): Promise<string> {
   if (!draft.tableId) return '';
   const t = await TableModel.findById(draft.tableId).select('label').lean<{ label: string }>();
   return t?.label ?? '';
@@ -110,7 +110,7 @@ async function toDTO(draft: DraftLean): Promise<DraftDTO> {
   return toDraftDTO(draft, await tableLabelOf(draft));
 }
 
-async function findDraft(scope: BranchScope, id: string, session?: ClientSession) {
+export async function findDraft(scope: BranchScope, id: string, session?: ClientSession) {
   const draft = await DraftModel.findOne({ _id: toObjectId(id, 'bill'), branchId: scope.branch._id })
     .session(session ?? null)
     .lean<DraftLean>();
@@ -118,7 +118,7 @@ async function findDraft(scope: BranchScope, id: string, session?: ClientSession
   return draft;
 }
 
-async function staleVersion(draft: DraftLean): Promise<AppError> {
+export async function staleVersion(draft: DraftLean): Promise<AppError> {
   return conflict(
     `This bill was changed by ${draft.updatedByName || 'another user'}. The latest version has been loaded.`,
     'CONFLICT',
@@ -126,7 +126,7 @@ async function staleVersion(draft: DraftLean): Promise<AppError> {
   );
 }
 
-function assertActive(draft: DraftLean) {
+export function assertActive(draft: DraftLean) {
   if (draft.status === 'FINALIZED') throw conflict('This bill has already been generated', 'BILL_FINALIZED');
   if (draft.status === 'DELETED') throw conflict('This bill was deleted', 'BILL_DELETED');
 }
@@ -171,7 +171,7 @@ export async function getCounterDraft(actor: AuthUser, scope: BranchScope): Prom
   return toDTO(draft);
 }
 
-function nextGroupName(existing: string[]): string {
+export function nextGroupName(existing: string[]): string {
   const used = new Set(existing);
   for (let n = 1; ; n++) if (!used.has(`Group ${n}`)) return `Group ${n}`;
 }

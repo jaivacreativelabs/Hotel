@@ -14,7 +14,7 @@ import {
   type TransactionDTO,
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronUp, CirclePlus, FileText, Minus, Pencil, Plus, Trash2, Users, Utensils } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, ChevronUp, CirclePlus, FileText, Merge, Minus, Pencil, Plus, Split, Trash2, Users, Utensils } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
@@ -32,6 +32,7 @@ import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { useDraftSync } from '../../hooks/useDraftSync';
+import { MergeGroupModal, MoveGroupModal, SplitGroupModal, type GroupAction, type SplitChoice } from './TableGroupActions';
 
 const ALL_FLOORS = '__all__';
 /** Same default naming as the server: the first free "Group N". */
@@ -349,6 +350,7 @@ function GroupCard({
   onGenerate,
   onDelete,
   onSent,
+  onAction,
 }: {
   group: TableGroupSummaryDTO;
   index: number;
@@ -356,6 +358,7 @@ function GroupCard({
   onGenerate: () => void;
   onDelete: () => void;
   onSent: () => void;
+  onAction: (action: GroupAction) => void;
 }) {
   const { activeBranch } = useAuth();
   const { send, sending } = useSendToKitchen();
@@ -403,6 +406,19 @@ function GroupCard({
       {activeBranch!.kitchenDisplay && group.itemCount > 0 && (
         <KitchenSendButton pending={group.kitchenPending} sending={sending} onSend={() => void send(group.draftId).then((ok) => ok && onSent())} />
       )}
+      <div className="group-more-actions">
+        <button className="link-btn" onClick={() => onAction('move')} title="Move this group to another table">
+          <ArrowRightLeft size={15} /> Move
+        </button>
+        <button className="link-btn" onClick={() => onAction('merge')} title="Add this group's bill to another group's bill">
+          <Merge size={15} /> Merge
+        </button>
+        <button className="link-btn" onClick={() => onAction('split')} disabled={group.itemCount < 2 || group.guestCount < 2}
+          title={group.guestCount < 2 ? 'Needs at least 2 guests to split' : 'Move some dishes into a new group at this table'}
+        >
+          <Split size={15} /> Split
+        </button>
+      </div>
     </div>
   );
 }
@@ -544,6 +560,49 @@ function TableDetail({
     }
   };
 
+  // ---- Move / Merge / Split ----
+  const allTables = useTables(branchId).data?.tables ?? [table];
+  const [action, setAction] = useState<{ kind: GroupAction; group: TableGroupSummaryDTO } | null>(null);
+  /** The bill open on the left was changed by the server: load the new version. */
+  const reloadIfOpen = (draftId: string) => {
+    if (draftId !== activeDraftId) return;
+    releaseDraftSync(acquireDraftSync(draftId, branchId));
+  };
+  const runAction = async (work: () => Promise<string>) => {
+    try {
+      toast.success(await work());
+      setAction(null);
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      await refresh();
+    }
+  };
+  const moveGroup = (g: TableGroupSummaryDTO, tableId: string) =>
+    runAction(async () => {
+      const moved = await withLatestDraft(g.draftId, (d) => api.post<DraftDTO>(`/bills/${d.id}/move`, { version: d.version, tableId }));
+      return `${g.groupName} moved to ${moved.tableLabel}${moved.groupName !== g.groupName ? ` as ${moved.groupName}` : ''}`;
+    });
+  const mergeGroup = (g: TableGroupSummaryDTO, intoDraftId: string) =>
+    runAction(async () => {
+      const merged = await withLatestDraft(g.draftId, (d) => api.post<DraftDTO>(`/bills/${d.id}/merge`, { version: d.version, intoDraftId }));
+      reloadIfOpen(intoDraftId);
+      return `${g.groupName} merged into ${merged.tableLabel} ${merged.groupName} – ${formatMoney(merged.totals.grandTotal)}`;
+    });
+  const splitGroup = (g: TableGroupSummaryDTO, choice: SplitChoice) =>
+    runAction(async () => {
+      const { created } = await withLatestDraft(g.draftId, (d) =>
+        api.post<{ source: DraftDTO; created: DraftDTO }>(`/bills/${d.id}/split`, {
+          version: d.version,
+          items: choice.items,
+          guestCount: choice.guestCount,
+          ...(choice.groupName && { groupName: choice.groupName }),
+        }),
+      );
+      reloadIfOpen(g.draftId);
+      return `${created.groupName} now has its own bill – ${formatMoney(created.totals.grandTotal)}`;
+    });
+
   const markAvailable = async () => {
     try {
       await api.patch(`/tables/${table.id}`, { status: 'AVAILABLE' });
@@ -609,6 +668,7 @@ function TableDetail({
             onGenerate={() => setPaying(g)}
             onDelete={() => setDeleting(g)}
             onSent={() => markSent(g.draftId)}
+            onAction={(kind) => setAction({ kind, group: g })}
           />
         ),
       )}
@@ -639,6 +699,21 @@ function TableDetail({
         </div>
       </div>
 
+      {action?.kind === 'move' && (
+        <MoveGroupModal group={action.group} table={table} tables={allTables} onClose={() => setAction(null)} onConfirm={(id) => moveGroup(action.group, id)} />
+      )}
+      {action?.kind === 'merge' && (
+        <MergeGroupModal group={action.group} table={table} tables={allTables} onClose={() => setAction(null)} onConfirm={(id) => mergeGroup(action.group, id)} />
+      )}
+      {action?.kind === 'split' && (
+        <SplitGroupModal
+          group={action.group}
+          branchId={branchId}
+          nextName={nextGroupName(table.groups.map((g) => g.groupName))}
+          onClose={() => setAction(null)}
+          onConfirm={(choice) => splitGroup(action.group, choice)}
+        />
+      )}
       {paying && (
         <PaymentModal
           title={`Generate bill · ${table.label} ${paying.groupName}`}

@@ -8,6 +8,9 @@ import {
   finalizeSchema,
   kitchenAdvanceSchema,
   kitchenPrioritySchema,
+  mergeGroupSchema,
+  moveGroupSchema,
+  splitGroupSchema,
   tableCreateSchema,
   tableUpdateSchema,
   transactionEditSchema,
@@ -20,6 +23,7 @@ import { getBranchScope } from '../middleware/scope.js';
 import * as bills from '../services/bills.service.js';
 import * as expenses from '../services/expenses.service.js';
 import * as kitchen from '../services/kitchen.service.js';
+import * as groups from '../services/tableGroups.service.js';
 import * as tables from '../services/tables.service.js';
 import * as transactions from '../services/transactions.service.js';
 import { todayIn } from '../utils/dates.js';
@@ -68,6 +72,17 @@ export const deleteDraft = async (req: Request, res: Response) => {
   if (!Number.isInteger(version) || version < 0) throw badRequest('version is required');
   await bills.deleteDraft(currentUser(req), getBranchScope(req), id(req), version);
   res.status(204).end();
+};
+
+// Move / merge / split table groups
+export const moveGroup = async (req: Request, res: Response) => {
+  res.json({ data: await groups.moveGroup(currentUser(req), getBranchScope(req), id(req), parse(moveGroupSchema, req.body)) });
+};
+export const mergeGroup = async (req: Request, res: Response) => {
+  res.json({ data: await groups.mergeGroup(currentUser(req), getBranchScope(req), id(req), parse(mergeGroupSchema, req.body)) });
+};
+export const splitGroup = async (req: Request, res: Response) => {
+  res.status(201).json({ data: await groups.splitGroup(currentUser(req), getBranchScope(req), id(req), parse(splitGroupSchema, req.body)) });
 };
 
 // Kitchen Display
