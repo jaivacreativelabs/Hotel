@@ -39,6 +39,8 @@ const menuItemSchema = new Schema(
     // themselves.
     parentId: { type: Schema.Types.ObjectId, ref: 'MenuItem', default: null },
     variantName: { type: String, default: '', maxlength: 30 },
+    // How much a variant is, e.g. "2 pcs" or "250 ml" (part of its name on bills)
+    variantQty: { type: String, default: '', maxlength: 20 },
   },
   { timestamps: true },
 );

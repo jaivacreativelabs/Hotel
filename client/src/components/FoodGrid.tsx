@@ -53,7 +53,10 @@ function VariantPicker({
           const qty = qtyById.get(v.id);
           return (
             <button key={v.id} type="button" className="variant-btn" disabled={!v.isAvailable} onClick={() => onPick(v)} aria-label={`Add ${v.name}`}>
-              <span className="variant-name">{v.variantName}</span>
+              <span className="variant-name">
+                {v.variantName}
+                {v.variantQty && <small className="variant-qty">{v.variantQty}</small>}
+              </span>
               {!v.isAvailable ? <span className="muted">Sold out</span> : qty ? <span className="food-qty-badge static">{qty}</span> : null}
               <span className="variant-price">{formatMoney(v.price)}</span>
             </button>

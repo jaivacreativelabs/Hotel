@@ -160,6 +160,8 @@ export interface MenuItemDTO {
   parentId: string | null;
   /** "Masala", "Half" … ("" for dishes) */
   variantName: string;
+  /** How much the variant is, e.g. "2 pcs" ("" when not set) */
+  variantQty: string;
 }
 
 export interface DraftItemDTO {

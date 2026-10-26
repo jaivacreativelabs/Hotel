@@ -125,6 +125,7 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     editable: owned,
     parentId: item.parentId ? String(item.parentId) : null,
     variantName: item.variantName ?? '',
+    variantQty: item.variantQty ?? '',
   };
 }
 

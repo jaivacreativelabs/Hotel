@@ -169,6 +169,8 @@ export const variantsSchema = z.strictObject({
       z.strictObject({
         id: objectIdSchema.optional(),
         name: name(30),
+        /** How much it is, e.g. "2 pcs" or "250 ml" */
+        qty: z.string().trim().max(20).optional(),
         price: pricePaiseSchema,
         isAvailable: z.boolean().optional(),
       }),

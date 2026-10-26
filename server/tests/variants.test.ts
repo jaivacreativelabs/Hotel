@@ -131,6 +131,21 @@ describe('adding variants to a dish', () => {
     expect((await save(w.adminA1, d, [[byName(variants, 'Onion').id, 1]])).status).toBe(200);
   });
 
+  it('puts the variant quantity in its name on bills', async () => {
+    const parotta = ok<Item>(await w.sa.post(menuOf(w.restaurantA), { categoryId: w.categoryId, name: 'Parotta', price: 2000 }), 201);
+    const rows = ok<(Item & { variantQty: string })[]>(
+      await putVariants(w.sa, parotta.id, [{ name: 'Half', qty: '1 pc', price: 2000 }, { name: 'Full', qty: '2 pcs', price: 3800 }, { name: 'Set', price: 9000 }], `?restaurantId=${w.restaurantA}`),
+    );
+    expect(rows.map((r) => [r.name, r.variantQty])).toEqual([
+      ['Parotta (Half, 1 pc)', '1 pc'],
+      ['Parotta (Full, 2 pcs)', '2 pcs'],
+      ['Parotta (Set)', ''],
+    ]);
+    ok(await w.sa.patch(`/api/v1/menu/items/${parotta.id}?restaurantId=${w.restaurantA}`, { name: 'Kerala Parotta' }));
+    const list = ok<Item[]>(await w.adminA1.get('/api/v1/menu/items'));
+    expect(list.find((i) => i.id === rows[1].id)!.name).toBe('Kerala Parotta (Full, 2 pcs)');
+  });
+
   it('refuses variants of a variant and duplicate names', async () => {
     expect((await putVariants(w.sa, byName(variants, 'Plain').id, [{ name: 'Small', price: 100 }], `?restaurantId=${w.restaurantA}`)).status).toBe(400);
     expect((await putVariants(w.sa, dosa.id, [{ name: 'Half', price: 100 }, { name: 'half', price: 200 }], `?restaurantId=${w.restaurantA}`)).status).toBe(400);

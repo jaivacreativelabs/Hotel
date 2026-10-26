@@ -366,18 +366,19 @@ export async function setItemArchived(actor: AuthUser, scope: Scope, id: string,
 
 // ---------------- Variants ----------------
 
-const variantFullName = (dish: string, variant: string) => `${dish} (${variant})`;
+/** "Idly (Full, 2 pcs)" – what bills, receipts and the kitchen show. */
+const variantFullName = (dish: string, variant: string, qty = '') => `${dish} (${variant}${qty ? `, ${qty}` : ''})`;
 
 /** Variants follow their dish's name, category and tax setting. */
 async function syncVariantsWithDish(dish: MenuItemLean) {
   const variants = await MenuItemModel.find({ parentId: dish._id })
-    .select('variantName status')
-    .lean<{ _id: Types.ObjectId; variantName: string; status: string }[]>();
+    .select('variantName variantQty status')
+    .lean<{ _id: Types.ObjectId; variantName: string; variantQty?: string; status: string }[]>();
   if (!variants.length) return;
   try {
     await MenuItemModel.bulkWrite(
       variants.map((v) => {
-        const name = variantFullName(dish.name, v.variantName);
+        const name = variantFullName(dish.name, v.variantName, v.variantQty);
         // Removed variants keep a unique key so they never block a live name.
         const key = v.status === 'ACTIVE' ? nameKey(name) : `${nameKey(name)}#${String(v._id)}`;
         return {
@@ -433,8 +434,8 @@ export async function setItemVariants(actor: AuthUser, scope: Scope, id: string,
         await v.save();
         continue;
       }
-      const name = variantFullName(dish.name, row.name);
-      const fields = { variantName: row.name, name, nameKey: nameKey(name), price: row.price, status: 'ACTIVE' as const };
+      const name = variantFullName(dish.name, row.name, row.qty);
+      const fields = { variantName: row.name, variantQty: row.qty ?? '', name, nameKey: nameKey(name), price: row.price, status: 'ACTIVE' as const };
       if (v) {
         v.set({ ...fields, ...(row.isAvailable !== undefined && { isAvailable: row.isAvailable }) });
         await v.save();

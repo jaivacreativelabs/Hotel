@@ -114,12 +114,21 @@ interface VariantRow {
   key: string;
   id?: string;
   name: string;
+  /** How much it is, e.g. "2 pcs" */
+  qty: string;
   price: string;
   /** A main-menu variant seen from a branch: only its price can change here. */
   fixed: boolean;
 }
 let rowSeq = 0;
-const toRow = (v: MenuItemDTO): VariantRow => ({ key: v.id, id: v.id, name: v.variantName, price: paiseToRupeesInput(v.price), fixed: !v.editable });
+const toRow = (v: MenuItemDTO): VariantRow => ({
+  key: v.id,
+  id: v.id,
+  name: v.variantName,
+  qty: v.variantQty,
+  price: paiseToRupeesInput(v.price),
+  fixed: !v.editable,
+});
 
 /** Rows of name + price. A branch adds its own variants and sets its price for main-menu ones. */
 function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; error?: string }) {
@@ -133,6 +142,7 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
         <div className="variant-rows">
           <div className="variant-row variant-head" aria-hidden="true">
             <span>Variant</span>
+            <span>Qty</span>
             <span>Price</span>
             <span />
           </div>
@@ -147,6 +157,15 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
                 title={r.fixed ? 'From the main menu – only the price can change for this branch' : undefined}
                 onChange={(e) => update(r.key, { name: e.target.value })}
                 aria-label="Variant name"
+              />
+              <input
+                className="input"
+                value={r.qty}
+                maxLength={20}
+                placeholder="2 pcs"
+                disabled={r.fixed}
+                onChange={(e) => update(r.key, { qty: e.target.value })}
+                aria-label={`${r.name || 'Variant'} quantity`}
               />
               <div className="input-prefix">
                 <span>₹</span>
@@ -168,7 +187,7 @@ function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChang
           type="button"
           className="btn btn-soft btn-sm"
           style={{ alignSelf: 'flex-start' }}
-          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', price: '', fixed: false }])}
+          onClick={() => onChange([...rows, { key: `new-${++rowSeq}`, name: '', qty: '', price: '', fixed: false }])}
         >
           <Plus size={16} /> Add a variant
         </button>
@@ -259,7 +278,7 @@ function ItemPanel({
       }
       if (hasVariants || variants.length) {
         await scoped.put(`/menu/items/${saved.id}/variants`, {
-          variants: variantRows.map((r) => ({ ...(r.id && { id: r.id }), name: r.name.trim(), price: r.paise!, isAvailable: true })),
+          variants: variantRows.map((r) => ({ ...(r.id && { id: r.id }), name: r.name.trim(), qty: r.qty.trim(), price: r.paise!, isAvailable: true })),
         });
       }
       // For a shared item in a branch the server stores this as the branch's own photo.
