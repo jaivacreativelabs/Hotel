@@ -103,6 +103,7 @@ function ExpenseForm({
     else if (paise > MAX_EXPENSE_PAISE) next.amount = 'Amount is too high';
     if (!category) next.category = 'Choose what the money was spent on';
     if (!date || date > today) next.date = 'Choose today or an earlier day';
+    if (category === 'OTHER' && !note.trim()) next.note = 'Type what the money was spent on';
     setErrors(next);
     if (Object.keys(next).length || !paymentMethod) return;
     const body = { date, category, amount: paise, paymentMethod, note: note.trim() };
@@ -155,6 +156,21 @@ function ExpenseForm({
           </div>
           {errors.category && <span className="field-error">{errors.category}</span>}
         </div>
+        {category === 'OTHER' && (
+          <Field label="What was it for?" error={errors.note}>
+            {(id) => (
+              <input
+                id={id}
+                className="input"
+                value={note}
+                maxLength={200}
+                placeholder="e.g. Cleaning supplies, auto fare, plumber"
+                onChange={(e) => setNote(e.target.value)}
+                autoFocus
+              />
+            )}
+          </Field>
+        )}
         <div className="field">
           <span className="field-label">Paid by</span>
           <PaymentButtons value={paymentMethod} onChange={setPaymentMethod} disabled={busy} />
@@ -163,9 +179,12 @@ function ExpenseForm({
           <Field label="Date" error={errors.date}>
             {(id) => <input id={id} type="date" className="input" value={date} max={today} onChange={(e) => setDate(e.target.value)} />}
           </Field>
-          <Field label="Note" hint="Optional – e.g. shop name or who was paid">
-            {(id) => <input id={id} className="input" value={note} maxLength={200} placeholder="e.g. Murugan Stores" onChange={(e) => setNote(e.target.value)} />}
-          </Field>
+          {/* For "Other" the note is the "What was it for?" box above. */}
+          {category !== 'OTHER' && (
+            <Field label="Note" hint="Optional – e.g. shop name or who was paid">
+              {(id) => <input id={id} className="input" value={note} maxLength={200} placeholder="e.g. Murugan Stores" onChange={(e) => setNote(e.target.value)} />}
+            </Field>
+          )}
         </div>
         <div className="modal-actions">
           <CancelButton onClick={onClose} disabled={busy} />

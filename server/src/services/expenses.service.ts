@@ -104,15 +104,17 @@ export async function listExpenses(user: AuthUser, q: ExpenseQuery): Promise<Exp
   };
 }
 
-function assertNotFuture(date: string) {
-  if (date > todayIn(env.APP_TIMEZONE)) throw badRequest('The date cannot be in the future');
+function assertValid(input: ExpenseInput) {
+  if (input.date > todayIn(env.APP_TIMEZONE)) throw badRequest('The date cannot be in the future');
+  // "Other" says nothing by itself – the note tells what the money was for.
+  if (input.category === 'OTHER' && !input.note?.trim()) throw badRequest('Type what the money was spent on');
 }
 
 const expenseText = (e: Pick<Expense, 'category' | 'amount' | 'date'>) =>
   `${EXPENSE_CATEGORY_LABEL[e.category]} ${formatMoney(e.amount)} on ${e.date}`;
 
 export async function createExpense(user: AuthUser, scope: BranchScope, input: ExpenseInput): Promise<ExpenseDTO> {
-  assertNotFuture(input.date);
+  assertValid(input);
   const [created] = await ExpenseModel.create([
     {
       restaurantId: scope.restaurant._id,
@@ -150,7 +152,7 @@ async function getChangeable(user: AuthUser, id: string): Promise<ExpenseLean> {
 
 export async function updateExpense(user: AuthUser, id: string, input: ExpenseInput): Promise<ExpenseDTO> {
   const before = await getChangeable(user, id);
-  assertNotFuture(input.date);
+  assertValid(input);
   const updated = await ExpenseModel.findByIdAndUpdate(
     before._id,
     { $set: { ...input, note: input.note ?? '', editedAt: new Date(), editedByName: user.name } },

@@ -107,3 +107,13 @@ describe('daily report', () => {
     expect(r.branches.some((b) => b.bills === 0 && b.expenses === 99900)).toBe(true);
   });
 });
+
+describe('other expenses', () => {
+  it('needs a note saying what the money was for', async () => {
+    const other = { date: today(), category: 'OTHER', amount: 15000, paymentMethod: 'CASH' };
+    expect((await w.adminA1.post('/api/v1/expenses', other)).status).toBe(400);
+    expect((await w.adminA1.post('/api/v1/expenses', { ...other, note: '  ' })).status).toBe(400);
+    const e = ok<Expense>(await w.adminA1.post('/api/v1/expenses', { ...other, note: 'Plumber' }), 201);
+    expect(e.note).toBe('Plumber');
+  });
+});
