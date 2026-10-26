@@ -140,46 +140,81 @@ export function MergeGroupModal({
   const withGroups = [table, ...tables.filter((t) => t.id !== table.id)]
     .map((t) => ({ t, groups: t.groups.filter((g) => g.draftId !== group.draftId) }))
     .filter((x) => x.groups.length > 0);
-  const chosen = withGroups.flatMap((x) => x.groups.map((g) => ({ g, t: x.t }))).find((x) => x.g.draftId === into);
+  const bills = withGroups.flatMap((x) => x.groups.map((g) => ({ g, t: x.t })));
+  const chosen = bills.find((x) => x.g.draftId === into);
   return (
-    <Modal title={`Merge ${group.groupName} into another bill`} onClose={busy ? () => undefined : onClose} width={560}>
-      <p className="muted" style={{ margin: 0 }}>
-        {group.groupName}’s dishes are added to the bill you choose – at this table or any other – and {group.groupName}’s bill closes. Food already
-        sent to the kitchen is not sent again.
-      </p>
-      {withGroups.length === 0 ? (
-        <div className="alert alert-info">There is no other open bill to merge with.</div>
-      ) : (
-        <div className="stack" style={{ gap: 12, maxHeight: '50vh', overflowY: 'auto' }}>
-          {withGroups.map(({ t, groups }) => {
-            return (
-              <div key={t.id}>
-                <div className="field-label" style={{ marginBottom: 6 }}>
-                  {t.id === table.id ? `This table (${t.label})` : t.label}
-                </div>
-                <div className="pick-grid">
-                  {groups.map((g) => (
-                    <button
-                      type="button"
-                      key={g.draftId}
-                      role="radio"
-                      aria-checked={into === g.draftId}
-                      className={cx('pick-tile', into === g.draftId && 'active')}
-                      disabled={busy}
-                      onClick={() => setInto(g.draftId)}
-                    >
-                      <strong>{g.groupName}</strong>
-                      <small>
-                        {plural(g.guestCount, 'guest')} · {formatMoney(g.grandTotal)}
-                      </small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+    <Modal title={`Merge ${group.groupName} into another bill`} onClose={busy ? () => undefined : onClose} width={900}>
+      <div className="move-flow">
+        {/* Merge from: this group's bill */}
+        <div className="move-side">
+          <div className="move-side-title">Merge from</div>
+          <div className="move-table from">
+            <TableIllustration shape={table.shape} seats={table.seats} tone={table.occupancy} className="table-illus-lg" />
+            <strong>{table.label}</strong>
+            <span className="muted">
+              {group.groupName} · {formatMoney(group.grandTotal)}
+            </span>
+          </div>
         </div>
-      )}
+
+        <div className="move-arrow" aria-hidden="true">
+          <ArrowRight />
+        </div>
+
+        {/* Merge into: every other open bill; once picked, only that bill is shown */}
+        <div className="move-side to">
+          <div className="move-side-title">
+            Merge into
+            {chosen && (
+              <button type="button" className="link-btn" onClick={() => setInto(null)} disabled={busy}>
+                Change
+              </button>
+            )}
+          </div>
+          {chosen ? (
+            <div className="move-table chosen">
+              <TableIllustration shape={chosen.t.shape} seats={chosen.t.seats} tone={chosen.t.occupancy} className="table-illus-lg" />
+              <strong>
+                {chosen.t.label} · {chosen.g.groupName}
+              </strong>
+              <span className="muted">
+                {plural(chosen.g.guestCount, 'guest')} · {formatMoney(chosen.g.grandTotal)} now → ≈ {formatMoney(chosen.g.grandTotal + group.grandTotal)} after merge
+              </span>
+            </div>
+          ) : bills.length === 0 ? (
+            <div className="move-table">
+              <span className="muted">There is no other open bill to merge with.</span>
+            </div>
+          ) : (
+            <div className="pick-grid pick-grid-tables" role="radiogroup" aria-label="Bill to merge into">
+              {bills.map(({ g, t }) => (
+                <button
+                  type="button"
+                  key={g.draftId}
+                  role="radio"
+                  aria-checked={false}
+                  className={cx('pick-tile pick-table', `occ-${t.occupancy.toLowerCase()}`)}
+                  disabled={busy}
+                  onClick={() => setInto(g.draftId)}
+                  aria-label={`${t.label} ${g.groupName}, ${plural(g.guestCount, 'guest')}, ${formatMoney(g.grandTotal)}`}
+                >
+                  <strong>
+                    {t.label}
+                    {t.id === table.id && <small className="muted"> (this table)</small>}
+                  </strong>
+                  <TableIllustration shape={t.shape} seats={t.seats} tone={t.occupancy} className="table-illus-sm" />
+                  <span className="pick-group-name">{g.groupName}</span>
+                  <span className="pick-table-pill">{formatMoney(g.grandTotal)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="muted" style={{ margin: 0 }}>
+        {group.groupName}’s dishes are added to the bill you choose and {group.groupName}’s bill closes. Food already sent to the kitchen is not sent
+        again.
+      </p>
       <div className="modal-actions">
         <CancelButton onClick={onClose} disabled={busy} />
         <ConfirmButton

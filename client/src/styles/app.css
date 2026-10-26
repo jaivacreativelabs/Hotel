@@ -3617,3 +3617,11 @@ a {
     transform: rotate(90deg);
   }
 }
+.pick-group-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
