@@ -1,4 +1,4 @@
-import { PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
+import { bpsToPercent, PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -11,7 +11,7 @@ import { api, downloadFile } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
-import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, type DatePreset } from '../../utils/format';
+import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, taxLabel, type DatePreset } from '../../utils/format';
 import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
@@ -206,7 +206,18 @@ function BillDetails({
               <div className="thumb thumb-sm">
                 <FoodImage src={i.imageUrl} alt={i.name} />
               </div>
-              <span>{i.name}</span>
+              <span>
+                {i.name}
+                {/* Which taxes this item paid, so the tax lines below make sense */}
+                {(Number(i.taxRateBps) > 0 || i.extraTaxes.length > 0) && (
+                  <small className="bill-item-tax">
+                    {[
+                      ...(Number(i.taxRateBps) > 0 ? [`GST ${bpsToPercent(i.taxRateBps!)}%`] : []),
+                      ...i.extraTaxes.map((t) => `${t.name} ${bpsToPercent(t.rateBps)}%`),
+                    ].join(' · ')}
+                  </small>
+                )}
+              </span>
               <span className="qty-col">x{i.quantity}</span>
               <span className="amt num">{formatMoney(i.lineTotal)}</span>
             </div>
@@ -226,10 +237,8 @@ function BillDetails({
             </div>
           )}
           {tx.taxes.map((t) => (
-            <div key={t.name}>
-              <span>
-                {t.name} ({t.rateBps / 100}%){tx.pricesIncludeTax ? ' incl.' : ''}
-              </span>
+            <div key={`${t.name}|${t.rateBps}`}>
+              <span>{taxLabel(t, tx.pricesIncludeTax)}</span>
               <span>{formatMoney(t.amount)}</span>
             </div>
           ))}

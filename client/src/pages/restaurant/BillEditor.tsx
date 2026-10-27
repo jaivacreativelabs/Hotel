@@ -1,4 +1,5 @@
-import { BILL_EDIT_WINDOW_MINUTES, calculateBill, type PaymentMethod, type TaxSettings, type TransactionDTO } from '@rb/shared';
+import { BILL_EDIT_WINDOW_MINUTES, calculateBill, type PaymentMethod, type RestaurantDTO, type TaxSettings, type TransactionDTO } from '@rb/shared';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronUp, Clock, Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { FoodGrid, addItemToBill, setBillQuantity } from '../../components/FoodGrid';
@@ -9,6 +10,7 @@ import { ApiError, api } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import type { LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
+import { adminKeys } from '../admin/adminShared';
 import { formatDateTime, formatMoney } from '../../utils/format';
 import { splitVariant } from '../../utils/menu';
 
@@ -49,13 +51,20 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
   const minutesLeft = useEditMinutesLeft(anyTime ? null : tx.editableUntil);
   const canEdit = anyTime || minutesLeft > 0;
 
-  // The preview uses the branch's tax settings; the server's totals are the ones saved.
+  // The preview uses the restaurant's tax settings; the server's totals are the ones saved. A
+  // bill's tax lines cannot stand in for them, since items may carry their own GST.
+  const inBranch = activeBranch?.id === tx.branchId;
+  const restaurants = useQuery({
+    queryKey: adminKeys.restaurants,
+    queryFn: () => api.get<RestaurantDTO[]>('/admin/restaurants', { branchId: null }),
+    enabled: !inBranch && anyTime,
+  });
   const settings: TaxSettings = useMemo(
     () =>
-      activeBranch?.id === tx.branchId
-        ? activeBranch.restaurant.settings
-        : { taxes: tx.taxes.map((t) => ({ name: t.name, rateBps: t.rateBps })), pricesIncludeTax: tx.pricesIncludeTax },
-    [activeBranch, tx],
+      inBranch
+        ? activeBranch!.restaurant.settings
+        : (restaurants.data?.find((r) => r.id === tx.restaurantId)?.settings ?? { taxes: [], pricesIncludeTax: tx.pricesIncludeTax }),
+    [inBranch, activeBranch, restaurants.data, tx],
   );
   const totals = useMemo(() => calculateBill(bill.items, settings, bill.discount), [bill, settings]);
   const qtyById = useMemo(() => new Map(bill.items.map((i) => [i.menuItemId, i.quantity])), [bill.items]);

@@ -18,7 +18,7 @@ const draftItemSchema = new Schema(
 );
 
 const taxLineSchema = new Schema(
-  { name: String, rateBps: Number, amount: Number },
+  { name: String, rateBps: Number, amount: Number, base: Number },
   { _id: false },
 );
 

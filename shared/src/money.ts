@@ -33,6 +33,8 @@ export interface TaxSettings {
 
 export interface TaxLine extends TaxRate {
   amount: number;
+  /** What the tax was charged on (after discount); bills made before this was kept have none. */
+  base?: number;
 }
 
 export interface BillTotals {
@@ -70,8 +72,8 @@ export function gstComponents(rateBps: number): TaxRate[] {
 
 /** Tax on one group of lines that share the same rates; `base` is after discount. */
 function taxFor(base: number, rates: TaxRate[], pricesIncludeTax: boolean): TaxLine[] {
-  if (base <= 0) return rates.map((t) => ({ ...t, amount: 0 }));
-  if (!pricesIncludeTax) return rates.map((t) => ({ ...t, amount: divRoundHalfUp(base * t.rateBps, 10_000) }));
+  if (base <= 0) return rates.map((t) => ({ ...t, amount: 0, base: 0 }));
+  if (!pricesIncludeTax) return rates.map((t) => ({ ...t, amount: divRoundHalfUp(base * t.rateBps, 10_000), base }));
   const totalBps = rates.reduce((a, t) => a + t.rateBps, 0);
   const net = divRoundHalfUp(base * 10_000, 10_000 + totalBps);
   const taxTotal = base - net;
@@ -79,7 +81,7 @@ function taxFor(base: number, rates: TaxRate[], pricesIncludeTax: boolean): TaxL
   return rates.map((t, i) => {
     const amount = i === rates.length - 1 ? taxTotal - allocated : divRoundHalfUp(net * t.rateBps, 10_000);
     allocated += amount;
-    return { ...t, amount };
+    return { ...t, amount, base };
   });
 }
 
@@ -137,7 +139,7 @@ export function calculateBill(
     for (const t of taxFor(base, g.rates, settings.pricesIncludeTax)) {
       const k = `${t.name}|${t.rateBps}`;
       const prev = merged.get(k);
-      merged.set(k, prev ? { ...prev, amount: prev.amount + t.amount } : t);
+      merged.set(k, prev ? { ...prev, amount: prev.amount + t.amount, base: (prev.base ?? 0) + (t.base ?? 0) } : t);
     }
   }
   const taxes = [...merged.values()];

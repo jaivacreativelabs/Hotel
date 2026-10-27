@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../../services/api';
-import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL } from '../../utils/format';
+import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL, taxLabel } from '../../utils/format';
 
 const css = `
 @page { size: 80mm auto; margin: 4mm; }
@@ -125,10 +125,8 @@ export function PrintReceiptPage() {
               </tr>
             )}
             {t.taxes.map((x) => (
-              <tr key={x.name}>
-                <td>
-                  {x.name} {x.rateBps / 100}%{t.pricesIncludeTax ? ' (incl.)' : ''}
-                </td>
+              <tr key={`${x.name}|${x.rateBps}`}>
+                <td>{taxLabel(x, t.pricesIncludeTax)}</td>
                 <td className="r">{formatMoney(x.amount)}</td>
               </tr>
             ))}

@@ -97,10 +97,10 @@ describe('calculateBill', () => {
       noTax,
     );
     expect(t.taxes).toEqual([
-      { name: 'CGST', rateBps: 250, amount: 250 },
-      { name: 'SGST', rateBps: 250, amount: 250 },
-      { name: 'CGST', rateBps: 900, amount: 900 },
-      { name: 'SGST', rateBps: 900, amount: 900 },
+      { name: 'CGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'SGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'CGST', rateBps: 900, amount: 900, base: 10000 },
+      { name: 'SGST', rateBps: 900, amount: 900, base: 10000 },
     ]);
     expect(t.taxTotal).toBe(2300);
     expect(t.grandTotal).toBe(32300);
@@ -115,8 +115,9 @@ describe('calculateBill', () => {
       gst5,
     );
     expect(t.taxes).toEqual([
-      { name: 'CGST', rateBps: 250, amount: 500 },
-      { name: 'SGST', rateBps: 250, amount: 500 },
+      // charged on both items' ₹200
+      { name: 'CGST', rateBps: 250, amount: 500, base: 20000 },
+      { name: 'SGST', rateBps: 250, amount: 500, base: 20000 },
     ]);
     expect(t.grandTotal).toBe(21000);
   });
@@ -150,9 +151,9 @@ describe('calculateBill', () => {
       noTax,
     );
     expect(t.taxes).toEqual([
-      { name: 'Service charge', rateBps: 1000, amount: 2000 },
-      { name: 'CGST', rateBps: 250, amount: 250 },
-      { name: 'SGST', rateBps: 250, amount: 250 },
+      { name: 'Service charge', rateBps: 1000, amount: 2000, base: 20000 },
+      { name: 'CGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'SGST', rateBps: 250, amount: 250, base: 10000 },
     ]);
     expect(t.grandTotal).toBe(20000 + 2500);
   });

@@ -236,10 +236,11 @@ describe('GST per item', () => {
     );
     const taxes = (d.totals as unknown as { taxes: { name: string; rateBps: number; amount: number }[] }).taxes;
     expect(taxes).toEqual([
-      { name: 'CGST', rateBps: 250, amount: 75 },
-      { name: 'SGST', rateBps: 250, amount: 75 },
-      { name: 'CGST', rateBps: 900, amount: 900 },
-      { name: 'SGST', rateBps: 900, amount: 900 },
+      // each line says what it was charged on: Idly ₹30, Cola ₹100
+      { name: 'CGST', rateBps: 250, amount: 75, base: 3000 },
+      { name: 'SGST', rateBps: 250, amount: 75, base: 3000 },
+      { name: 'CGST', rateBps: 900, amount: 900, base: 10000 },
+      { name: 'SGST', rateBps: 900, amount: 900, base: 10000 },
     ]);
     expect(d.totals.grandTotal).toBe(13000 + 1950);
 
@@ -265,8 +266,8 @@ describe('GST per item', () => {
     d = ok<Draft>(await w.adminA1.put(`/api/v1/bills/${d.id}`, { version: d.version, items: [{ menuItemId: w.items.idly, quantity: 1 }] }));
     const taxes = (d.totals as unknown as { taxes: { name: string; rateBps: number; amount: number }[] }).taxes;
     expect(taxes.filter((t) => t.amount > 0)).toEqual([
-      { name: 'CGST', rateBps: 600, amount: 180 },
-      { name: 'SGST', rateBps: 600, amount: 180 },
+      { name: 'CGST', rateBps: 600, amount: 180, base: 3000 },
+      { name: 'SGST', rateBps: 600, amount: 180, base: 3000 },
     ]);
 
     // Other taxes: Dosa (main menu) gets a service charge; a branch pin must not drop it.

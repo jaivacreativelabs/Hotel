@@ -1,4 +1,4 @@
-import type { PaymentMethod, TransactionStatus } from '@rb/shared';
+import { bpsToPercent, formatMoney, type PaymentMethod, type TaxLine, type TransactionStatus } from '@rb/shared';
 
 export { formatMoney } from '@rb/shared';
 
@@ -55,6 +55,12 @@ export function newIdempotencyKey(): string {
 
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = { CASH: 'Cash', UPI: 'UPI', CARD: 'Card' };
 export const STATUS_LABEL: Record<TransactionStatus, string> = { COMPLETED: 'Paid', VOIDED: 'Voided', REFUNDED: 'Refunded' };
+
+/** "CGST (6% on ₹ 300)": a tax line and what it was charged on (older bills did not keep that). */
+export function taxLabel(t: TaxLine, included: boolean): string {
+  const on = t.base ? ` on ${formatMoney(t.base)}` : '';
+  return `${t.name} (${bpsToPercent(t.rateBps)}%${on})${included ? ' incl.' : ''}`;
+}
 
 /** Joins class names, skipping falsy values. */
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ');
