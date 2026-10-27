@@ -68,6 +68,14 @@ interface TaxedItem {
   extraTaxes: { name: string; rateBps: number }[];
 }
 
+/** "GST 5% · Service charge 10%": an item's own taxes ("" when it has none). */
+export function itemTaxText(i: Pick<TaxedItem, 'taxRateBps' | 'extraTaxes'>): string {
+  return [
+    ...(Number(i.taxRateBps) > 0 ? [`GST ${bpsToPercent(i.taxRateBps!)}%`] : []),
+    ...(i.extraTaxes ?? []).map((t) => `${t.name} ${bpsToPercent(t.rateBps)}%`),
+  ].join(' · ');
+}
+
 /** Which items of a bill a tax line was charged on, e.g. "Idly (Half, 1), Dosa". */
 export function taxedItemsText(t: TaxLine, items: TaxedItem[]): string {
   const own = (i: TaxedItem) => i.taxRateBps !== null && i.taxRateBps !== undefined;

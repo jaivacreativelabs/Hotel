@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../../services/api';
-import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL, taxedItemsText, taxLabel } from '../../utils/format';
+import { formatDateTime, formatMoney, itemTaxText, PAYMENT_LABEL, STATUS_LABEL, taxedItemsText, taxLabel } from '../../utils/format';
 
 const css = `
 @page { size: 80mm auto; margin: 4mm; }
@@ -16,7 +16,7 @@ body { background: #fff !important; }
 .receipt .logo { display: block; width: 22mm; height: 22mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
 .receipt h1 { font-size: 16px; text-align: center; margin: 0; font-family: inherit; }
 .receipt .c { text-align: center; }
-.receipt .tax-items { font-size: 9px; color: #555; }
+.receipt .tax-items { font-size: 11px; font-weight: normal; color: #000; }
 .receipt .rule { border-top: 1px dashed #000; margin: 6px 0; }
 .receipt table { width: 100%; border-collapse: collapse; }
 .receipt td { padding: 1px 0; vertical-align: top; }
@@ -105,6 +105,7 @@ export function PrintReceiptPage() {
                 <td>
                   {i.name}
                   <br />@ {formatMoney(i.unitPrice)}
+                  {itemTaxText(i) && ` · ${itemTaxText(i)}`}
                 </td>
                 <td className="r">{i.quantity}</td>
                 <td className="r">{formatMoney(i.lineTotal)}</td>

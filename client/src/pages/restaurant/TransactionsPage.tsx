@@ -1,4 +1,4 @@
-import { bpsToPercent, PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
+import { PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -11,7 +11,7 @@ import { api, downloadFile } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
-import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, taxedItemsText, taxLabel, type DatePreset } from '../../utils/format';
+import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, itemTaxText, taxedItemsText, taxLabel, type DatePreset } from '../../utils/format';
 import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
@@ -209,14 +209,7 @@ function BillDetails({
               <span>
                 {i.name}
                 {/* Which taxes this item paid, so the tax lines below make sense */}
-                {(Number(i.taxRateBps) > 0 || i.extraTaxes.length > 0) && (
-                  <small className="bill-item-tax">
-                    {[
-                      ...(Number(i.taxRateBps) > 0 ? [`GST ${bpsToPercent(i.taxRateBps!)}%`] : []),
-                      ...i.extraTaxes.map((t) => `${t.name} ${bpsToPercent(t.rateBps)}%`),
-                    ].join(' · ')}
-                  </small>
-                )}
+                {itemTaxText(i) && <small className="bill-item-tax">{itemTaxText(i)}</small>}
               </span>
               <span className="qty-col">x{i.quantity}</span>
               <span className="amt num">{formatMoney(i.lineTotal)}</span>
