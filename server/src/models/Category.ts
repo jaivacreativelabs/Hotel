@@ -1,6 +1,18 @@
 import { model, Schema, type HydratedDocument, type InferSchemaType } from 'mongoose';
 import { RECORD_STATUSES } from '@rb/shared';
 
+// A branch's own name, icon, on/off and position for a category (null → the category's own).
+const categoryOverrideSchema = new Schema(
+  {
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    name: { type: String, default: null, trim: true, maxlength: 50 },
+    icon: { type: String, default: null },
+    status: { type: String, enum: [...RECORD_STATUSES, null], default: null },
+    displayOrder: { type: Number, default: null },
+  },
+  { _id: false },
+);
+
 const categorySchema = new Schema(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
@@ -11,6 +23,7 @@ const categorySchema = new Schema(
     icon: { type: String, default: '' },
     displayOrder: { type: Number, default: 0 },
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
+    branchOverrides: { type: [categoryOverrideSchema], default: [] },
   },
   { timestamps: true },
 );

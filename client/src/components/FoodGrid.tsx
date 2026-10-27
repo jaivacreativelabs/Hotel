@@ -57,7 +57,7 @@ function VariantPicker({
                 {v.variantName}
                 {v.variantQty && <small className="variant-qty">{v.variantQty}</small>}
               </span>
-              {!v.isAvailable ? <span className="muted">Sold out</span> : qty ? <span className="food-qty-badge static">{qty}</span> : null}
+              {!v.isAvailable ? <span className="muted">Sold out</span> : qty ? <span className="food-qty-badge">{qty}</span> : null}
               <span className="variant-price">{formatMoney(v.price)}</span>
             </button>
           );

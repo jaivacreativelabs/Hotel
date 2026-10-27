@@ -28,7 +28,7 @@ import {
   type Transaction,
 } from '../models/index.js';
 import { type AppError, badRequest, conflict, notFound } from '../utils/errors.js';
-import { effectiveItem, restaurantSettings, toDraftDTO, toTransactionDTO } from '../utils/serialize.js';
+import { effectiveCategory, effectiveItem, restaurantSettings, toDraftDTO, toTransactionDTO } from '../utils/serialize.js';
 import { toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { cancelUnstarted, sendToKitchen } from './kitchen.service.js';
@@ -93,10 +93,11 @@ export async function priceLines(
     if (!item) throw badRequest('An item on this bill is not on this branch’s menu', 'ITEM_NOT_FOUND');
     const eff = effectiveItem(item, scope.branch._id);
     const cat = catById.get(String(item.categoryId));
+    const catEff = cat ? effectiveCategory(cat, scope.branch._id) : undefined; // the branch's own on/off and name
     const parent = item.parentId ? parentById.get(String(item.parentId)) : undefined;
     const parentEff = parent ? effectiveItem(parent, scope.branch._id) : undefined;
     const parentOk = !item.parentId || Boolean(parent && parent.status === 'ACTIVE' && parentEff!.isAvailable);
-    const available = item.status === 'ACTIVE' && eff.isAvailable && !eff.hidden && cat?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
+    const available = item.status === 'ACTIVE' && eff.isAvailable && !eff.hidden && catEff?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
     return {
       menuItemId: item._id,
       name: item.name,
@@ -108,7 +109,7 @@ export async function priceLines(
       extraTaxes: (parentEff ?? eff).extraTaxes,
       quantity: r.quantity,
       unavailable: !available,
-      categoryName: cat?.name ?? '',
+      categoryName: catEff?.name ?? '',
     };
   });
 }

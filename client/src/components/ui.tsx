@@ -60,13 +60,18 @@ export function Modal({ title, children, onClose, width }: { title: ReactNode; c
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+    ref.current?.querySelector<HTMLElement>('input, select, textarea, button:not(.modal-close)')?.focus();
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" ref={ref} style={width ? { width: `min(${width}px, 100%)` } : undefined}>
-        <h2 className="modal-title">{title}</h2>
+        <div className="modal-head">
+          <h2 className="modal-title">{title}</h2>
+          <button type="button" className="icon-btn close-red modal-close" onClick={onClose} aria-label="Close" title="Close">
+            <X />
+          </button>
+        </div>
         {children}
       </div>
     </div>

@@ -10,7 +10,7 @@ import type { AuthUser } from '../middleware/auth.js';
 import type { Scope } from '../middleware/scope.js';
 import { CategoryModel, MenuItemModel, type Category, type MenuItem } from '../models/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
-import { effectiveItem, toCategoryDTO, toMenuItemDTO } from '../utils/serialize.js';
+import { effectiveCategory, effectiveItem, toCategoryDTO, toMenuItemDTO } from '../utils/serialize.js';
 import { escapeRegex, nameKey, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { saveImage } from './storage.service.js';
@@ -48,10 +48,12 @@ function auditBase(scope: Scope) {
 // ---------------- Categories ----------------
 
 export async function listCategories(scope: Scope, includeInactive: boolean) {
-  const cats = await CategoryModel.find({ ...visibleFilter(scope), ...(includeInactive ? {} : { status: 'ACTIVE' }) })
-    .sort({ branchId: 1, displayOrder: 1, name: 1 })
-    .lean<CategoryLean[]>();
-  return cats.map((c) => toCategoryDTO(c, branchOf(scope)));
+  const cats = await CategoryModel.find(visibleFilter(scope)).lean<CategoryLean[]>();
+  const branchId = branchOf(scope);
+  return cats
+    .map((c) => toCategoryDTO(c, branchId))
+    .filter((c) => includeInactive || c.status === 'ACTIVE')
+    .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
 }
 
 async function getVisibleCategory(scope: Scope, id: string) {
@@ -60,10 +62,15 @@ async function getVisibleCategory(scope: Scope, id: string) {
   return cat;
 }
 
-async function getOwnedCategory(scope: Scope, id: string) {
-  const cat = await getVisibleCategory(scope, id);
-  if (!owns(scope, cat)) throw forbidden('Shared categories are managed from the restaurant-wide menu');
-  return cat;
+/** Sets this branch's own name / icon / on-off / position for a category. */
+function setCategoryOverride(
+  cat: InstanceType<typeof CategoryModel>,
+  branchId: Types.ObjectId,
+  patch: { name?: string; icon?: string; status?: RecordStatus; displayOrder?: number },
+) {
+  const existing = cat.branchOverrides.find((o) => o.branchId.equals(branchId));
+  if (existing) existing.set(patch);
+  else cat.branchOverrides.push({ branchId, name: null, icon: null, status: null, displayOrder: null, ...patch });
 }
 
 export async function createCategory(actor: AuthUser, scope: Scope, input: CategoryCreateInput) {
@@ -93,16 +100,26 @@ export async function createCategory(actor: AuthUser, scope: Scope, input: Categ
 }
 
 export async function updateCategory(actor: AuthUser, scope: Scope, id: string, input: Partial<CategoryCreateInput>) {
-  const cat = await getOwnedCategory(scope, id);
-  if (input.name && nameKey(input.name) !== cat.nameKey) {
-    const key = nameKey(input.name);
-    if (await CategoryModel.exists({ ...nameClashFilter(scope, key), _id: { $ne: cat._id } })) {
-      throw conflict(`Category "${input.name}" already exists`, 'DUPLICATE');
+  const cat = await getVisibleCategory(scope, id);
+  const branchId = branchOf(scope);
+  if (owns(scope, cat)) {
+    if (input.name && nameKey(input.name) !== cat.nameKey) {
+      const key = nameKey(input.name);
+      if (await CategoryModel.exists({ ...nameClashFilter(scope, key), _id: { $ne: cat._id } })) {
+        throw conflict(`Category "${input.name}" already exists`, 'DUPLICATE');
+      }
+      cat.name = input.name;
+      cat.nameKey = key;
     }
-    cat.name = input.name;
-    cat.nameKey = key;
+    if (input.icon !== undefined) cat.icon = input.icon;
+  } else {
+    // A main-menu category renamed or given another icon in a branch: for that branch only.
+    if (input.name) {
+      const others = (await listCategories(scope, true)).filter((c) => c.id !== String(cat._id));
+      if (others.some((c) => nameKey(c.name) === nameKey(input.name!))) throw conflict(`Category "${input.name}" already exists`, 'DUPLICATE');
+    }
+    setCategoryOverride(cat, branchId!, { ...(input.name && { name: input.name }), ...(input.icon !== undefined && { icon: input.icon }) });
   }
-  if (input.icon !== undefined) cat.icon = input.icon;
   await cat.save();
   await audit(actor, {
     ...auditBase(scope),
@@ -115,8 +132,9 @@ export async function updateCategory(actor: AuthUser, scope: Scope, id: string, 
 }
 
 export async function setCategoryStatus(actor: AuthUser, scope: Scope, id: string, status: RecordStatus) {
-  const cat = await getOwnedCategory(scope, id);
-  cat.status = status;
+  const cat = await getVisibleCategory(scope, id);
+  if (owns(scope, cat)) cat.status = status;
+  else setCategoryOverride(cat, branchOf(scope)!, { status }); // this branch only
   await cat.save();
   await audit(actor, {
     ...auditBase(scope),
@@ -130,15 +148,23 @@ export async function setCategoryStatus(actor: AuthUser, scope: Scope, id: strin
 
 export async function reorderCategories(scope: Scope, ids: string[]) {
   const objectIds = ids.map((id) => toObjectId(id, 'category'));
-  const owned = await CategoryModel.countDocuments({
-    _id: { $in: objectIds },
-    restaurantId: scope.restaurant._id,
-    branchId: branchOf(scope),
-  });
-  if (owned !== objectIds.length) throw forbidden('Only categories of this menu can be reordered');
-  await CategoryModel.bulkWrite(
-    objectIds.map((_id, i) => ({ updateOne: { filter: { _id }, update: { $set: { displayOrder: i } } } })),
-  );
+  const branchId = branchOf(scope);
+  if (!branchId) {
+    const owned = await CategoryModel.countDocuments({ _id: { $in: objectIds }, restaurantId: scope.restaurant._id, branchId: null });
+    if (owned !== objectIds.length) throw forbidden('Only categories of this menu can be reordered');
+    await CategoryModel.bulkWrite(
+      objectIds.map((_id, i) => ({ updateOne: { filter: { _id }, update: { $set: { displayOrder: i } } } })),
+    );
+    return listCategories(scope, true);
+  }
+  // A branch orders everything it sees (shared and its own) for itself only.
+  const cats = await CategoryModel.find({ _id: { $in: objectIds }, ...visibleFilter(scope) });
+  if (cats.length !== objectIds.length) throw forbidden('Only categories of this menu can be reordered');
+  const position = new Map(objectIds.map((id, i) => [String(id), i]));
+  for (const c of cats) {
+    setCategoryOverride(c, branchId, { displayOrder: position.get(String(c._id))! });
+    await c.save();
+  }
   return listCategories(scope, true);
 }
 
@@ -189,7 +215,9 @@ async function getOwnedItem(scope: Scope, id: string) {
 
 async function assertCategoryUsable(scope: Scope, categoryId: string) {
   const cat = await getVisibleCategory(scope, categoryId);
-  if (cat.status !== 'ACTIVE') throw badRequest('This category is inactive', 'CATEGORY_INACTIVE');
+  if (effectiveCategory(cat.toObject() as CategoryLean, branchOf(scope)).status !== 'ACTIVE') {
+    throw badRequest('This category is inactive', 'CATEGORY_INACTIVE');
+  }
   // An item in the shared menu cannot point at a branch-only category.
   if (!branchOf(scope) && cat.branchId) throw badRequest('Choose a shared category');
   return cat;

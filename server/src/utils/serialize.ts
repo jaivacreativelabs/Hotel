@@ -7,6 +7,7 @@ import type {
   CategoryDTO,
   DraftDTO,
   MenuItemDTO,
+  RecordStatus,
   RestaurantDTO,
   TransactionDTO,
   UserDTO,
@@ -74,16 +75,34 @@ export function toBranchDTO(b: BranchLean & { createdAt?: Date }): BranchDTO {
   };
 }
 
+/**
+ * A category as a branch sees it: the branch's own name, icon, on/off and position win. A branch's
+ * own categories come after the shared ones until the branch reorders its list.
+ */
+export function effectiveCategory(c: WithId<Category>, branchId: Types.ObjectId | null) {
+  const o = branchId ? c.branchOverrides?.find((x) => x.branchId.equals(branchId)) : undefined;
+  const ownOffset = c.branchId && branchId ? 1000 : 0;
+  return {
+    name: o?.name ?? c.name,
+    icon: o?.icon ?? c.icon ?? '',
+    status: (o?.status ?? c.status) as RecordStatus,
+    displayOrder: o?.displayOrder ?? ownOffset + (c.displayOrder ?? 0),
+  };
+}
+
 export function toCategoryDTO(c: WithId<Category>, scopeBranchId: Types.ObjectId | null): CategoryDTO {
+  const eff = effectiveCategory(c, scopeBranchId);
+  const isShared = !c.branchId && scopeBranchId !== null;
   return {
     id: String(c._id),
     restaurantId: String(c.restaurantId),
     branchId: c.branchId ? String(c.branchId) : null,
-    name: c.name,
-    icon: c.icon ?? '',
-    displayOrder: c.displayOrder ?? 0,
-    status: c.status,
-    editable: sameId(c.branchId, scopeBranchId),
+    name: eff.name,
+    icon: eff.icon,
+    displayOrder: eff.displayOrder,
+    status: eff.status,
+    editable: sameId(c.branchId, scopeBranchId) || isShared,
+    isShared,
   };
 }
 
@@ -167,7 +186,7 @@ export function toDraftDTO(d: WithId<Draft>, tableLabel = ''): DraftDTO {
     totals: {
       subtotal: d.totals?.subtotal ?? 0,
       discountAmount: d.totals?.discountAmount ?? 0,
-      taxes: (d.totals?.taxes ?? []).map((t) => ({ name: t.name ?? '', rateBps: t.rateBps ?? 0, amount: t.amount ?? 0 })),
+      taxes: (d.totals?.taxes ?? []).map((t) => ({ name: t.name ?? '', rateBps: t.rateBps ?? 0, amount: t.amount ?? 0, ...(t.base != null && { base: t.base }) })),
       taxTotal: d.totals?.taxTotal ?? 0,
       grandTotal: d.totals?.grandTotal ?? 0,
     },
@@ -220,7 +239,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
     discount: t.discount?.type
       ? { type: t.discount.type, value: t.discount.value ?? 0, amount: t.discount.amount ?? 0 }
       : null,
-    taxes: (t.taxes ?? []).map((x) => ({ name: x.name ?? '', rateBps: x.rateBps ?? 0, amount: x.amount ?? 0 })),
+    taxes: (t.taxes ?? []).map((x) => ({ name: x.name ?? '', rateBps: x.rateBps ?? 0, amount: x.amount ?? 0, ...(x.base != null && { base: x.base }) })),
     taxTotal: t.taxTotal,
     grandTotal: t.grandTotal,
     pricesIncludeTax: Boolean(t.pricesIncludeTax),

@@ -1133,6 +1133,15 @@ a {
   font-size: var(--font-size-xl);
   font-weight: 800;
 }
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-close {
+  flex-shrink: 0;
+}
 .modal-actions {
   display: flex;
   gap: 12px;
@@ -3575,25 +3584,27 @@ a {
 }
 
 /* ============ Variants (sizes / types) ============ */
-.food-qty-badge.static {
-  position: static;
-}
+/* Size / type choices: square tiles, tap one to add it */
 .variant-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 10px;
 }
 .variant-btn {
+  position: relative;
+  aspect-ratio: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 10px 16px;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
   border: 1.5px solid var(--color-border-strong);
   border-radius: var(--radius);
   background: var(--color-surface);
   color: var(--color-text);
-  text-align: left;
+  text-align: center;
+  cursor: pointer;
 }
 .variant-btn:hover:not(:disabled) {
   border-color: var(--color-primary);
@@ -3603,15 +3614,21 @@ a {
   opacity: 0.5;
   cursor: not-allowed;
 }
+.variant-btn .food-qty-badge {
+  top: 8px;
+  right: 8px;
+}
+.variant-btn .muted {
+  font-size: 0.75rem;
+}
 .variant-name {
-  flex: 1;
   font-weight: 700;
   font-size: 1.05rem;
 }
 .variant-price {
   color: var(--color-primary);
   font-weight: 800;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
 }
 .variant-rows {
   display: flex;
@@ -3870,4 +3887,103 @@ a {
   grid-template-columns: 1fr 96px auto;
   gap: 8px;
   align-items: center;
+}
+/* Category icon: tap to pick from a grid */
+.icon-picker {
+  position: relative;
+  flex-shrink: 0;
+  align-self: center;
+}
+.icon-picker-btn {
+  width: 70px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+.icon-picker-btn.small {
+  width: 54px;
+  height: 36px;
+  font-size: 1.2rem;
+}
+.icon-picker-btn.no-icon {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.icon-picker-btn:hover,
+.icon-picker-btn[aria-expanded='true'] {
+  border-color: var(--color-primary);
+}
+.icon-picker-grid {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 288px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-modal);
+}
+.icon-picker-grid button {
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+.icon-picker-grid button:hover {
+  background: var(--color-surface-muted, #f2f4ef);
+}
+.icon-picker-grid button.active {
+  background: var(--color-primary-soft);
+  outline: 2px solid var(--color-primary);
+}
+.icon-picker-grid .icon-picker-none {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-danger, #c62828);
+}
+.cat-row-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cat-row-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cat-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cat-row {
+  flex-wrap: wrap;
+}
+.cat-row-name {
+  flex: 1 1 140px;
+}
+.cat-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.bill-item-tax {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
 }

@@ -129,8 +129,10 @@ export interface CategoryDTO {
   icon: string;
   displayOrder: number;
   status: RecordStatus;
-  /** true when the category belongs to the caller's scope and may be edited */
+  /** true when the caller may rename, hide or move it (a branch changes shared ones for itself only) */
   editable: boolean;
+  /** a main-menu category seen from a branch */
+  isShared: boolean;
 }
 
 export interface MenuItemDTO {

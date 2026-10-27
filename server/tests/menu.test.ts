@@ -31,7 +31,8 @@ describe('categories', () => {
     expect(c.editable).toBe(true);
     const list = ok<{ name: string; editable: boolean }[]>(await w.adminA1.get('/api/v1/menu/categories'));
     expect(list.map((x) => x.name)).toEqual(expect.arrayContaining(['Main', 'Specials']));
-    expect(list.find((x) => x.name === 'Main')?.editable).toBe(false);
+    // A branch can manage a shared category too (for itself only); it stays marked as shared.
+    expect(list.find((x) => x.name === 'Main')).toMatchObject({ editable: true, isShared: true });
     // Another branch does not see A1's category.
     const a2 = ok<{ name: string }[]>(await w.adminA2.get('/api/v1/menu/categories'));
     expect(a2.map((x) => x.name)).not.toContain('Specials');
@@ -44,10 +45,18 @@ describe('categories', () => {
     expect((await w.adminA2.post('/api/v1/menu/categories', { name: 'Specials' })).status).toBe(201);
   });
 
-  it('cannot rename shared categories from a branch', async () => {
-    const list = ok<{ id: string; name: string }[]>(await w.adminA1.get('/api/v1/menu/categories'));
-    const main = list.find((x) => x.name === 'Main')!;
-    expect((await w.adminA1.patch(`/api/v1/menu/categories/${main.id}`, { name: 'Hacked' })).status).toBe(403);
+  it('renames and hides a shared category for one branch only', async () => {
+    const names = async (c: typeof w.adminA1) => ok<{ name: string; status: string }[]>(await c.get('/api/v1/menu/categories?includeInactive=true'));
+    const main = ok<{ id: string; name: string }[]>(await w.adminA1.get('/api/v1/menu/categories')).find((x) => x.name === 'Main')!;
+    ok(await w.adminA1.patch(`/api/v1/menu/categories/${main.id}`, { name: 'Meals', icon: '🍛' }));
+    ok(await w.adminA1.patch(`/api/v1/menu/categories/${main.id}/status`, { status: 'INACTIVE' }));
+    expect((await names(w.adminA1)).find((x) => x.name === 'Meals')?.status).toBe('INACTIVE');
+    expect((await names(w.adminA2)).find((x) => x.name === 'Main')?.status).toBe('ACTIVE'); // other branch untouched
+    // A name another category already has is refused.
+    expect((await w.adminA1.patch(`/api/v1/menu/categories/${main.id}`, { name: 'Specials' })).status).toBe(409);
+    // Back to normal for the tests below.
+    ok(await w.adminA1.patch(`/api/v1/menu/categories/${main.id}`, { name: 'Main' }));
+    ok(await w.adminA1.patch(`/api/v1/menu/categories/${main.id}/status`, { status: 'ACTIVE' }));
   });
 
   it('deactivates and reorders own categories', async () => {

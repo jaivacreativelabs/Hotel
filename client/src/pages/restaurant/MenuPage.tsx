@@ -27,7 +27,7 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
@@ -55,6 +55,70 @@ function useScopedApi(scope: MenuScope) {
 }
 
 // ---------------- Inline category creation ----------------
+
+const CATEGORY_ICONS = [
+  '🍽️', '🥞', '🍛', '🍚', '🍲', '🥘', '🍜', '🍝', '🥗', '🫓', '🥙', '🌯',
+  '🥪', '🍔', '🍕', '🌮', '🥟', '🍟', '🍳', '🥚', '🍗', '🍖', '🐟', '🍤',
+  '🧆', '🌶️', '☕', '🍵', '🥤', '🧃', '🥛', '🍹', '🍦', '🍰', '🍮', '🍩',
+  '🍪', '🍫', '🍎', '🍌', '🥥', '🍉',
+];
+
+/** Picks a category's icon from a grid instead of typing an emoji. */
+function IconPicker({ value, onChange, small }: { value: string; onChange: (icon: string) => void; small?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <div className="icon-picker" ref={ref}>
+      <button
+        type="button"
+        className={cx('icon-picker-btn', small && 'small', !value && 'no-icon')}
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Choose an icon"
+        aria-expanded={open}
+        title="Choose an icon"
+      >
+        {value || '🍽️'}
+      </button>
+      {open && (
+        <div className="icon-picker-grid" role="listbox" aria-label="Icons">
+          {CATEGORY_ICONS.map((i) => (
+            <button
+              type="button"
+              key={i}
+              role="option"
+              aria-selected={value === i}
+              className={cx(value === i && 'active')}
+              onClick={() => {
+                onChange(i);
+                setOpen(false);
+              }}
+            >
+              {i}
+            </button>
+          ))}
+          {value && (
+            <button
+              type="button"
+              className="icon-picker-none"
+              onClick={() => {
+                onChange('');
+                setOpen(false);
+              }}
+            >
+              No icon
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CreateCategoryForm({ scope, onCreated, prominent }: { scope: MenuScope; onCreated: (c: CategoryDTO) => void; prominent: boolean }) {
   const scoped = useScopedApi(scope);
@@ -94,7 +158,7 @@ function CreateCategoryForm({ scope, onCreated, prominent }: { scope: MenuScope;
         </div>
       )}
       <div className="row" style={{ alignItems: 'stretch' }}>
-        <input className="input" style={{ width: 70, textAlign: 'center', padding: 0 }} placeholder="🍽" value={icon} maxLength={4} onChange={(e) => setIcon(e.target.value)} aria-label="Category icon (emoji, optional)" />
+        <IconPicker value={icon} onChange={setIcon} />
         <input
           className="input"
           placeholder="Category name"
@@ -646,7 +710,7 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
               <div key={c.id} className={cx('cat-row', c.status === 'INACTIVE' && 'inactive')}>
                 {editing?.id === c.id ? (
                   <>
-                    <input className="input input-sm" style={{ width: 54, textAlign: 'center', padding: 0 }} value={editing.icon} maxLength={4} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} aria-label="Icon" />
+                    <IconPicker small value={editing.icon} onChange={(icon) => setEditing({ ...editing, icon })} />
                     <input className="input input-sm" value={editing.name} maxLength={50} onChange={(e) => setEditing({ ...editing, name: e.target.value })} aria-label="Name" autoFocus />
                     <button
                       className="btn btn-primary btn-sm"
@@ -663,13 +727,17 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                 ) : (
                   <>
                     <span className="cat-icon">{c.icon || '•'}</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
+                    <span className="cat-row-name">
                       <strong>{c.name}</strong>
-                      {!c.editable && <span className="badge badge-gray badge-sm" style={{ marginLeft: 8 }}>Shared</span>}
-                      {c.status === 'INACTIVE' && <span className="badge badge-amber badge-sm" style={{ marginLeft: 8 }}>Hidden</span>}
+                      {(c.isShared || c.status === 'INACTIVE') && (
+                        <span className="cat-row-badges">
+                          {c.isShared && <span className="badge badge-gray badge-sm">Shared</span>}
+                          {c.status === 'INACTIVE' && <span className="badge badge-amber badge-sm">Hidden</span>}
+                        </span>
+                      )}
                     </span>
                     {c.editable && (
-                      <>
+                      <span className="cat-row-actions">
                         <button className="icon-btn plain" onClick={() => move(c.id, -1)} disabled={index <= 0} aria-label={`Move ${c.name} up`}>
                           <ArrowUp />
                         </button>
@@ -687,7 +755,7 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                             aria-label={`${c.name} visible`}
                           />
                         </label>
-                      </>
+                      </span>
                     )}
                   </>
                 )}
@@ -745,10 +813,7 @@ export function MenuManager({
       (i) => i.status === 'ACTIVE' && (category === 'all' || i.categoryId === category) && (!q || i.name.toLowerCase().includes(q)),
     );
   }, [dishes, category, search]);
-  const hiddenDishes = dishes.filter((i) => i.status === 'ACTIVE' && notInBilling(i));
-  const hiddenCount = hiddenDishes.length;
-  // Shared categories can only be switched on from the Super Admin's restaurant-wide menu.
-  const hiddenShared = (categories.data ?? []).some((c) => !c.editable && hiddenDishes.some((i) => i.categoryId === c.id));
+  const hiddenCount = dishes.filter((i) => i.status === 'ACTIVE' && notInBilling(i)).length;
 
   const run = async (fn: () => Promise<unknown>, success: string) => {
     try {
@@ -795,10 +860,7 @@ export function MenuManager({
             <TriangleAlert />
             <span style={{ flex: 1 }}>
               <strong>{hiddenCount === 1 ? '1 dish is' : `${hiddenCount} dishes are`} not shown in billing</strong> because the category is switched
-              off.{' '}
-              {hiddenShared
-                ? 'Shared categories can only be switched on by the Super Admin (Menu › Categories).'
-                : 'Turn it on in Categories.'}
+              off. Turn it on in Categories.
             </span>
             <button className="btn btn-outline btn-sm" onClick={() => setPanel({ kind: 'categories' })}>
               <Layers /> Categories
