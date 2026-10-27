@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../../services/api';
-import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL, taxLabel } from '../../utils/format';
+import { formatDateTime, formatMoney, PAYMENT_LABEL, STATUS_LABEL, taxedItemsText, taxLabel } from '../../utils/format';
 
 const css = `
 @page { size: 80mm auto; margin: 4mm; }
@@ -16,6 +16,7 @@ body { background: #fff !important; }
 .receipt .logo { display: block; width: 22mm; height: 22mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
 .receipt h1 { font-size: 16px; text-align: center; margin: 0; font-family: inherit; }
 .receipt .c { text-align: center; }
+.receipt .tax-items { font-size: 9px; color: #555; }
 .receipt .rule { border-top: 1px dashed #000; margin: 6px 0; }
 .receipt table { width: 100%; border-collapse: collapse; }
 .receipt td { padding: 1px 0; vertical-align: top; }
@@ -126,7 +127,10 @@ export function PrintReceiptPage() {
             )}
             {t.taxes.map((x) => (
               <tr key={`${x.name}|${x.rateBps}`}>
-                <td>{taxLabel(x, t.pricesIncludeTax)}</td>
+                <td>
+                  {taxLabel(x, t.pricesIncludeTax)}
+                  <div className="tax-items">{taxedItemsText(x, t.items)}</div>
+                </td>
                 <td className="r">{formatMoney(x.amount)}</td>
               </tr>
             ))}

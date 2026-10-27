@@ -11,7 +11,7 @@ import { api, downloadFile } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
-import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, taxLabel, type DatePreset } from '../../utils/format';
+import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, taxedItemsText, taxLabel, type DatePreset } from '../../utils/format';
 import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
@@ -238,7 +238,10 @@ function BillDetails({
           )}
           {tx.taxes.map((t) => (
             <div key={`${t.name}|${t.rateBps}`}>
-              <span>{taxLabel(t, tx.pricesIncludeTax)}</span>
+              <span>
+                {taxLabel(t, tx.pricesIncludeTax)}
+                <small className="tax-items">{taxedItemsText(t, tx.items)}</small>
+              </span>
               <span>{formatMoney(t.amount)}</span>
             </div>
           ))}

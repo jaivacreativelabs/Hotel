@@ -87,7 +87,7 @@ describe('calculateBill', () => {
     expect(flat.grandTotal).toBe(0);
   });
 
-  it("uses an item's own GST %, split into CGST and SGST", () => {
+  it("uses an item's own GST % as one GST line", () => {
     const t = calculateBill(
       [
         { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 500 },
@@ -97,16 +97,14 @@ describe('calculateBill', () => {
       noTax,
     );
     expect(t.taxes).toEqual([
-      { name: 'CGST', rateBps: 250, amount: 250, base: 10000 },
-      { name: 'SGST', rateBps: 250, amount: 250, base: 10000 },
-      { name: 'CGST', rateBps: 900, amount: 900, base: 10000 },
-      { name: 'SGST', rateBps: 900, amount: 900, base: 10000 },
+      { name: 'GST', rateBps: 500, amount: 500, base: 10000 },
+      { name: 'GST', rateBps: 1800, amount: 1800, base: 10000 },
     ]);
     expect(t.taxTotal).toBe(2300);
     expect(t.grandTotal).toBe(32300);
   });
 
-  it('adds up the same rate from the restaurant and from items', () => {
+  it("keeps the restaurant's taxes and an item's own GST apart", () => {
     const t = calculateBill(
       [
         { unitPrice: 10000, quantity: 1, taxable: true }, // restaurant CGST + SGST 2.5 %
@@ -115,9 +113,9 @@ describe('calculateBill', () => {
       gst5,
     );
     expect(t.taxes).toEqual([
-      // charged on both items' ₹200
-      { name: 'CGST', rateBps: 250, amount: 500, base: 20000 },
-      { name: 'SGST', rateBps: 250, amount: 500, base: 20000 },
+      { name: 'CGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'SGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'GST', rateBps: 500, amount: 500, base: 10000 },
     ]);
     expect(t.grandTotal).toBe(21000);
   });
@@ -132,7 +130,7 @@ describe('calculateBill', () => {
       { type: 'PERCENT', value: 1000 },
     );
     // each line's base is ₹90 after 10 % off
-    expect(t.taxes.map((x) => x.amount)).toEqual([225, 225, 810, 810]);
+    expect(t.taxes.map((x) => x.amount)).toEqual([450, 1620]);
     expect(t.grandTotal).toBe(18000 + 2070);
   });
 
@@ -152,10 +150,15 @@ describe('calculateBill', () => {
     );
     expect(t.taxes).toEqual([
       { name: 'Service charge', rateBps: 1000, amount: 2000, base: 20000 },
-      { name: 'CGST', rateBps: 250, amount: 250, base: 10000 },
-      { name: 'SGST', rateBps: 250, amount: 250, base: 10000 },
+      { name: 'GST', rateBps: 500, amount: 500, base: 10000 },
     ]);
     expect(t.grandTotal).toBe(20000 + 2500);
+  });
+
+  it('rounds one GST line, not two halves', () => {
+    // 5 % of ₹15 = 75 paise (CGST + SGST halves would round to 38 + 38 = 76)
+    const t = calculateBill([{ unitPrice: 1500, quantity: 1, taxable: true, taxRateBps: 500 }], noTax);
+    expect(t.taxTotal).toBe(75);
   });
 
   it('handles an empty bill', () => {

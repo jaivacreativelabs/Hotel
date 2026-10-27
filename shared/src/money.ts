@@ -61,13 +61,9 @@ export function divRoundHalfUp(numerator: number, denominator: number): number {
   return r * 2 >= denominator ? q + 1 : q;
 }
 
-/** An item's own GST rate as it appears on Indian bills: half CGST, half SGST. */
+/** An item's own GST rate: one "GST" line on the bill (not split into CGST and SGST). */
 export function gstComponents(rateBps: number): TaxRate[] {
-  const sgst = Math.floor(rateBps / 2);
-  return [
-    { name: 'CGST', rateBps: rateBps - sgst },
-    { name: 'SGST', rateBps: sgst },
-  ];
+  return [{ name: 'GST', rateBps }];
 }
 
 /** Tax on one group of lines that share the same rates; `base` is after discount. */

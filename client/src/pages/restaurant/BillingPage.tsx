@@ -39,7 +39,7 @@ import { useAuth } from '../../store/auth';
 import type { DraftSyncState, LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
-import { cx, formatMoney, newIdempotencyKey, taxLabel } from '../../utils/format';
+import { cx, formatMoney, newIdempotencyKey, taxedItemsText, taxLabel } from '../../utils/format';
 import { splitVariant } from '../../utils/menu';
 
 function SyncStatus({ state }: { state: DraftSyncState }) {
@@ -387,7 +387,10 @@ export function BillingView({
               )}
               {totals.taxes.map((t) => (
                 <div key={`${t.name}|${t.rateBps}`}>
-                  <span>{taxLabel(t, settings.pricesIncludeTax)}</span>
+                  <span>
+                    {taxLabel(t, settings.pricesIncludeTax)}
+                    <small className="tax-items">{taxedItemsText(t, local?.items ?? [])}</small>
+                  </span>
                   <span>{formatMoney(t.amount)}</span>
                 </div>
               ))}

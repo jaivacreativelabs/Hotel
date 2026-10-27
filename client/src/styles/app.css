@@ -3987,3 +3987,11 @@ a {
   font-size: 0.72rem;
   font-weight: 500;
 }
+/* Under a tax line: the items it was charged on */
+.tax-items {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+}

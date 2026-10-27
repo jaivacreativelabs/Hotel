@@ -1,4 +1,4 @@
-import { bpsToPercent, formatMoney, type PaymentMethod, type TaxLine, type TransactionStatus } from '@rb/shared';
+import { bpsToPercent, type PaymentMethod, type TaxLine, type TransactionStatus } from '@rb/shared';
 
 export { formatMoney } from '@rb/shared';
 
@@ -56,10 +56,28 @@ export function newIdempotencyKey(): string {
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = { CASH: 'Cash', UPI: 'UPI', CARD: 'Card' };
 export const STATUS_LABEL: Record<TransactionStatus, string> = { COMPLETED: 'Paid', VOIDED: 'Voided', REFUNDED: 'Refunded' };
 
-/** "CGST (6% on ₹ 300)": a tax line and what it was charged on (older bills did not keep that). */
+/** "GST (5%)" – a tax line on a bill. */
 export function taxLabel(t: TaxLine, included: boolean): string {
-  const on = t.base ? ` on ${formatMoney(t.base)}` : '';
-  return `${t.name} (${bpsToPercent(t.rateBps)}%${on})${included ? ' incl.' : ''}`;
+  return `${t.name} (${bpsToPercent(t.rateBps)}%)${included ? ' incl.' : ''}`;
+}
+
+interface TaxedItem {
+  name: string;
+  taxable: boolean;
+  taxRateBps: number | null;
+  extraTaxes: { name: string; rateBps: number }[];
+}
+
+/** Which items of a bill a tax line was charged on, e.g. "Idly (Half, 1), Dosa". */
+export function taxedItemsText(t: TaxLine, items: TaxedItem[]): string {
+  const own = (i: TaxedItem) => i.taxRateBps !== null && i.taxRateBps !== undefined;
+  let hit = items.filter((i) => (i.extraTaxes ?? []).some((x) => x.name === t.name && x.rateBps === t.rateBps));
+  if (!hit.length && t.name === 'GST') hit = items.filter((i) => i.taxRateBps === t.rateBps);
+  // Bills made before GST was one line split an item's own GST into CGST + SGST halves.
+  if (!hit.length && (t.name === 'CGST' || t.name === 'SGST')) hit = items.filter((i) => own(i) && Math.abs(i.taxRateBps! - 2 * t.rateBps) <= 1);
+  if (!hit.length) hit = items.filter((i) => !own(i) && i.taxable); // the restaurant's taxes
+  const names = hit.map((i) => i.name);
+  return names.length > 3 ? `${names.slice(0, 3).join(', ')} + ${names.length - 3} more` : names.join(', ');
 }
 
 /** Joins class names, skipping falsy values. */
