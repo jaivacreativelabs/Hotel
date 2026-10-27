@@ -15,12 +15,15 @@ export function TableIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-/** UPI mark: two arrows, the second in UPI orange (the first follows the text colour, so it shows on green). */
+/**
+ * The UPI mark: an orange arrow in front of a green one, both slanted like the logo. The green
+ * one follows the text colour, so it still shows on a selected (green) button.
+ */
 export function UpiIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" stroke="none" {...props}>
-      <path d="M3 4.5 10.5 12 3 19.5Z" fill="currentColor" />
-      <path d="M10.5 3 19.5 12 10.5 21Z" fill="#F47920" />
+      <path d="M11.5 3.5 20 13.5 9.5 21.5Z" fill="currentColor" />
+      <path d="M7 2.5 15.5 12 5 20Z" fill="#F47920" />
     </svg>
   );
 }
