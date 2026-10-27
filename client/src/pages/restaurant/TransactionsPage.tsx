@@ -11,7 +11,7 @@ import { api, downloadFile } from '../../services/api';
 import { useAuth } from '../../store/auth';
 import { useToast } from '../../store/toast';
 import { usePageSearch, useTopbarExtra } from '../../store/topbar';
-import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, itemTaxText, taxedItemsText, taxLabel, type DatePreset } from '../../utils/format';
+import { cx, formatDate, formatDateTime, formatDay, formatMoney, formatTime, isoDay, PAYMENT_LABEL, presetRange, shiftDays, STATUS_LABEL, itemTaxShares, itemTaxText, type DatePreset } from '../../utils/format';
 import { BillEditor, useEditMinutesLeft } from './BillEditor';
 
 const PRESETS: [DatePreset, string][] = [
@@ -104,6 +104,7 @@ function BillDetails({
   showBranch: boolean;
 }) {
   const [change, setChange] = useState<'void' | 'refund' | null>(null);
+  const taxShares = itemTaxShares(tx.taxes, tx.items);
   const toast = useToast();
   const { user } = useAuth();
   const anyTime = user?.role === 'SUPER_ADMIN';
@@ -201,43 +202,32 @@ function BillDetails({
       <div>
         <div className="section-title">Items ({tx.items.length})</div>
         <div className="bill-items-list">
-          {tx.items.map((i) => (
+          {tx.items.map((i, n) => (
             <div key={i.menuItemId} className="bill-item-row">
               <div className="thumb thumb-sm">
                 <FoodImage src={i.imageUrl} alt={i.name} />
               </div>
               <span>
                 {i.name}
-                {/* Which taxes this item paid, so the tax lines below make sense */}
-                {itemTaxText(i) && <small className="bill-item-tax">{itemTaxText(i)}</small>}
+                {/* Taxes are shown inside the item's amount, not as separate lines */}
+                {itemTaxText(i) && <small className="bill-item-tax">{tx.pricesIncludeTax ? `incl. ${itemTaxText(i)}` : `+ ${itemTaxText(i)}`}</small>}
               </span>
               <span className="qty-col">x{i.quantity}</span>
-              <span className="amt num">{formatMoney(i.lineTotal)}</span>
+              <span className="amt num">{formatMoney(i.lineTotal + (tx.pricesIncludeTax ? 0 : taxShares[n]))}</span>
             </div>
           ))}
         </div>
       </div>
-      {(tx.discount || tx.taxes.length > 0) && (
+      {tx.discount && tx.discount.amount > 0 && (
         <div className="bill-rows num">
           <div>
             <span>Subtotal</span>
-            <span>{formatMoney(tx.subtotal)}</span>
+            <span>{formatMoney(tx.subtotal + (tx.pricesIncludeTax ? 0 : tx.taxTotal))}</span>
           </div>
-          {tx.discount && tx.discount.amount > 0 && (
-            <div>
-              <span>Discount</span>
-              <span>− {formatMoney(tx.discount.amount)}</span>
-            </div>
-          )}
-          {tx.taxes.map((t) => (
-            <div key={`${t.name}|${t.rateBps}`}>
-              <span>
-                {taxLabel(t, tx.pricesIncludeTax)}
-                <small className="tax-items">{taxedItemsText(t, tx.items)}</small>
-              </span>
-              <span>{formatMoney(t.amount)}</span>
-            </div>
-          ))}
+          <div>
+            <span>Discount</span>
+            <span>− {formatMoney(tx.discount.amount)}</span>
+          </div>
         </div>
       )}
       <div className="total-box num">
@@ -305,6 +295,7 @@ function TxCard({
   const takeaway = !tx.tableLabel;
   const TypeIcon = takeaway ? ShoppingBag : UtensilsCrossed;
   const hidden = tx.items.length - CARD_ITEMS;
+  const taxShares = itemTaxShares(tx.taxes, tx.items); // each item's amount includes its tax
   return (
     <article className={cx('bill-card', selected && 'selected', !completed && 'closed')}>
       <header className="bill-card-head">
@@ -336,11 +327,11 @@ function TxCard({
           </tr>
         </thead>
         <tbody>
-          {tx.items.slice(0, CARD_ITEMS).map((i) => (
+          {tx.items.slice(0, CARD_ITEMS).map((i, n) => (
             <tr key={i.menuItemId}>
               <td>{i.name}</td>
               <td className="center num">{i.quantity}</td>
-              <td className="right num">{formatMoney(i.lineTotal)}</td>
+              <td className="right num">{formatMoney(i.lineTotal + (tx.pricesIncludeTax ? 0 : taxShares[n]))}</td>
             </tr>
           ))}
           {hidden > 0 && (

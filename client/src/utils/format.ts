@@ -76,16 +76,41 @@ export function itemTaxText(i: Pick<TaxedItem, 'taxRateBps' | 'extraTaxes'>): st
   ].join(' · ');
 }
 
-/** Which items of a bill a tax line was charged on, e.g. "Idly (Half, 1), Dosa". */
-export function taxedItemsText(t: TaxLine, items: TaxedItem[]): string {
+/** The items of a bill a tax line was charged on. */
+function taxedItems<T extends TaxedItem>(t: TaxLine, items: T[]): T[] {
   const own = (i: TaxedItem) => i.taxRateBps !== null && i.taxRateBps !== undefined;
   let hit = items.filter((i) => (i.extraTaxes ?? []).some((x) => x.name === t.name && x.rateBps === t.rateBps));
   if (!hit.length && t.name === 'GST') hit = items.filter((i) => i.taxRateBps === t.rateBps);
   // Bills made before GST was one line split an item's own GST into CGST + SGST halves.
   if (!hit.length && (t.name === 'CGST' || t.name === 'SGST')) hit = items.filter((i) => own(i) && Math.abs(i.taxRateBps! - 2 * t.rateBps) <= 1);
   if (!hit.length) hit = items.filter((i) => !own(i) && i.taxable); // the restaurant's taxes
-  const names = hit.map((i) => i.name);
+  return hit;
+}
+
+/** Which items of a bill a tax line was charged on, e.g. "Idly (Half, 1), Dosa". */
+export function taxedItemsText(t: TaxLine, items: TaxedItem[]): string {
+  const names = taxedItems(t, items).map((i) => i.name);
   return names.length > 3 ? `${names.slice(0, 3).join(', ')} + ${names.length - 3} more` : names.join(', ');
+}
+
+/**
+ * Each item's share of the bill's taxes in paise, so a bill can show the tax inside the item's
+ * amount. Every tax line is split over its items by their amounts; the shares add up exactly.
+ */
+export function itemTaxShares(taxes: TaxLine[], items: (TaxedItem & { lineTotal: number })[]): number[] {
+  const shares = items.map(() => 0);
+  for (const t of taxes) {
+    const hit = taxedItems(t, items);
+    const base = hit.reduce((a, i) => a + i.lineTotal, 0);
+    if (!t.amount || !base) continue;
+    let given = 0;
+    hit.forEach((i, k) => {
+      const part = k === hit.length - 1 ? t.amount - given : Math.round((t.amount * i.lineTotal) / base);
+      shares[items.indexOf(i)] += part;
+      given += part;
+    });
+  }
+  return shares;
 }
 
 /** Joins class names, skipping falsy values. */
