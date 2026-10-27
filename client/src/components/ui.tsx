@@ -140,6 +140,22 @@ export function ConfirmButton({
   );
 }
 
+/** A restaurant's uploaded logo, or its initials – never a built-in logo. */
+export function LogoMark({ src, name, className }: { src?: string | null; name: string; className?: string }) {
+  if (src) return <img className={className} src={src} alt="" />;
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  return (
+    <span className={cx('logo-mark', className)} aria-hidden="true">
+      {initials || '?'}
+    </span>
+  );
+}
+
 export function Spinner({ className }: { className?: string }) {
   return <LoaderCircle className={cx('spinner', className)} aria-label="Loading" />;
 }

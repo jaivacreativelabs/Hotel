@@ -37,7 +37,7 @@ export function PrintReceiptPage() {
   // Print only once the logo has loaded (or failed), so it is never missing from the paper.
   const [logoDone, setLogoDone] = useState(false);
   useEffect(() => {
-    if (tx.data && logoDone && params.get('autoprint') === '1') {
+    if (tx.data && (logoDone || !tx.data.restaurantSnapshot.logoUrl) && params.get('autoprint') === '1') {
       const t = setTimeout(() => window.print(), 300);
       return () => clearTimeout(t);
     }
@@ -51,7 +51,9 @@ export function PrintReceiptPage() {
     <>
       <style>{css}</style>
       <div className="receipt">
-        <img className="logo" src={t.restaurantSnapshot.logoUrl || '/logo.jpeg'} alt="" onLoad={() => setLogoDone(true)} onError={() => setLogoDone(true)} />
+        {t.restaurantSnapshot.logoUrl && (
+          <img className="logo" src={t.restaurantSnapshot.logoUrl} alt="" onLoad={() => setLogoDone(true)} onError={() => setLogoDone(true)} />
+        )}
         <h1>{t.restaurantSnapshot.name}</h1>
         <div className="c">{t.branchSnapshot.name}</div>
         {t.branchSnapshot.address && <div className="c">{t.branchSnapshot.address}</div>}

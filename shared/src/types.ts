@@ -283,7 +283,7 @@ export interface TransactionDTO {
   groupName: string;
   guestCount: number;
   customerName: string;
-  /** logoUrl "" → the Tiffin House logo */
+  /** logoUrl "" → the restaurant had no logo; the bill prints without one */
   restaurantSnapshot: { name: string; address: string; phone: string; gstin: string; receiptFooter: string; logoUrl: string };
   branchSnapshot: { name: string; code: string; address: string; phone: string };
   items: TransactionItemDTO[];

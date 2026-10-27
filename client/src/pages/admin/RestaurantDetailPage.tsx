@@ -12,7 +12,7 @@ import { ArrowLeft, Building2, Camera, CirclePlus, FileText, Pencil, Plus, Power
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveBadge } from '../../components/badges';
-import { ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
+import { ConfirmDialog, Empty, Field, Loading, LogoMark, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { useToast } from '../../store/toast';
 import { cx } from '../../utils/format';
@@ -114,7 +114,7 @@ function RestaurantLogo({ restaurant }: { restaurant: RestaurantDTO }) {
   return (
     <span className="restaurant-logo-edit">
       <label className={cx('restaurant-logo-pick', busy && 'busy')} title="Change logo">
-        <img src={restaurant.logoUrl || '/logo.jpeg'} alt={`${restaurant.name} logo`} />
+        <LogoMark src={restaurant.logoUrl} name={restaurant.name} />
         <span className="restaurant-logo-cam">{busy ? <Spinner /> : <Camera size={16} />}</span>
         <input type="file" accept="image/jpeg,image/png,image/webp" hidden disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
       </label>

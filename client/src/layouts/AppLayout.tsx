@@ -24,7 +24,7 @@ import {
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
-import { Loading } from '../components/ui';
+import { Loading, LogoMark } from '../components/ui';
 import { ChangePasswordModal } from '../pages/auth/ChangePasswordModal';
 import { useAuth } from '../store/auth';
 import { getSyncSummary, subscribeSyncSummary } from '../store/draftSync';
@@ -175,7 +175,7 @@ export function AppLayout() {
   const isKitchen = user?.role === 'KITCHEN';
   // Branch staff see their restaurant's own logo and name (set by the Super Admin).
   const ownRestaurant = isSuper ? null : activeBranch?.restaurant;
-  const brandLogo = ownRestaurant?.logoUrl || '/logo.jpeg';
+  const brandLogo = ownRestaurant ? ownRestaurant.logoUrl : '/logo.jpeg';
   const brandName = ownRestaurant?.name ?? 'Tiffin House';
   const nav = isSuper ? ADMIN_NAV : isKitchen ? [KITCHEN_NAV] : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
   // Phones: Restaurant Admins get a bottom tab bar, the Super Admin a slide-in menu; a Kitchen
@@ -188,7 +188,7 @@ export function AppLayout() {
   return (
     <div className={cx('app', bottomNav && 'has-bottom-nav')}>
       <div className="brand">
-        <img src={brandLogo} alt="" />
+        <LogoMark src={brandLogo} name={brandName} />
         <div style={{ minWidth: 0 }}>
           <div className="brand-name" title={brandName}>
             {brandName}
@@ -202,7 +202,7 @@ export function AppLayout() {
             <MenuIcon />
           </button>
         )}
-        <img className="topbar-logo" src={brandLogo} alt={brandName} />
+        <LogoMark className="topbar-logo" src={brandLogo} name={brandName} />
         {placeholder ? (
           <div className="search">
             <Search />
