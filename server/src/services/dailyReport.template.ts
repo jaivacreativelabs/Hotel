@@ -179,19 +179,6 @@ function branchDetail(b: BranchReport): string {
   </td></tr>`;
 }
 
-function notCountedNote(r: DailyReport): string {
-  const parts = [
-    r.voided.bills && `${r.voided.bills} voided bill${r.voided.bills === 1 ? '' : 's'} (${formatMoney(r.voided.amount)})`,
-    r.refunded.bills && `${r.refunded.bills} refunded bill${r.refunded.bills === 1 ? '' : 's'} (${formatMoney(r.refunded.amount)})`,
-  ].filter(Boolean);
-  if (!parts.length) return '';
-  return `<tr><td style="padding:20px 24px 0 24px;">
-    <div style="background:${C.dangerSoft};border-radius:8px;padding:10px 14px;font:400 13px/18px ${FONT};color:${C.text};">
-      Not counted in the total: ${parts.join(' and ')}.
-    </div>
-  </td></tr>`;
-}
-
 export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | null }): string {
   const logo = opts.logoSrc
     ? `<img src="${opts.logoSrc}" width="48" height="48" alt="Tiffin House" style="display:block;border-radius:24px;border:1px solid ${C.border};">`
@@ -252,7 +239,6 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
       : paymentSection(r)
   }
   ${r.branches.length ? branchSummary(r) : ''}
-  ${notCountedNote(r)}
   ${r.branches.filter((b) => b.bills > 0 || b.expenses > 0).map(branchDetail).join('')}
 
   <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
@@ -281,7 +267,6 @@ export function renderDailyReportText(r: DailyReport): string {
     'Branch-wise sale',
     ...r.branches.map((b) => line(`  ${b.branchName} (${b.restaurantName})`, `${formatMoney(b.sales)}  (${b.bills} bills)`)),
   ];
-  if (r.voided.bills || r.refunded.bills) out.push('', `Not counted: ${r.voided.bills} voided, ${r.refunded.bills} refunded.`);
   for (const b of r.branches.filter((x) => x.bills > 0 || x.expenses > 0)) {
     out.push(
       '',
