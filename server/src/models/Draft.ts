@@ -9,6 +9,7 @@ const draftItemSchema = new Schema(
     imageUrl: { type: String, default: null },
     unitPrice: { type: Number, required: true },
     taxable: { type: Boolean, default: true },
+    taxRateBps: { type: Number, default: null },
     quantity: { type: Number, required: true, min: 1 },
     unavailable: { type: Boolean, default: false },
   },

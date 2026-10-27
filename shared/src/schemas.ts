@@ -155,6 +155,8 @@ export const menuItemCreateSchema = z.strictObject({
   description: z.string().trim().max(300).optional(),
   price: pricePaiseSchema,
   taxable: z.boolean().optional(),
+  /** GST % of this item in basis points (500 = 5 %); null → the restaurant's taxes */
+  taxRateBps: z.number().int().min(0).max(10_000).nullable().optional(),
   isAvailable: z.boolean().optional(),
 });
 export const menuItemUpdateSchema = menuItemCreateSchema.partial();

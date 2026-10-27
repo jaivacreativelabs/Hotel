@@ -32,6 +32,8 @@ const menuItemSchema = new Schema(
       validate: { validator: Number.isInteger, message: 'price must be integer paise' },
     },
     taxable: { type: Boolean, default: true },
+    // Own GST % in basis points; null → the restaurant's taxes (when taxable)
+    taxRateBps: { type: Number, default: null, min: 0, max: 10_000 },
     isAvailable: { type: Boolean, default: true },
     status: { type: String, enum: ITEM_STATUSES, default: 'ACTIVE' },
     branchOverrides: { type: [overrideSchema], default: [] },

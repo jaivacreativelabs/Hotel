@@ -126,6 +126,7 @@ export function AdminMenuPage() {
         headerExtra={selector}
         initialEditId={editId}
         onInitialEditOpened={clearEdit}
+        taxSettings={restaurants.data?.find((r) => r.id === restaurantId)?.settings}
       />
     );
   }

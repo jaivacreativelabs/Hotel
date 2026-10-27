@@ -44,6 +44,7 @@ interface PricedLine {
   imageUrl: string | null;
   unitPrice: number;
   taxable: boolean;
+  taxRateBps: number | null;
   quantity: number;
   unavailable: boolean;
   categoryName: string;
@@ -101,6 +102,7 @@ export async function priceLines(
       imageUrl: eff.imageUrl ?? parentEff?.imageUrl ?? null,
       unitPrice: eff.price,
       taxable: item.taxable,
+      taxRateBps: item.taxRateBps ?? null,
       quantity: r.quantity,
       unavailable: !available,
       categoryName: cat?.name ?? '',
@@ -437,6 +439,7 @@ export async function finalizeDraft(
                 unitPrice: l.unitPrice,
                 quantity: l.quantity,
                 taxable: l.taxable,
+                taxRateBps: l.taxRateBps,
                 lineTotal: totals.lineTotals[i],
               })),
               subtotal: totals.subtotal,

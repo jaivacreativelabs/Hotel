@@ -9,6 +9,8 @@ export interface BillLineInput {
   unitPrice: number;
   quantity: number;
   taxable: boolean;
+  /** The item's own GST rate. Unset (null) → the restaurant's taxes apply when `taxable`. */
+  taxRateBps?: number | null;
 }
 
 export interface TaxRate {
@@ -55,6 +57,30 @@ export function divRoundHalfUp(numerator: number, denominator: number): number {
   return r * 2 >= denominator ? q + 1 : q;
 }
 
+/** An item's own GST rate as it appears on Indian bills: half CGST, half SGST. */
+export function gstComponents(rateBps: number): TaxRate[] {
+  const sgst = Math.floor(rateBps / 2);
+  return [
+    { name: 'CGST', rateBps: rateBps - sgst },
+    { name: 'SGST', rateBps: sgst },
+  ];
+}
+
+/** Tax on one group of lines that share the same rates; `base` is after discount. */
+function taxFor(base: number, rates: TaxRate[], pricesIncludeTax: boolean): TaxLine[] {
+  if (base <= 0) return rates.map((t) => ({ ...t, amount: 0 }));
+  if (!pricesIncludeTax) return rates.map((t) => ({ ...t, amount: divRoundHalfUp(base * t.rateBps, 10_000) }));
+  const totalBps = rates.reduce((a, t) => a + t.rateBps, 0);
+  const net = divRoundHalfUp(base * 10_000, 10_000 + totalBps);
+  const taxTotal = base - net;
+  let allocated = 0;
+  return rates.map((t, i) => {
+    const amount = i === rates.length - 1 ? taxTotal - allocated : divRoundHalfUp(net * t.rateBps, 10_000);
+    allocated += amount;
+    return { ...t, amount };
+  });
+}
+
 export function calculateBill(
   lines: BillLineInput[],
   settings: TaxSettings,
@@ -67,7 +93,6 @@ export function calculateBill(
     return l.unitPrice * l.quantity;
   });
   const subtotal = lineTotals.reduce((a, b) => a + b, 0);
-  const taxableSubtotal = lineTotals.reduce((a, t, i) => (lines[i].taxable ? a + t : a), 0);
 
   let discountAmount = 0;
   if (discount && subtotal > 0) {
@@ -80,35 +105,39 @@ export function calculateBill(
   }
   const afterDiscount = subtotal - discountAmount;
 
-  // The discount is spread proportionally over taxable and non-taxable lines.
-  const taxableBase =
-    subtotal > 0 ? taxableSubtotal - divRoundHalfUp(discountAmount * taxableSubtotal, subtotal) : 0;
-
-  const rates = settings.taxes.filter((t) => t.rateBps > 0);
-  const totalBps = rates.reduce((a, t) => a + t.rateBps, 0);
-  let taxes: TaxLine[] = [];
-  let taxTotal = 0;
-  let grandTotal = afterDiscount;
-
-  if (rates.length > 0 && taxableBase > 0) {
-    if (!settings.pricesIncludeTax) {
-      taxes = rates.map((t) => ({ ...t, amount: divRoundHalfUp(taxableBase * t.rateBps, 10_000) }));
-      taxTotal = taxes.reduce((a, t) => a + t.amount, 0);
-      grandTotal = afterDiscount + taxTotal;
-    } else {
-      const net = divRoundHalfUp(taxableBase * 10_000, 10_000 + totalBps);
-      taxTotal = taxableBase - net;
-      let allocated = 0;
-      taxes = rates.map((t, i) => {
-        const amount =
-          i === rates.length - 1 ? taxTotal - allocated : divRoundHalfUp(net * t.rateBps, 10_000);
-        allocated += amount;
-        return { ...t, amount };
-      });
+  // Lines are grouped by the rates they pay: the restaurant's taxes, or the item's own GST %.
+  const restaurantRates = settings.taxes.filter((t) => t.rateBps > 0);
+  const groups = new Map<string, { rates: TaxRate[]; subtotal: number }>([['restaurant', { rates: restaurantRates, subtotal: 0 }]]);
+  lines.forEach((l, i) => {
+    const own = l.taxRateBps;
+    if (own === null || own === undefined) {
+      if (l.taxable) groups.get('restaurant')!.subtotal += lineTotals[i];
+      return;
     }
-  } else {
-    taxes = rates.map((t) => ({ ...t, amount: 0 }));
+    if (own <= 0) return;
+    const key = `own:${own}`;
+    if (!groups.has(key)) groups.set(key, { rates: gstComponents(own).filter((t) => t.rateBps > 0), subtotal: 0 });
+    groups.get(key)!.subtotal += lineTotals[i];
+  });
+
+  // The discount is spread proportionally over every group (and the untaxed lines); same
+  // names and rates from different groups (e.g. CGST 2.5 %) are added together.
+  const merged = new Map<string, TaxLine>();
+  const ordered = [...groups.entries()].sort(([a], [b]) =>
+    a === 'restaurant' ? -1 : b === 'restaurant' ? 1 : Number(a.slice(4)) - Number(b.slice(4)),
+  );
+  for (const [key, g] of ordered) {
+    if (key !== 'restaurant' && g.subtotal === 0) continue;
+    const base = subtotal > 0 ? g.subtotal - divRoundHalfUp(discountAmount * g.subtotal, subtotal) : 0;
+    for (const t of taxFor(base, g.rates, settings.pricesIncludeTax)) {
+      const k = `${t.name}|${t.rateBps}`;
+      const prev = merged.get(k);
+      merged.set(k, prev ? { ...prev, amount: prev.amount + t.amount } : t);
+    }
   }
+  const taxes = [...merged.values()];
+  const taxTotal = taxes.reduce((a, t) => a + t.amount, 0);
+  const grandTotal = settings.pricesIncludeTax ? afterDiscount : afterDiscount + taxTotal;
 
   return { lineTotals, subtotal, discountAmount, taxes, taxTotal, grandTotal };
 }

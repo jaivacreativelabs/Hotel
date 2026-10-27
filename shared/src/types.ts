@@ -150,6 +150,8 @@ export interface MenuItemDTO {
   price: number;
   basePrice: number;
   taxable: boolean;
+  /** Own GST % in basis points (500 = 5 %); null → the restaurant's taxes apply when taxable */
+  taxRateBps: number | null;
   /** effective availability for the requested scope */
   isAvailable: boolean;
   status: ItemStatus;
@@ -172,6 +174,7 @@ export interface DraftItemDTO {
   imageUrl: string | null;
   unitPrice: number;
   taxable: boolean;
+  taxRateBps: number | null;
   quantity: number;
   /** item became unavailable after it was added – must be removed before finalising */
   unavailable: boolean;
@@ -269,6 +272,7 @@ export interface TransactionItemDTO {
   unitPrice: number;
   quantity: number;
   taxable: boolean;
+  taxRateBps: number | null;
   lineTotal: number;
 }
 
@@ -324,7 +328,7 @@ export interface ExpenseDTO {
   createdAt: string;
   editedByName: string;
   editedAt: string | null;
-  /** End of the Restaurant Admin edit/delete window; null once over (the Super Admin can any time). */
+  /** End of the Restaurant Admin delete window; null once over (editing is open any time). */
   editableUntil: string | null;
 }
 

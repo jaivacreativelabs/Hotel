@@ -1,9 +1,12 @@
 import {
+  bpsToPercent,
   LIMITS,
   paiseToRupeesInput,
+  parsePercentToBps,
   parseRupeesToPaise,
   type CategoryDTO,
   type MenuItemDTO,
+  type TaxSettings,
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -37,6 +40,8 @@ import { shrinkImage } from '../../utils/image';
 import { groupVariants, priceLabel } from '../../utils/menu';
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp'];
+/** Common GST rates for food in India, offered as one-tap choices (any % can be typed). */
+const GST_RATES = [0, 5, 12, 18];
 
 function useScopedApi(scope: MenuScope) {
   const opts = { query: scopeQuery(scope), branchId: scope.branchId ?? null };
@@ -196,12 +201,14 @@ function ItemPanel({
   item,
   variants,
   categories,
+  taxSettings,
   onClose,
 }: {
   scope: MenuScope;
   item: MenuItemDTO | null;
   variants: MenuItemDTO[];
   categories: CategoryDTO[];
+  taxSettings: TaxSettings;
   onClose: () => void;
 }) {
   const scoped = useScopedApi(scope);
@@ -216,7 +223,11 @@ function ItemPanel({
   const [name, setName] = useState(item?.name ?? '');
   const [price, setPrice] = useState(item ? paiseToRupeesInput(item.price) : '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [taxable, setTaxable] = useState(item?.taxable ?? true);
+  // GST % of this food. Older items without their own rate show the restaurant's rate they pay today.
+  const restaurantTaxBps = taxSettings.taxes.reduce((a, t) => a + t.rateBps, 0);
+  const [tax, setTax] = useState(() =>
+    bpsToPercent(item ? (item.taxRateBps ?? (item.taxable ? restaurantTaxBps : 0)) : restaurantTaxBps),
+  );
   // There is no sold-out switch in this form: saving a dish keeps it orderable.
   const isAvailable = true;
   const [file, setFile] = useState<File | null>(null);
@@ -253,6 +264,8 @@ function ItemPanel({
     if (names.some((n) => !n)) next.variants = 'Give every variant a name, e.g. Half or Large';
     else if (new Set(names).size !== names.length) next.variants = 'Each variant name only once';
     else if (variantRows.some((r) => r.paise === null || r.paise > LIMITS.maxPricePaise)) next.variants = 'Enter a price for every variant, like 50 or 49.50';
+    const taxBps = parsePercentToBps(tax || '0');
+    if (!sharedOnly && (taxBps === null || taxBps > 10_000)) next.tax = 'Enter a tax % like 5 or 2.5';
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -264,7 +277,7 @@ function ItemPanel({
       if (sharedOnly) {
         saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable } : { price: paise, isAvailable });
       } else {
-        const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxable, isAvailable };
+        const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxRateBps: taxBps, taxable: taxBps! > 0, isAvailable };
         saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
       }
       if (hasVariants || variants.length) {
@@ -457,15 +470,53 @@ function ItemPanel({
         )}
         <VariantsEditor rows={rows} onChange={setRows} branchOnly={sharedOnly} error={errors.variants} />
 
+        <Field
+          label="GST %"
+          error={errors.tax}
+          hint={
+            sharedOnly
+              ? 'Main menu item – its GST is set by the Super Admin'
+              : Number(parsePercentToBps(tax || '0')) > 0
+                ? `CGST + SGST, ${taxSettings.pricesIncludeTax ? 'included in' : 'added to'} the price on the bill`
+                : 'No GST on this food'
+          }
+        >
+          {(id) => (
+            <div className="tax-picker">
+              {GST_RATES.map((r) => (
+                <button
+                  type="button"
+                  key={r}
+                  className={cx('chip chip-sm', parsePercentToBps(tax || '0') === r * 100 && 'active')}
+                  onClick={() => setTax(String(r))}
+                  disabled={sharedOnly}
+                >
+                  {r === 0 ? 'No GST' : `${r}%`}
+                </button>
+              ))}
+              <div className="input-suffix">
+                <input
+                  id={id}
+                  className="input"
+                  inputMode="decimal"
+                  value={tax}
+                  onChange={(e) => setTax(e.target.value)}
+                  placeholder="0"
+                  aria-label="GST percent"
+                  disabled={sharedOnly}
+                />
+                <span>%</span>
+              </div>
+            </div>
+          )}
+        </Field>
+
         {!sharedOnly && (
           <details className="more-options">
-            <summary>More options (description, tax)</summary>
+            <summary>More options (description)</summary>
             <Field label="Description">
               {(id) => <textarea id={id} className="textarea" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />}
             </Field>
-            <label className="switch">
-              <input type="checkbox" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} /> Apply restaurant taxes to this food
-            </label>
           </details>
         )}
 
@@ -604,12 +655,15 @@ export function MenuManager({
   headerExtra,
   initialEditId,
   onInitialEditOpened,
+  taxSettings,
 }: {
   scope: MenuScope;
   headerExtra?: React.ReactNode;
   /** Opens this item's edit panel once the menu has loaded (e.g. from the all-restaurants view). */
   initialEditId?: string | null;
   onInitialEditOpened?: () => void;
+  /** The restaurant's taxes: new items start at this GST %, older items show what they pay. */
+  taxSettings?: TaxSettings;
 }) {
   const search = usePageSearch('Search food items...');
   const queryClient = useQueryClient();
@@ -773,6 +827,7 @@ export function MenuManager({
           item={panel.item}
           variants={panel.item ? (variantsOf.get(panel.item.id) ?? []) : []}
           categories={categories.data ?? []}
+          taxSettings={taxSettings ?? { taxes: [], pricesIncludeTax: false }}
           onClose={() => setPanel(null)}
         />
       )}
@@ -797,5 +852,5 @@ export function MenuManager({
 
 export function MenuPage() {
   const { activeBranch } = useAuth();
-  return <MenuManager scope={{ branchId: activeBranch!.id }} />;
+  return <MenuManager scope={{ branchId: activeBranch!.id }} taxSettings={activeBranch!.restaurant.settings} />;
 }

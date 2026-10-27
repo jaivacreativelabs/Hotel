@@ -213,3 +213,43 @@ describe('bill number series', () => {
     expect(await bill()).toBe('ITH0002');
   });
 });
+
+describe('GST per item', () => {
+  it("bills an item's own GST % next to the restaurant's taxes", async () => {
+    // Restaurant A has CGST + SGST 2.5 % from the tests above; Cola gets its own 18 %.
+    const cola = ok<{ id: string; taxRateBps: number; taxable: boolean }>(
+      await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Cola', price: 10000, taxRateBps: 1800 }),
+      201,
+    );
+    expect([cola.taxRateBps, cola.taxable]).toEqual([1800, true]);
+
+    let d = await freshCounter();
+    d = ok<Draft>(
+      await w.adminA1.put(`/api/v1/bills/${d.id}`, {
+        version: d.version,
+        items: [
+          { menuItemId: w.items.idly, quantity: 1 },
+          { menuItemId: cola.id, quantity: 1 },
+        ],
+        discount: null,
+      }),
+    );
+    const taxes = (d.totals as unknown as { taxes: { name: string; rateBps: number; amount: number }[] }).taxes;
+    expect(taxes).toEqual([
+      { name: 'CGST', rateBps: 250, amount: 75 },
+      { name: 'SGST', rateBps: 250, amount: 75 },
+      { name: 'CGST', rateBps: 900, amount: 900 },
+      { name: 'SGST', rateBps: 900, amount: 900 },
+    ]);
+    expect(d.totals.grandTotal).toBe(13000 + 1950);
+
+    const res = await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod: 'CASH', idempotencyKey: key() });
+    const tx = res.body.data.transaction as { grandTotal: number; items: { name: string; taxRateBps: number | null }[] };
+    expect(tx.grandTotal).toBe(14950);
+    expect(tx.items.find((i) => i.name === 'Cola')?.taxRateBps).toBe(1800);
+
+    // 0 % means no GST at all.
+    const none = ok<{ taxRateBps: number; taxable: boolean }>(await w.adminA1.patch(`/api/v1/menu/items/${cola.id}`, { taxRateBps: 0 }));
+    expect([none.taxRateBps, none.taxable]).toEqual([0, false]);
+  });
+});

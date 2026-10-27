@@ -10,6 +10,7 @@ const itemSnapshotSchema = new Schema(
     unitPrice: { type: Number, required: true },
     quantity: { type: Number, required: true },
     taxable: { type: Boolean, required: true },
+    taxRateBps: { type: Number, default: null },
     lineTotal: { type: Number, required: true },
   },
   { _id: false },

@@ -202,7 +202,8 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
     nameKey: nameKey(input.name),
     description: input.description ?? '',
     price: input.price,
-    taxable: input.taxable ?? true,
+    taxable: input.taxRateBps != null ? input.taxRateBps > 0 : (input.taxable ?? true),
+    taxRateBps: input.taxRateBps ?? null,
     isAvailable: input.isAvailable ?? true,
   });
   await audit(actor, {
@@ -260,7 +261,12 @@ export async function updateItem(actor: AuthUser, scope: Scope, id: string, inpu
       await assertItemNameFree(scope, input.name, item._id);
       item.nameKey = nameKey(input.name);
     }
-    item.set({ ...input, ...(input.categoryId && { categoryId: toObjectId(input.categoryId) }) });
+    item.set({
+      ...input,
+      ...(input.categoryId && { categoryId: toObjectId(input.categoryId) }),
+      // An own GST % decides whether the item is taxed at all.
+      ...(input.taxRateBps != null && { taxable: input.taxRateBps > 0 }),
+    });
   } else {
     const disallowed = Object.keys(input).filter((k) => k !== 'price' && k !== 'isAvailable');
     if (disallowed.length) {
@@ -390,7 +396,7 @@ async function syncVariantsWithDish(dish: MenuItemLean) {
         return {
           updateOne: {
             filter: { _id: v._id },
-            update: { $set: { name, nameKey: key, categoryId: dish.categoryId, taxable: dish.taxable } },
+            update: { $set: { name, nameKey: key, categoryId: dish.categoryId, taxable: dish.taxable, taxRateBps: dish.taxRateBps ?? null } },
           },
         };
       }),
@@ -456,6 +462,7 @@ export async function setItemVariants(actor: AuthUser, scope: Scope, id: string,
           branchId,
           categoryId: dish.categoryId,
           taxable: dish.taxable,
+          taxRateBps: dish.taxRateBps ?? null,
           isAvailable: row.isAvailable ?? true,
           parentId: dish._id,
         });

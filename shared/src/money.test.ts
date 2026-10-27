@@ -87,6 +87,60 @@ describe('calculateBill', () => {
     expect(flat.grandTotal).toBe(0);
   });
 
+  it("uses an item's own GST %, split into CGST and SGST", () => {
+    const t = calculateBill(
+      [
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 500 },
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 1800 },
+        { unitPrice: 10000, quantity: 1, taxable: false, taxRateBps: 0 },
+      ],
+      noTax,
+    );
+    expect(t.taxes).toEqual([
+      { name: 'CGST', rateBps: 250, amount: 250 },
+      { name: 'SGST', rateBps: 250, amount: 250 },
+      { name: 'CGST', rateBps: 900, amount: 900 },
+      { name: 'SGST', rateBps: 900, amount: 900 },
+    ]);
+    expect(t.taxTotal).toBe(2300);
+    expect(t.grandTotal).toBe(32300);
+  });
+
+  it('adds up the same rate from the restaurant and from items', () => {
+    const t = calculateBill(
+      [
+        { unitPrice: 10000, quantity: 1, taxable: true }, // restaurant CGST + SGST 2.5 %
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 500 },
+      ],
+      gst5,
+    );
+    expect(t.taxes).toEqual([
+      { name: 'CGST', rateBps: 250, amount: 500 },
+      { name: 'SGST', rateBps: 250, amount: 500 },
+    ]);
+    expect(t.grandTotal).toBe(21000);
+  });
+
+  it('spreads a discount over items with different rates', () => {
+    const t = calculateBill(
+      [
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 500 },
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 1800 },
+      ],
+      noTax,
+      { type: 'PERCENT', value: 1000 },
+    );
+    // each line's base is ₹90 after 10 % off
+    expect(t.taxes.map((x) => x.amount)).toEqual([225, 225, 810, 810]);
+    expect(t.grandTotal).toBe(18000 + 2070);
+  });
+
+  it("extracts an item's own GST from prices that include tax", () => {
+    const t = calculateBill([{ unitPrice: 11800, quantity: 1, taxable: true, taxRateBps: 1800 }], { taxes: [], pricesIncludeTax: true });
+    expect(t.grandTotal).toBe(11800);
+    expect(t.taxTotal).toBe(1800);
+  });
+
   it('handles an empty bill', () => {
     const t = calculateBill([], gst5, { type: 'FLAT', value: 100 });
     expect(t.grandTotal).toBe(0);
