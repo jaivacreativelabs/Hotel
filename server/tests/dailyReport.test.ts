@@ -2,7 +2,7 @@ import request from 'supertest';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { env } from '../src/config/env.js';
-import { ReportSettingModel } from '../src/models/index.js';
+import { ReportSettingModel, TransactionModel } from '../src/models/index.js';
 import { buildDailyReport, runDueDailyReport, sendDailyReport } from '../src/services/dailyReport.service.js';
 import { todayIn } from '../src/utils/dates.js';
 import { buildWorld, type Client, key, ok, useTestDatabase, type World } from './helpers.js';
@@ -67,6 +67,14 @@ describe('daily report contents', () => {
     expect(rest.length).toBeGreaterThan(0);
     expect(rest.every((b) => b.sales === 0 && b.items.length === 0)).toBe(true);
     expect(rest.map((b) => b.branchName)).toContain('Branch B1');
+  });
+
+  it('leaves out generated demo bills', async () => {
+    const t = await TransactionModel.findOne({ status: 'COMPLETED', grandTotal: 3000 });
+    await TransactionModel.collection.updateOne({ _id: t!._id }, { $set: { isDemo: true } }); // bills are immutable through the model
+    const r = await buildDailyReport(today());
+    expect([r.totalSales, r.billCount]).toEqual([13500, 2]);
+    await TransactionModel.collection.updateOne({ _id: t!._id }, { $set: { isDemo: false } });
   });
 
   it('renders a preview for the Super Admin only', async () => {
@@ -135,7 +143,10 @@ describe('sending', () => {
     const app = createApp();
     expect((await request(app).get('/api/v1/cron/daily-report')).status).toBe(401);
     expect((await request(app).get('/api/v1/cron/daily-report').set('Authorization', 'Bearer wrong')).status).toBe(401);
+    const sendTime = env.DAILY_REPORT_TIME;
+    Object.assign(env, { DAILY_REPORT_TIME: '00:00' }); // the endpoint never sends before the report time
     const res = await request(app).get('/api/v1/cron/daily-report').set('Authorization', 'Bearer cron-secret-for-tests');
+    Object.assign(env, { DAILY_REPORT_TIME: sendTime });
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('sent');
     configureMail(false);
