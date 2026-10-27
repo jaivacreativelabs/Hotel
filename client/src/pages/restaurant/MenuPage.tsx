@@ -134,7 +134,7 @@ const toRow = (v: MenuItemDTO): VariantRow => ({
 });
 
 /** Rows of name, quantity and price. For a main-menu dish seen from a branch, changes apply to that branch only. */
-function VariantsEditor({ rows, onChange, branchOnly, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; branchOnly: boolean; error?: string }) {
+function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; error?: string }) {
   const update = (key: string, patch: Partial<VariantRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   return (
     <div className="field">
@@ -188,7 +188,6 @@ function VariantsEditor({ rows, onChange, branchOnly, error }: { rows: VariantRo
           <Plus size={16} /> Add a variant
         </button>
       )}
-      {branchOnly && <span className="field-hint">This food is from the main menu – variant changes here apply to this branch only.</span>}
       {error && <span className="field-error">{error}</span>}
     </div>
   );
@@ -265,7 +264,7 @@ function ItemPanel({
     else if (new Set(names).size !== names.length) next.variants = 'Each variant name only once';
     else if (variantRows.some((r) => r.paise === null || r.paise > LIMITS.maxPricePaise)) next.variants = 'Enter a price for every variant, like 50 or 49.50';
     const taxBps = parsePercentToBps(tax || '0');
-    if (!sharedOnly && (taxBps === null || taxBps > 10_000)) next.tax = 'Enter a tax % like 5 or 2.5';
+    if (taxBps === null || taxBps > 10_000) next.tax = 'Enter a tax % like 5 or 2.5';
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -275,7 +274,7 @@ function ItemPanel({
       // A dish with variants shows its lowest variant price.
       const dishPrice = hasVariants ? Math.min(...variantRows.map((r) => r.paise!)) : paise!;
       if (sharedOnly) {
-        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable } : { price: paise, isAvailable });
+        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable, taxRateBps: taxBps } : { price: paise, isAvailable, taxRateBps: taxBps });
       } else {
         const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxRateBps: taxBps, taxable: taxBps! > 0, isAvailable };
         saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
@@ -368,7 +367,7 @@ function ItemPanel({
       {sharedOnly && (
         <div className="alert alert-info">
           <Info />
-          <span>This food comes from the main menu. Here you can change its photo and price for this branch only.</span>
+          <span>This food comes from the main menu. Here you can change its photo, price and GST for this branch only.</span>
         </div>
       )}
 
@@ -468,14 +467,14 @@ function ItemPanel({
             )}
           </Field>
         )}
-        <VariantsEditor rows={rows} onChange={setRows} branchOnly={sharedOnly} error={errors.variants} />
+        <VariantsEditor rows={rows} onChange={setRows} error={errors.variants} />
 
         <Field
           label="GST %"
           error={errors.tax}
           hint={
             sharedOnly
-              ? 'Main menu item – its GST is set by the Super Admin'
+              ? undefined
               : Number(parsePercentToBps(tax || '0')) > 0
                 ? `CGST + SGST, ${taxSettings.pricesIncludeTax ? 'included in' : 'added to'} the price on the bill`
                 : 'No GST on this food'
@@ -489,7 +488,6 @@ function ItemPanel({
                   key={r}
                   className={cx('chip chip-sm', parsePercentToBps(tax || '0') === r * 100 && 'active')}
                   onClick={() => setTax(String(r))}
-                  disabled={sharedOnly}
                 >
                   {r === 0 ? 'No GST' : `${r}%`}
                 </button>
@@ -503,7 +501,6 @@ function ItemPanel({
                   onChange={(e) => setTax(e.target.value)}
                   placeholder="0"
                   aria-label="GST percent"
-                  disabled={sharedOnly}
                 />
                 <span>%</span>
               </div>

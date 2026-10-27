@@ -93,10 +93,15 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
   const price = override?.price ?? item.price;
   const isAvailable = override?.isAvailable ?? item.isAvailable;
   const imageUrl = override?.imageUrl ?? item.imageUrl ?? null;
+  // A branch's own GST % wins; null keeps the item's (or the restaurant's) taxes.
+  const taxRateBps = override?.taxRateBps ?? item.taxRateBps ?? null;
+  const taxable = override?.taxRateBps != null ? override.taxRateBps > 0 : item.taxable;
   return {
     price,
     isAvailable,
     imageUrl,
+    taxRateBps,
+    taxable,
     pinned: Boolean(override?.pinned),
     hidden: Boolean(override?.hidden),
     hasOverride: override?.price != null || override?.isAvailable != null,
@@ -119,8 +124,8 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     pinned: eff.pinned,
     price: eff.price,
     basePrice: item.price,
-    taxable: item.taxable,
-    taxRateBps: item.taxRateBps ?? null,
+    taxable: eff.taxable,
+    taxRateBps: eff.taxRateBps,
     isAvailable: eff.isAvailable,
     status: item.status,
     isShared: !item.branchId && scopeBranchId !== null,

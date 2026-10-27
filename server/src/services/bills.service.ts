@@ -101,8 +101,9 @@ export async function priceLines(
       name: item.name,
       imageUrl: eff.imageUrl ?? parentEff?.imageUrl ?? null,
       unitPrice: eff.price,
-      taxable: item.taxable,
-      taxRateBps: item.taxRateBps ?? null,
+      // GST follows the dish (and this branch's own GST for it, if set).
+      taxable: (parentEff ?? eff).taxable,
+      taxRateBps: (parentEff ?? eff).taxRateBps,
       quantity: r.quantity,
       unavailable: !available,
       categoryName: cat?.name ?? '',

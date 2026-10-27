@@ -11,6 +11,8 @@ const overrideSchema = new Schema(
     pinned: { type: Boolean, default: null },
     // A main-menu variant this branch removed from its own menu.
     hidden: { type: Boolean, default: null },
+    // This branch's own GST % for a main-menu dish (its variants follow the dish).
+    taxRateBps: { type: Number, default: null },
   },
   { _id: false },
 );

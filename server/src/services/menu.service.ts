@@ -155,11 +155,23 @@ export async function listItems(
     filter.name = { $regex: escapeRegex(query.q.trim().slice(0, 50)), $options: 'i' };
   }
   const items = await MenuItemModel.find(filter).sort({ displayOrder: 1, name: 1 }).lean<MenuItemLean[]>();
+  // Variants are taxed like their dish, including a branch's own GST for it.
+  const dishes = new Map(items.map((i) => [String(i._id), i]));
+  const missing = items.filter((i) => i.parentId && !dishes.has(String(i.parentId))).map((i) => i.parentId!);
+  if (missing.length) {
+    for (const d of await MenuItemModel.find({ _id: { $in: missing } }).lean<MenuItemLean[]>()) dishes.set(String(d._id), d);
+  }
   // Pinned dishes first; Array.sort is stable, so the menu order is kept within each group.
   const branchId = branchOf(scope);
   return items
     .filter((i) => !effectiveItem(i, branchId).hidden) // main-menu variants this branch removed
-    .map((i) => toMenuItemDTO(i, branchId))
+    .map((i) => {
+      const dto = toMenuItemDTO(i, branchId);
+      const dish = i.parentId ? dishes.get(String(i.parentId)) : undefined;
+      if (!dish) return dto;
+      const { taxable, taxRateBps } = effectiveItem(dish, branchId);
+      return { ...dto, taxable, taxRateBps };
+    })
     .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
 
@@ -219,7 +231,7 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
 function setOverride(
   item: InstanceType<typeof MenuItemModel>,
   branchId: Types.ObjectId,
-  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean },
+  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean; taxRateBps?: number | null },
 ) {
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) {
@@ -228,6 +240,7 @@ function setOverride(
     if (patch.imageUrl !== undefined) existing.imageUrl = patch.imageUrl;
     if (patch.pinned !== undefined) existing.pinned = patch.pinned;
     if (patch.hidden !== undefined) existing.hidden = patch.hidden;
+    if (patch.taxRateBps !== undefined) existing.taxRateBps = patch.taxRateBps;
   } else {
     item.branchOverrides.push({
       branchId,
@@ -236,6 +249,7 @@ function setOverride(
       imageUrl: patch.imageUrl ?? null,
       pinned: patch.pinned ?? null,
       hidden: patch.hidden ?? null,
+      taxRateBps: patch.taxRateBps ?? null,
     });
   }
 }
@@ -268,11 +282,14 @@ export async function updateItem(actor: AuthUser, scope: Scope, id: string, inpu
       ...(input.taxRateBps != null && { taxable: input.taxRateBps > 0 }),
     });
   } else {
-    const disallowed = Object.keys(input).filter((k) => k !== 'price' && k !== 'isAvailable');
+    // A branch may set its own price, availability and GST % for a main-menu item.
+    const allowed = ['price', 'isAvailable', 'taxRateBps', 'taxable'];
+    const disallowed = Object.keys(input).filter((k) => !allowed.includes(k));
     if (disallowed.length) {
-      throw forbidden(`Only price and availability of shared items can be changed for a branch (${disallowed.join(', ')})`);
+      throw forbidden(`Only price, availability and GST of shared items can be changed for a branch (${disallowed.join(', ')})`);
     }
-    setOverride(item, branchId!, input);
+    const { taxable: _derived, ...patch } = input; // taxable follows the GST %
+    setOverride(item, branchId!, patch);
   }
   await item.save();
   if (owns(scope, item)) await syncVariantsWithDish(item.toObject() as MenuItemLean);
@@ -297,7 +314,8 @@ export async function removeOverride(actor: AuthUser, scope: Scope, id: string) 
   if (!branchId) throw badRequest('Overrides exist only for branches');
   const item = await getVisibleItem(scope, id);
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
-  if (existing?.imageUrl || existing?.pinned || existing?.hidden) {
+  // "Use main menu price" resets price and availability; the photo, pin, removal and GST stay.
+  if (existing?.imageUrl || existing?.pinned || existing?.hidden || existing?.taxRateBps != null) {
     existing.price = null;
     existing.isAvailable = null;
   } else {

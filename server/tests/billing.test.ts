@@ -252,4 +252,24 @@ describe('GST per item', () => {
     const none = ok<{ taxRateBps: number; taxable: boolean }>(await w.adminA1.patch(`/api/v1/menu/items/${cola.id}`, { taxRateBps: 0 }));
     expect([none.taxRateBps, none.taxable]).toEqual([0, false]);
   });
+
+  it('lets a branch set its own GST for a main-menu item', async () => {
+    type Item = { id: string; taxRateBps: number | null };
+    // Idly is on the main menu; branch A1 sets 12 %, branch A2 keeps the main-menu taxes.
+    ok(await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { taxRateBps: 1200 }));
+    const inA1 = ok<Item[]>(await w.adminA1.get('/api/v1/menu/items')).find((i) => i.id === w.items.idly);
+    const inA2 = ok<Item[]>(await w.adminA2.get('/api/v1/menu/items')).find((i) => i.id === w.items.idly);
+    expect([inA1?.taxRateBps, inA2?.taxRateBps]).toEqual([1200, null]);
+
+    let d = await freshCounter();
+    d = ok<Draft>(await w.adminA1.put(`/api/v1/bills/${d.id}`, { version: d.version, items: [{ menuItemId: w.items.idly, quantity: 1 }] }));
+    const taxes = (d.totals as unknown as { taxes: { name: string; rateBps: number; amount: number }[] }).taxes;
+    expect(taxes.filter((t) => t.amount > 0)).toEqual([
+      { name: 'CGST', rateBps: 600, amount: 180 },
+      { name: 'SGST', rateBps: 600, amount: 180 },
+    ]);
+
+    // A branch still cannot rename a main-menu item.
+    expect((await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Idli' })).status).toBe(403);
+  });
 });
