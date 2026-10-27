@@ -20,6 +20,7 @@ import {
   PinOff,
   Plus,
   Trash2,
+  TriangleAlert,
   UtensilsCrossed,
   X,
 } from 'lucide-react';
@@ -627,6 +628,9 @@ export function MenuManager({
   const [archiving, setArchiving] = useState<MenuItemDTO | null>(null);
 
   const activeCategories = (categories.data ?? []).filter((c) => c.status === 'ACTIVE');
+  // Billing only lists dishes whose category is switched on; flag the rest here.
+  const activeCategoryIds = new Set(activeCategories.map((c) => c.id));
+  const notInBilling = (item: MenuItemDTO) => categories.isSuccess && !activeCategoryIds.has(item.categoryId);
   const categoryIcon = useMemo(() => new Map((categories.data ?? []).map((c) => [c.id, c.icon])), [categories.data]);
   const { dishes, variantsOf } = useMemo(() => groupVariants(items.data ?? []), [items.data]);
   const visible = useMemo(() => {
@@ -635,6 +639,10 @@ export function MenuManager({
       (i) => i.status === 'ACTIVE' && (category === 'all' || i.categoryId === category) && (!q || i.name.toLowerCase().includes(q)),
     );
   }, [dishes, category, search]);
+  const hiddenDishes = dishes.filter((i) => i.status === 'ACTIVE' && notInBilling(i));
+  const hiddenCount = hiddenDishes.length;
+  // Shared categories can only be switched on from the Super Admin's restaurant-wide menu.
+  const hiddenShared = (categories.data ?? []).some((c) => !c.editable && hiddenDishes.some((i) => i.categoryId === c.id));
 
   const run = async (fn: () => Promise<unknown>, success: string) => {
     try {
@@ -676,6 +684,21 @@ export function MenuManager({
           ))}
         </div>
 
+        {hiddenCount > 0 && (
+          <div className="alert alert-warning" style={{ marginBottom: 14, alignItems: 'center' }}>
+            <TriangleAlert />
+            <span style={{ flex: 1 }}>
+              <strong>{hiddenCount === 1 ? '1 dish is' : `${hiddenCount} dishes are`} not shown in billing</strong> because the category is switched
+              off.{' '}
+              {hiddenShared
+                ? 'Shared categories can only be switched on by the Super Admin (Menu › Categories).'
+                : 'Turn it on in Categories.'}
+            </span>
+            <button className="btn btn-outline btn-sm" onClick={() => setPanel({ kind: 'categories' })}>
+              <Layers /> Categories
+            </button>
+          </div>
+        )}
         {items.isLoading || categories.isLoading ? (
           <Loading label="Loading menu…" />
         ) : visible.length === 0 ? (
@@ -693,7 +716,10 @@ export function MenuManager({
                 <div className="food-media">
                   <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
                 </div>
-                <div className="menu-card-tags">{!item.isAvailable && <span className="tag dark">Sold out</span>}</div>
+                <div className="menu-card-tags">
+                  {notInBilling(item) && <span className="tag yellow">Not in billing</span>}
+                  {!item.isAvailable && <span className="tag dark">Sold out</span>}
+                </div>
                 {scope.branchId && (
                   <button
                     type="button"
