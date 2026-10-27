@@ -241,7 +241,7 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   ${r.branches.length ? branchSummary(r) : ''}
   ${r.branches.filter((b) => b.bills > 0 || b.expenses > 0).map(branchDetail).join('')}
 
-  <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
+  <tr><td align="center" style="padding:28px 24px 22px 24px;font:400 12px/18px ${FONT};color:${C.subtle};">&copy; 2026 JAIVA Creative Labs</td></tr>
 
 </table>
 </td></tr></table>
@@ -281,5 +281,6 @@ export function renderDailyReportText(r: DailyReport): string {
       );
     }
   }
+  out.push('', '© 2026 JAIVA Creative Labs');
   return out.join('\n');
 }
