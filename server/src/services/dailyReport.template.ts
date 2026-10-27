@@ -35,10 +35,6 @@ const pct = (part: number, whole: number) => (whole ? Math.round((part / whole) 
 function timeOf(d: Date): string {
   return new Intl.DateTimeFormat('en-IN', { timeZone: env.APP_TIMEZONE, hour: 'numeric', minute: '2-digit', hour12: true }).format(d).toUpperCase();
 }
-function sendTimeLabel(hhmm: string): string {
-  const [h, m] = hhmm.split(':').map(Number);
-  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-}
 
 function sectionTitle(title: string, aside = ''): string {
   return `<tr><td style="padding:28px 24px 10px 24px;">
@@ -196,7 +192,7 @@ function notCountedNote(r: DailyReport): string {
   </td></tr>`;
 }
 
-export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | null; sendTime: string }): string {
+export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | null }): string {
   const logo = opts.logoSrc
     ? `<img src="${opts.logoSrc}" width="48" height="48" alt="Tiffin House" style="display:block;border-radius:24px;border:1px solid ${C.border};">`
     : `<div style="width:48px;height:48px;border-radius:24px;background:${C.secondary};font:700 20px/48px ${FONT};color:${C.text};text-align:center;">T</div>`;
@@ -259,12 +255,7 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   ${notCountedNote(r)}
   ${r.branches.filter((b) => b.bills > 0 || b.expenses > 0).map(branchDetail).join('')}
 
-  <tr><td style="padding:28px 24px 26px 24px;">
-    <div style="border-top:1px solid ${C.border};padding-top:16px;font:400 12px/18px ${FONT};color:${C.subtle};">
-      Paid bills only. Totals include tax; item amounts are before discount and tax. Expenses are those recorded for this date in each branch. Sent every day at ${sendTimeLabel(opts.sendTime)} by Tiffin House POS.
-      To change who gets this email, open Super Admin &rsaquo; Daily Report.
-    </div>
-  </td></tr>
+  <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
 
 </table>
 </td></tr></table>

@@ -248,7 +248,7 @@ export function reportSubject(r: DailyReport): string {
 /** HTML for the in-app preview; the logo is inlined there instead of attached. */
 export async function previewDailyReport(date = todayIn(env.APP_TIMEZONE)): Promise<string> {
   const logo = fs.existsSync(logoPath) ? `data:image/jpeg;base64,${fs.readFileSync(logoPath).toString('base64')}` : null;
-  return renderDailyReportHtml(await buildDailyReport(date), { logoSrc: logo, sendTime: env.DAILY_REPORT_TIME });
+  return renderDailyReportHtml(await buildDailyReport(date), { logoSrc: logo });
 }
 
 async function deliver(report: DailyReport, recipients: string[]) {
@@ -258,7 +258,7 @@ async function deliver(report: DailyReport, recipients: string[]) {
     to: recipients,
     subject: reportSubject(report),
     text: renderDailyReportText(report),
-    html: renderDailyReportHtml(report, { logoSrc: hasLogo ? `cid:${LOGO_CID}` : null, sendTime: env.DAILY_REPORT_TIME }),
+    html: renderDailyReportHtml(report, { logoSrc: hasLogo ? `cid:${LOGO_CID}` : null }),
     attachments: hasLogo ? [{ filename: 'logo.jpg', path: logoPath, cid: LOGO_CID }] : [],
   });
 }
