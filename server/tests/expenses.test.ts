@@ -75,7 +75,8 @@ describe('recording expenses', () => {
 
     // createdAt is immutable through Mongoose, so age the expense directly in the collection.
     await ExpenseModel.collection.updateOne({ _id: new Types.ObjectId(mine.id) }, { $set: { createdAt: new Date(Date.now() - 31 * 60_000) } });
-    expect((await w.adminA1.put(`/api/v1/expenses/${mine.id}`, gas())).status).toBe(403);
+    // Still editable later; deleting is closed after the window.
+    expect(ok<Expense>(await w.adminA1.put(`/api/v1/expenses/${mine.id}`, { ...gas(), amount: 105000 })).amount).toBe(105000);
     expect((await w.adminA1.delete(`/api/v1/expenses/${mine.id}`)).status).toBe(403);
     // The Super Admin can still correct it.
     expect(ok<Expense>(await w.sa.put(`/api/v1/expenses/${mine.id}`, { ...gas(), amount: 100000 })).amount).toBe(100000);

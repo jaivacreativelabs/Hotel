@@ -1,7 +1,7 @@
 /**
- * Branch expenses (groceries, gas, salary …). Restaurant Admins record them for their branch and
- * may correct or delete one for EXPENSE_EDIT_WINDOW_MINUTES; the Super Admin sees every branch
- * and can change them any time. They are taken off the day's sale in the daily report.
+ * Branch expenses (groceries, gas, salary …). Restaurant Admins record them for their branch,
+ * may correct them any time and delete one for EXPENSE_EDIT_WINDOW_MINUTES; the Super Admin sees
+ * every branch and can change them any time. They are taken off the day's sale in the daily report.
  */
 import type { Types } from 'mongoose';
 import {
@@ -140,18 +140,21 @@ export async function createExpense(user: AuthUser, scope: BranchScope, input: E
   return toExpenseDTO(e, scope.branch.name);
 }
 
-/** Loads an expense the caller may change. Other branches' expenses look like they do not exist. */
-async function getChangeable(user: AuthUser, id: string): Promise<ExpenseLean> {
+/**
+ * Loads an expense the caller may change. Other branches' expenses look like they do not exist.
+ * A branch may correct its expenses any time; deleting one is limited to the first minutes.
+ */
+async function getChangeable(user: AuthUser, id: string, change: 'edit' | 'delete'): Promise<ExpenseLean> {
   const e = await ExpenseModel.findOne({ _id: toObjectId(id, 'expense'), status: 'ACTIVE' }).lean<ExpenseLean>();
   if (!e || (user.role !== 'SUPER_ADMIN' && !user.branchIds.some((b) => b.equals(e.branchId)))) throw notFound('Expense');
-  if (user.role !== 'SUPER_ADMIN' && !expenseEditableUntil(e)) {
-    throw forbidden(`An expense can only be changed within ${EXPENSE_EDIT_WINDOW_MINUTES} minutes of adding it. Ask your Super Admin.`);
+  if (change === 'delete' && user.role !== 'SUPER_ADMIN' && !expenseEditableUntil(e)) {
+    throw forbidden(`An expense can only be deleted within ${EXPENSE_EDIT_WINDOW_MINUTES} minutes of adding it. Edit it instead, or ask your Super Admin.`);
   }
   return e;
 }
 
 export async function updateExpense(user: AuthUser, id: string, input: ExpenseInput): Promise<ExpenseDTO> {
-  const before = await getChangeable(user, id);
+  const before = await getChangeable(user, id, 'edit');
   assertValid(input);
   const updated = await ExpenseModel.findByIdAndUpdate(
     before._id,
@@ -170,7 +173,7 @@ export async function updateExpense(user: AuthUser, id: string, input: ExpenseIn
 }
 
 export async function deleteExpense(user: AuthUser, id: string): Promise<void> {
-  const e = await getChangeable(user, id);
+  const e = await getChangeable(user, id, 'delete');
   await ExpenseModel.updateOne({ _id: e._id }, { $set: { status: 'DELETED', editedAt: new Date(), editedByName: user.name } });
   await audit(user, {
     action: 'EXPENSE_DELETED',

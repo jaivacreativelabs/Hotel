@@ -249,7 +249,8 @@ export function ExpensesView({
   );
   useTopbarExtra(extra);
 
-  const canChange = (e: ExpenseDTO) => anyTime || (e.editableUntil !== null && new Date(e.editableUntil).getTime() > Date.now());
+  // Editing is open any time; a branch may delete an entry only in its first minutes.
+  const canDelete = (e: ExpenseDTO) => anyTime || (e.editableUntil !== null && new Date(e.editableUntil).getTime() > Date.now());
 
   const remove = async (e: ExpenseDTO) => {
     setDeleteBusy(true);
@@ -265,17 +266,18 @@ export function ExpensesView({
     }
   };
 
-  const actions = (e: ExpenseDTO) =>
-    canChange(e) && (
-      <span className="row" style={{ gap: 4, justifyContent: 'center' }}>
-        <button className="icon-btn plain" onClick={() => setForm({ expense: e })} aria-label="Edit expense" title="Edit">
-          <Pencil />
-        </button>
+  const actions = (e: ExpenseDTO) => (
+    <span className="row" style={{ gap: 4, justifyContent: 'center' }}>
+      <button className="icon-btn plain" onClick={() => setForm({ expense: e })} aria-label="Edit expense" title="Edit">
+        <Pencil />
+      </button>
+      {canDelete(e) && (
         <button className="icon-btn plain danger-text" onClick={() => setDeleting(e)} aria-label="Delete expense" title="Delete">
           <Trash2 />
         </button>
-      </span>
-    );
+      )}
+    </span>
+  );
 
   const top = data?.byCategory[0];
   const TopIcon = top ? EXPENSE_ICON[top.category] : Wallet;
@@ -284,7 +286,7 @@ export function ExpensesView({
     <div className="page">
       <PageHeader
         title="Expenses"
-        subtitle={anyTime ? 'Money spent by each branch' : `Record what the branch spends. You can fix or delete an entry for ${EXPENSE_EDIT_WINDOW_MINUTES} minutes.`}
+        subtitle={anyTime ? 'Money spent by each branch' : `Record what the branch spends. You can edit an entry any time, and delete it within ${EXPENSE_EDIT_WINDOW_MINUTES} minutes.`}
         actions={
           <button
             className="btn btn-primary btn-lg"
