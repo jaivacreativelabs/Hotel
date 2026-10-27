@@ -222,7 +222,7 @@ export function AppLayout() {
             <span>{label}</span>
           </NavLink>
         ))}
-        <div className="sidebar-footer">Fresh starts. Good days.</div>
+        <div className="sidebar-footer">© 2026 JAIVA Creative Labs</div>
       </nav>
       {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <main className="content">
