@@ -68,7 +68,7 @@ function paymentSection(r: DailyReport): string {
           <span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${PAYMENT_COLOUR[p.method]};margin-right:10px;vertical-align:middle;"></span>${PAYMENT_NAME[p.method]}
         </td>
         <td align="right" style="padding:12px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:400 13px/20px ${FONT};color:${C.muted};white-space:nowrap;">
-          ${p.bills} bill${p.bills === 1 ? '' : 's'} · ${pct(p.sales, r.totalSales)}%
+          ${pct(p.sales, r.totalSales)}%
         </td>
         <td align="right" width="110" style="padding:12px 0;${i ? `border-top:1px solid ${C.border};` : ''}font:600 14px/20px ${FONT};color:${C.text};white-space:nowrap;">${formatMoney(p.sales)}</td>
       </tr>`,
@@ -262,7 +262,7 @@ export function renderDailyReportText(r: DailyReport): string {
     line('Net (sale - expenses)', formatMoney(r.net)),
     '',
     'Payment split',
-    ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, `${formatMoney(p.sales)}  (${p.bills} bills)`)),
+    ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, formatMoney(p.sales))),
     '',
     'Branch-wise sale',
     ...r.branches.map((b) => line(`  ${b.branchName} (${b.restaurantName})`, `${formatMoney(b.sales)}  (${b.bills} bills)`)),
