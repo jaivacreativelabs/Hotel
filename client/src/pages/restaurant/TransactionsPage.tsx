@@ -191,7 +191,9 @@ function BillDetails({
         <div className="alert alert-warning">
           <Ban />
           <span>
-            {STATUS_LABEL[tx.status]} by {tx.statusChange.byName} on {formatDateTime(tx.statusChange.at)}: “{tx.statusChange.reason}”
+            {STATUS_LABEL[tx.status]} by {tx.statusChange.byName} on {formatDateTime(tx.statusChange.at)}
+            <br />
+            <strong>Reason:</strong> {tx.statusChange.reason}
           </span>
         </div>
       )}
