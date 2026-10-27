@@ -1,5 +1,5 @@
 import type { PaymentMethod, TransactionStatus } from '@rb/shared';
-import { Banknote, CreditCard, Smartphone } from 'lucide-react';
+import { Banknote, CreditCard } from 'lucide-react';
 import { PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
 /** Furniture-style table icon used in the navigation (lucide has no dining table). */
@@ -15,7 +15,21 @@ export function TableIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-export const PAYMENT_ICON: Record<PaymentMethod, typeof Banknote> = { CASH: Banknote, UPI: Smartphone, CARD: CreditCard };
+/** UPI mark: two arrows, the second in UPI orange (the first follows the text colour, so it shows on green). */
+export function UpiIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" stroke="none" {...props}>
+      <path d="M3 4.5 10.5 12 3 19.5Z" fill="currentColor" />
+      <path d="M10.5 3 19.5 12 10.5 21Z" fill="#F47920" />
+    </svg>
+  );
+}
+
+export const PAYMENT_ICON: Record<PaymentMethod, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
+  CASH: Banknote,
+  UPI: UpiIcon,
+  CARD: CreditCard,
+};
 
 const PAYMENT_CLASS: Record<PaymentMethod, string> = { CASH: 'badge-green', UPI: 'badge-purple', CARD: 'badge-blue' };
 
