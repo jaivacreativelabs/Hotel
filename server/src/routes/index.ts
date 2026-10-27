@@ -107,9 +107,10 @@ export function createApiRouter(): Router {
   adminRouter.get('/audit-logs', admin.auditLogs);
   api.use('/admin', adminRouter);
 
-  // ---- Scheduled jobs (Vercel Cron sends `Authorization: Bearer $CRON_SECRET`) ----
+  // ---- Scheduled jobs (schedulers send `Authorization: Bearer $CRON_SECRET`) ----
   api.get('/cron/daily-report', cronAuth, async (_req, res) => {
-    res.json({ data: await runDueDailyReport(new Date(), true) });
+    // A scheduler firing on the minute may land a moment early, so allow one minute.
+    res.json({ data: await runDueDailyReport(new Date(Date.now() + 60_000)) });
   });
 
   // ---- Menu (both roles, scoped) ----

@@ -324,11 +324,11 @@ function clockIn(timeZone: string, now: Date): string {
 }
 
 /**
- * Sends today's report if it is due. The in-process timer checks the clock; Vercel Cron is
- * itself the clock (`ignoreClock`), since on some plans it fires anywhere within the hour.
+ * Sends today's report if it is due – never before DAILY_REPORT_TIME, whoever calls (the
+ * in-process timer, an external scheduler, or Vercel Cron, which on Hobby fires anywhere in its hour).
  */
-export async function runDueDailyReport(now = new Date(), ignoreClock = false): Promise<SendResult> {
-  if (!ignoreClock && clockIn(env.APP_TIMEZONE, now) < env.DAILY_REPORT_TIME) return { status: 'skipped', reason: 'not yet time' };
+export async function runDueDailyReport(now = new Date()): Promise<SendResult> {
+  if (clockIn(env.APP_TIMEZONE, now) < env.DAILY_REPORT_TIME) return { status: 'skipped', reason: 'not yet time' };
   return sendDailyReport({ date: todayIn(env.APP_TIMEZONE, now) });
 }
 

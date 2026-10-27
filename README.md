@@ -150,10 +150,14 @@ Mail goes out through Gmail SMTP:
    `npm run dev`. Never commit it or paste it anywhere else.
 
 Who sends it: a long-running server (`npm run dev` / `npm start`) checks the clock every minute.
-On Vercel, **Vercel Cron** calls `/api/v1/cron/daily-report` at `30 15 * * *` (UTC = 9:00 PM IST,
-see `vercel.json`). The day is claimed in MongoDB before sending, so the report is sent only once
-even if both are running. On the Vercel Hobby plan cron jobs may fire anywhere within that hour
-(8:30–9:29 PM IST); the email states the time it was made ("Till 9:04 PM").
+On Vercel, call `GET /api/v1/cron/daily-report` with `Authorization: Bearer <CRON_SECRET>`; it
+never sends before `DAILY_REPORT_TIME`. The day is claimed in MongoDB before sending, so the
+report goes out only once whoever calls.
+
+- **Sharp at 9:00 PM:** a free scheduler such as [cron-job.org](https://cron-job.org) – daily at
+  21:00, time zone Asia/Kolkata, with that `Authorization` header (Advanced → Headers).
+- **Backup:** Vercel Cron at `0 16 * * *` (`vercel.json`). On the Hobby plan it fires anywhere in
+  that UTC hour (9:30–10:29 PM IST), so it only sends if the 9 PM call did not.
 
 ## Deployment
 
