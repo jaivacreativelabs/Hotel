@@ -241,10 +241,12 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   ${r.branches.length ? branchSummary(r) : ''}
   ${r.branches.filter((b) => b.bills > 0 || b.expenses > 0).map(branchDetail).join('')}
 
-  <tr><td align="center" style="padding:28px 24px 22px 24px;font:400 12px/18px ${FONT};color:${C.subtle};">&copy; 2026 JAIVA Creative Labs</td></tr>
+  <tr><td style="height:26px;line-height:26px;font-size:0;">&nbsp;</td></tr>
 
 </table>
-</td></tr></table>
+</td></tr>
+<tr><td align="right" style="padding:0 16px 12px 16px;font:400 12px/18px ${FONT};color:${C.subtle};">&copy; 2026 JAIVA Creative Labs</td></tr>
+</table>
 </body></html>`;
 }
 
