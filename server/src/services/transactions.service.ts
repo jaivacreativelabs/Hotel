@@ -161,7 +161,7 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
   const billed = new Map(tx.items.map((i) => [String(i.menuItemId), i]));
   const lines = (await priceLines(scope, input.items)).map((l) => {
     const old = billed.get(String(l.menuItemId));
-    return old ? { ...l, unitPrice: old.unitPrice, taxable: old.taxable, taxRateBps: old.taxRateBps ?? null } : l;
+    return old ? { ...l, unitPrice: old.unitPrice, taxable: old.taxable, taxRateBps: old.taxRateBps ?? null, extraTaxes: (old.extraTaxes ?? []).map((t) => ({ name: t.name ?? '', rateBps: t.rateBps ?? 0 })) } : l;
   });
   const blocked = lines.filter((l) => l.unavailable && l.quantity > (billed.get(String(l.menuItemId))?.quantity ?? 0));
   if (blocked.length) {
@@ -187,6 +187,7 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
           quantity: l.quantity,
           taxable: l.taxable,
           taxRateBps: l.taxRateBps,
+          extraTaxes: l.extraTaxes,
           lineTotal: totals.lineTotals[i],
         })),
         subtotal: totals.subtotal,

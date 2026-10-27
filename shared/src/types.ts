@@ -152,6 +152,8 @@ export interface MenuItemDTO {
   taxable: boolean;
   /** Own GST % in basis points (500 = 5 %); null → the restaurant's taxes apply when taxable */
   taxRateBps: number | null;
+  /** Other taxes besides GST, e.g. Service charge 10 % */
+  extraTaxes: TaxRate[];
   /** effective availability for the requested scope */
   isAvailable: boolean;
   status: ItemStatus;
@@ -175,6 +177,8 @@ export interface DraftItemDTO {
   unitPrice: number;
   taxable: boolean;
   taxRateBps: number | null;
+  /** Other taxes besides GST, e.g. Service charge 10 % */
+  extraTaxes: TaxRate[];
   quantity: number;
   /** item became unavailable after it was added – must be removed before finalising */
   unavailable: boolean;
@@ -273,6 +277,8 @@ export interface TransactionItemDTO {
   quantity: number;
   taxable: boolean;
   taxRateBps: number | null;
+  /** Other taxes besides GST, e.g. Service charge 10 % */
+  extraTaxes: TaxRate[];
   lineTotal: number;
 }
 

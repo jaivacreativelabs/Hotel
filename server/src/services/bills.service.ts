@@ -45,6 +45,7 @@ interface PricedLine {
   unitPrice: number;
   taxable: boolean;
   taxRateBps: number | null;
+  extraTaxes: { name: string; rateBps: number }[];
   quantity: number;
   unavailable: boolean;
   categoryName: string;
@@ -104,6 +105,7 @@ export async function priceLines(
       // GST follows the dish (and this branch's own GST for it, if set).
       taxable: (parentEff ?? eff).taxable,
       taxRateBps: (parentEff ?? eff).taxRateBps,
+      extraTaxes: (parentEff ?? eff).extraTaxes,
       quantity: r.quantity,
       unavailable: !available,
       categoryName: cat?.name ?? '',
@@ -441,6 +443,7 @@ export async function finalizeDraft(
                 quantity: l.quantity,
                 taxable: l.taxable,
                 taxRateBps: l.taxRateBps,
+                extraTaxes: l.extraTaxes,
                 lineTotal: totals.lineTotals[i],
               })),
               subtotal: totals.subtotal,

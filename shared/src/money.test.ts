@@ -141,6 +141,22 @@ describe('calculateBill', () => {
     expect(t.taxTotal).toBe(1800);
   });
 
+  it("adds an item's other taxes on top of its GST", () => {
+    const t = calculateBill(
+      [
+        { unitPrice: 10000, quantity: 1, taxable: true, taxRateBps: 500, extraTaxes: [{ name: 'Service charge', rateBps: 1000 }] },
+        { unitPrice: 10000, quantity: 1, taxable: false, taxRateBps: 0, extraTaxes: [{ name: 'Service charge', rateBps: 1000 }] },
+      ],
+      noTax,
+    );
+    expect(t.taxes).toEqual([
+      { name: 'Service charge', rateBps: 1000, amount: 2000 },
+      { name: 'CGST', rateBps: 250, amount: 250 },
+      { name: 'SGST', rateBps: 250, amount: 250 },
+    ]);
+    expect(t.grandTotal).toBe(20000 + 2500);
+  });
+
   it('handles an empty bill', () => {
     const t = calculateBill([], gst5, { type: 'FLAT', value: 100 });
     expect(t.grandTotal).toBe(0);

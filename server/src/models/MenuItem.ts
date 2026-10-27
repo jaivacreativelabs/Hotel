@@ -1,6 +1,9 @@
 import { model, Schema, type HydratedDocument, type InferSchemaType } from 'mongoose';
 import { ITEM_STATUSES } from '@rb/shared';
 
+/** Another tax on an item besides GST, e.g. Service charge 10 % */
+const extraTaxSchema = new Schema({ name: { type: String, required: true }, rateBps: { type: Number, required: true, min: 0, max: 10_000 } }, { _id: false });
+
 const overrideSchema = new Schema(
   {
     branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
@@ -13,6 +16,8 @@ const overrideSchema = new Schema(
     hidden: { type: Boolean, default: null },
     // This branch's own GST % for a main-menu dish (its variants follow the dish).
     taxRateBps: { type: Number, default: null },
+    // This branch's own other taxes (unset → the dish's).
+    extraTaxes: { type: [extraTaxSchema], default: undefined },
   },
   { _id: false },
 );
@@ -36,6 +41,7 @@ const menuItemSchema = new Schema(
     taxable: { type: Boolean, default: true },
     // Own GST % in basis points; null → the restaurant's taxes (when taxable)
     taxRateBps: { type: Number, default: null, min: 0, max: 10_000 },
+    extraTaxes: { type: [extraTaxSchema], default: [] },
     isAvailable: { type: Boolean, default: true },
     status: { type: String, enum: ITEM_STATUSES, default: 'ACTIVE' },
     branchOverrides: { type: [overrideSchema], default: [] },

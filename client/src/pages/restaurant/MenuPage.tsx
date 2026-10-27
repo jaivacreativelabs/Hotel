@@ -133,6 +133,53 @@ const toRow = (v: MenuItemDTO): VariantRow => ({
   price: paiseToRupeesInput(v.price),
 });
 
+interface TaxRow {
+  key: string;
+  name: string;
+  rate: string;
+}
+
+/** Other taxes on a food besides GST (e.g. Service charge 10 %): a name and a % each. */
+function ExtraTaxesEditor({ rows, onChange, error }: { rows: TaxRow[]; onChange: (rows: TaxRow[]) => void; error?: string }) {
+  const update = (key: string, patch: Partial<TaxRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  return (
+    <div className="field">
+      <span className="field-label">
+        Tax <span className="muted">(optional – any other tax, e.g. Service charge)</span>
+      </span>
+      {rows.length > 0 && (
+        <div className="variant-rows">
+          {rows.map((r) => (
+            <div key={r.key} className="tax-row">
+              <input
+                className="input"
+                value={r.name}
+                maxLength={30}
+                placeholder="Tax name"
+                onChange={(e) => update(r.key, { name: e.target.value })}
+                aria-label="Tax name"
+              />
+              <div className="input-suffix">
+                <input className="input" inputMode="decimal" value={r.rate} placeholder="0" onChange={(e) => update(r.key, { rate: e.target.value })} aria-label={`${r.name || 'Tax'} percent`} />
+                <span>%</span>
+              </div>
+              <button type="button" className="icon-btn plain danger-text" onClick={() => onChange(rows.filter((x) => x.key !== r.key))} aria-label={`Remove ${r.name || 'tax'}`}>
+                <Trash2 />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {rows.length < LIMITS.maxTaxes && (
+        <button type="button" className="btn btn-soft btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => onChange([...rows, { key: `tax-${++rowSeq}`, name: '', rate: '' }])}>
+          <Plus size={16} /> Add tax
+        </button>
+      )}
+      {error && <span className="field-error">{error}</span>}
+    </div>
+  );
+}
+
 /** Rows of name, quantity and price. For a main-menu dish seen from a branch, changes apply to that branch only. */
 function VariantsEditor({ rows, onChange, error }: { rows: VariantRow[]; onChange: (rows: VariantRow[]) => void; error?: string }) {
   const update = (key: string, patch: Partial<VariantRow>) => onChange(rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -227,6 +274,9 @@ function ItemPanel({
   const [tax, setTax] = useState(() =>
     bpsToPercent(item ? (item.taxRateBps ?? (item.taxable ? restaurantTaxBps : 0)) : restaurantTaxBps),
   );
+  const [extraTaxes, setExtraTaxes] = useState<TaxRow[]>(() =>
+    (item?.extraTaxes ?? []).map((t) => ({ key: `tax-${++rowSeq}`, name: t.name, rate: bpsToPercent(t.rateBps) })),
+  );
   // There is no sold-out switch in this form: saving a dish keeps it orderable.
   const isAvailable = true;
   const [file, setFile] = useState<File | null>(null);
@@ -265,6 +315,10 @@ function ItemPanel({
     else if (variantRows.some((r) => r.paise === null || r.paise > LIMITS.maxPricePaise)) next.variants = 'Enter a price for every variant, like 50 or 49.50';
     const taxBps = parsePercentToBps(tax || '0');
     if (taxBps === null || taxBps > 10_000) next.tax = 'Enter a tax % like 5 or 2.5';
+    const extras = extraTaxes.map((t) => ({ name: t.name.trim(), rateBps: parsePercentToBps(t.rate || '0') }));
+    if (extras.some((t) => !t.name)) next.extraTaxes = 'Give every tax a name, e.g. Service charge';
+    else if (extras.some((t) => t.rateBps === null || t.rateBps > 10_000)) next.extraTaxes = 'Enter a % for every tax, like 10 or 2.5';
+    else if (new Set(extras.map((t) => t.name.toLowerCase())).size !== extras.length) next.extraTaxes = 'Each tax name only once';
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -274,9 +328,9 @@ function ItemPanel({
       // A dish with variants shows its lowest variant price.
       const dishPrice = hasVariants ? Math.min(...variantRows.map((r) => r.paise!)) : paise!;
       if (sharedOnly) {
-        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable, taxRateBps: taxBps } : { price: paise, isAvailable, taxRateBps: taxBps });
+        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable, taxRateBps: taxBps, extraTaxes: extras } : { price: paise, isAvailable, taxRateBps: taxBps, extraTaxes: extras });
       } else {
-        const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxRateBps: taxBps, taxable: taxBps! > 0, isAvailable };
+        const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxRateBps: taxBps, taxable: taxBps! > 0, extraTaxes: extras, isAvailable };
         saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
       }
       if (hasVariants || variants.length) {
@@ -507,6 +561,7 @@ function ItemPanel({
             </div>
           )}
         </Field>
+        <ExtraTaxesEditor rows={extraTaxes} onChange={setExtraTaxes} error={errors.extraTaxes} />
 
         {!sharedOnly && (
           <details className="more-options">

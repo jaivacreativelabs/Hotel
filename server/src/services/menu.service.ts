@@ -169,8 +169,8 @@ export async function listItems(
       const dto = toMenuItemDTO(i, branchId);
       const dish = i.parentId ? dishes.get(String(i.parentId)) : undefined;
       if (!dish) return dto;
-      const { taxable, taxRateBps } = effectiveItem(dish, branchId);
-      return { ...dto, taxable, taxRateBps };
+      const { taxable, taxRateBps, extraTaxes } = effectiveItem(dish, branchId);
+      return { ...dto, taxable, taxRateBps, extraTaxes };
     })
     .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
@@ -216,6 +216,7 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
     price: input.price,
     taxable: input.taxRateBps != null ? input.taxRateBps > 0 : (input.taxable ?? true),
     taxRateBps: input.taxRateBps ?? null,
+    extraTaxes: input.extraTaxes ?? [],
     isAvailable: input.isAvailable ?? true,
   });
   await audit(actor, {
@@ -231,7 +232,7 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
 function setOverride(
   item: InstanceType<typeof MenuItemModel>,
   branchId: Types.ObjectId,
-  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean; taxRateBps?: number | null },
+  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean; taxRateBps?: number | null; extraTaxes?: { name: string; rateBps: number }[] },
 ) {
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) {
@@ -241,6 +242,7 @@ function setOverride(
     if (patch.pinned !== undefined) existing.pinned = patch.pinned;
     if (patch.hidden !== undefined) existing.hidden = patch.hidden;
     if (patch.taxRateBps !== undefined) existing.taxRateBps = patch.taxRateBps;
+    if (patch.extraTaxes !== undefined) existing.set('extraTaxes', patch.extraTaxes);
   } else {
     item.branchOverrides.push({
       branchId,
@@ -250,6 +252,7 @@ function setOverride(
       pinned: patch.pinned ?? null,
       hidden: patch.hidden ?? null,
       taxRateBps: patch.taxRateBps ?? null,
+      ...(patch.extraTaxes && { extraTaxes: patch.extraTaxes }),
     });
   }
 }
@@ -282,11 +285,11 @@ export async function updateItem(actor: AuthUser, scope: Scope, id: string, inpu
       ...(input.taxRateBps != null && { taxable: input.taxRateBps > 0 }),
     });
   } else {
-    // A branch may set its own price, availability and GST % for a main-menu item.
-    const allowed = ['price', 'isAvailable', 'taxRateBps', 'taxable'];
+    // A branch may set its own price, availability, GST % and other taxes for a main-menu item.
+    const allowed = ['price', 'isAvailable', 'taxRateBps', 'taxable', 'extraTaxes'];
     const disallowed = Object.keys(input).filter((k) => !allowed.includes(k));
     if (disallowed.length) {
-      throw forbidden(`Only price, availability and GST of shared items can be changed for a branch (${disallowed.join(', ')})`);
+      throw forbidden(`Only price, availability and taxes of shared items can be changed for a branch (${disallowed.join(', ')})`);
     }
     const { taxable: _derived, ...patch } = input; // taxable follows the GST %
     setOverride(item, branchId!, patch);
@@ -314,8 +317,8 @@ export async function removeOverride(actor: AuthUser, scope: Scope, id: string) 
   if (!branchId) throw badRequest('Overrides exist only for branches');
   const item = await getVisibleItem(scope, id);
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
-  // "Use main menu price" resets price and availability; the photo, pin, removal and GST stay.
-  if (existing?.imageUrl || existing?.pinned || existing?.hidden || existing?.taxRateBps != null) {
+  // "Use main menu price" resets price and availability; the photo, pin, removal and taxes stay.
+  if (existing?.imageUrl || existing?.pinned || existing?.hidden || existing?.taxRateBps != null || existing?.extraTaxes) {
     existing.price = null;
     existing.isAvailable = null;
   } else {
@@ -414,7 +417,7 @@ async function syncVariantsWithDish(dish: MenuItemLean) {
         return {
           updateOne: {
             filter: { _id: v._id },
-            update: { $set: { name, nameKey: key, categoryId: dish.categoryId, taxable: dish.taxable, taxRateBps: dish.taxRateBps ?? null } },
+            update: { $set: { name, nameKey: key, categoryId: dish.categoryId, taxable: dish.taxable, taxRateBps: dish.taxRateBps ?? null, extraTaxes: dish.extraTaxes ?? [] } },
           },
         };
       }),
@@ -481,6 +484,7 @@ export async function setItemVariants(actor: AuthUser, scope: Scope, id: string,
           categoryId: dish.categoryId,
           taxable: dish.taxable,
           taxRateBps: dish.taxRateBps ?? null,
+          extraTaxes: dish.extraTaxes ?? [],
           isAvailable: row.isAvailable ?? true,
           parentId: dish._id,
         });

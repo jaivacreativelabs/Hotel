@@ -62,7 +62,7 @@ function mergeServerFields(local: LocalBill, saved: DraftDTO): LocalBill {
     ...local,
     items: local.items.map((i) => {
       const s = byId.get(i.menuItemId);
-      return s ? { ...i, name: s.name, unitPrice: s.unitPrice, imageUrl: s.imageUrl, taxable: s.taxable, taxRateBps: s.taxRateBps, unavailable: s.unavailable } : i;
+      return s ? { ...i, name: s.name, unitPrice: s.unitPrice, imageUrl: s.imageUrl, taxable: s.taxable, taxRateBps: s.taxRateBps, extraTaxes: s.extraTaxes, unavailable: s.unavailable } : i;
     }),
   };
 }

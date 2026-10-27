@@ -11,6 +11,8 @@ export interface BillLineInput {
   taxable: boolean;
   /** The item's own GST rate. Unset (null) → the restaurant's taxes apply when `taxable`. */
   taxRateBps?: number | null;
+  /** Any other taxes on this item (e.g. Service charge 10 %), on top of its GST. */
+  extraTaxes?: TaxRate[];
 }
 
 export interface TaxRate {
@@ -105,29 +107,32 @@ export function calculateBill(
   }
   const afterDiscount = subtotal - discountAmount;
 
-  // Lines are grouped by the rates they pay: the restaurant's taxes, or the item's own GST %.
+  // Lines are grouped by the rates they pay: the restaurant's taxes or the item's own GST %,
+  // plus any other taxes of the item.
   const restaurantRates = settings.taxes.filter((t) => t.rateBps > 0);
-  const groups = new Map<string, { rates: TaxRate[]; subtotal: number }>([['restaurant', { rates: restaurantRates, subtotal: 0 }]]);
+  const keyOf = (rates: TaxRate[]) => rates.map((t) => `${t.name}|${t.rateBps}`).join(',');
+  const restaurantKey = keyOf(restaurantRates);
+  const groups = new Map<string, { rates: TaxRate[]; subtotal: number }>([[restaurantKey, { rates: restaurantRates, subtotal: 0 }]]);
   lines.forEach((l, i) => {
     const own = l.taxRateBps;
-    if (own === null || own === undefined) {
-      if (l.taxable) groups.get('restaurant')!.subtotal += lineTotals[i];
-      return;
-    }
-    if (own <= 0) return;
-    const key = `own:${own}`;
-    if (!groups.has(key)) groups.set(key, { rates: gstComponents(own).filter((t) => t.rateBps > 0), subtotal: 0 });
+    const gst = own === null || own === undefined ? (l.taxable ? restaurantRates : []) : gstComponents(own);
+    const rates = [...gst, ...(l.extraTaxes ?? [])].filter((t) => t.rateBps > 0);
+    if (rates.length === 0) return;
+    const key = keyOf(rates);
+    if (!groups.has(key)) groups.set(key, { rates, subtotal: 0 });
     groups.get(key)!.subtotal += lineTotals[i];
   });
 
   // The discount is spread proportionally over every group (and the untaxed lines); same
-  // names and rates from different groups (e.g. CGST 2.5 %) are added together.
+  // names and rates from different groups (e.g. CGST 2.5 %) are added together. The
+  // restaurant's taxes come first, then the lowest rates.
   const merged = new Map<string, TaxLine>();
-  const ordered = [...groups.entries()].sort(([a], [b]) =>
-    a === 'restaurant' ? -1 : b === 'restaurant' ? 1 : Number(a.slice(4)) - Number(b.slice(4)),
+  const totalBps = (rates: TaxRate[]) => rates.reduce((a, t) => a + t.rateBps, 0);
+  const ordered = [...groups.entries()].sort(([a, ga], [b, gb]) =>
+    a === restaurantKey ? -1 : b === restaurantKey ? 1 : totalBps(ga.rates) - totalBps(gb.rates),
   );
   for (const [key, g] of ordered) {
-    if (key !== 'restaurant' && g.subtotal === 0) continue;
+    if (key !== restaurantKey && g.subtotal === 0) continue;
     const base = subtotal > 0 ? g.subtotal - divRoundHalfUp(discountAmount * g.subtotal, subtotal) : 0;
     for (const t of taxFor(base, g.rates, settings.pricesIncludeTax)) {
       const k = `${t.name}|${t.rateBps}`;

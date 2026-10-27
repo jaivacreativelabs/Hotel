@@ -96,12 +96,14 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
   // A branch's own GST % wins; null keeps the item's (or the restaurant's) taxes.
   const taxRateBps = override?.taxRateBps ?? item.taxRateBps ?? null;
   const taxable = override?.taxRateBps != null ? override.taxRateBps > 0 : item.taxable;
+  const extraTaxes = (override?.extraTaxes ?? item.extraTaxes ?? []).map((t) => ({ name: t.name, rateBps: t.rateBps }));
   return {
     price,
     isAvailable,
     imageUrl,
     taxRateBps,
     taxable,
+    extraTaxes,
     pinned: Boolean(override?.pinned),
     hidden: Boolean(override?.hidden),
     hasOverride: override?.price != null || override?.isAvailable != null,
@@ -126,6 +128,7 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     basePrice: item.price,
     taxable: eff.taxable,
     taxRateBps: eff.taxRateBps,
+    extraTaxes: eff.extraTaxes,
     isAvailable: eff.isAvailable,
     status: item.status,
     isShared: !item.branchId && scopeBranchId !== null,
@@ -156,6 +159,7 @@ export function toDraftDTO(d: WithId<Draft>, tableLabel = ''): DraftDTO {
       unitPrice: i.unitPrice,
       taxable: i.taxable,
       taxRateBps: i.taxRateBps ?? null,
+      extraTaxes: (i.extraTaxes ?? []).map((t) => ({ name: t.name ?? '', rateBps: t.rateBps ?? 0 })),
       quantity: i.quantity,
       unavailable: Boolean(i.unavailable),
     })),
@@ -208,6 +212,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
       quantity: i.quantity,
       taxable: i.taxable,
       taxRateBps: i.taxRateBps ?? null,
+      extraTaxes: (i.extraTaxes ?? []).map((t) => ({ name: t.name ?? '', rateBps: t.rateBps ?? 0 })),
       lineTotal: i.lineTotal,
     })),
     itemCount: t.items.reduce((a, i) => a + i.quantity, 0),

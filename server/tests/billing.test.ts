@@ -269,6 +269,25 @@ describe('GST per item', () => {
       { name: 'SGST', rateBps: 600, amount: 180 },
     ]);
 
+    // Other taxes: Dosa (main menu) gets a service charge; a branch pin must not drop it.
+    type Tax = { name: string; rateBps: number };
+    ok(await w.sa.patch(`/api/v1/menu/items/${w.items.dosa}?restaurantId=${w.restaurantA}`, { extraTaxes: [{ name: 'Service charge', rateBps: 1000 }] }));
+    ok(await w.adminA1.patch(`/api/v1/menu/items/${w.items.dosa}/pin`, { pinned: true }));
+    const dosaA1 = ok<(Item & { extraTaxes: Tax[] })[]>(await w.adminA1.get('/api/v1/menu/items')).find((i) => i.id === w.items.dosa);
+    expect(dosaA1?.extraTaxes).toEqual([{ name: 'Service charge', rateBps: 1000 }]);
+    // Branch A2 sets its own: no service charge there.
+    ok(await w.adminA2.patch(`/api/v1/menu/items/${w.items.dosa}`, { extraTaxes: [] }));
+    const dosaA2 = ok<(Item & { extraTaxes: Tax[] })[]>(await w.adminA2.get('/api/v1/menu/items')).find((i) => i.id === w.items.dosa);
+    expect(dosaA2?.extraTaxes).toEqual([]);
+
+    d = ok<Draft>(await w.adminA1.put(`/api/v1/bills/${d.id}`, { version: d.version, items: [{ menuItemId: w.items.dosa, quantity: 1 }] }));
+    const dosaTaxes = (d.totals as unknown as { taxes: (Tax & { amount: number })[] }).taxes.filter((t) => t.amount > 0);
+    expect(dosaTaxes.map((t) => [t.name, t.rateBps, t.amount])).toEqual([
+      ['CGST', 250, 125],
+      ['SGST', 250, 125],
+      ['Service charge', 1000, 500],
+    ]);
+
     // A branch still cannot rename a main-menu item.
     expect((await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Idli' })).status).toBe(403);
   });

@@ -10,6 +10,7 @@ const draftItemSchema = new Schema(
     unitPrice: { type: Number, required: true },
     taxable: { type: Boolean, default: true },
     taxRateBps: { type: Number, default: null },
+    extraTaxes: { type: [{ name: String, rateBps: Number, _id: false }], default: [] },
     quantity: { type: Number, required: true, min: 1 },
     unavailable: { type: Boolean, default: false },
   },

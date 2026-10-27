@@ -11,6 +11,7 @@ const itemSnapshotSchema = new Schema(
     quantity: { type: Number, required: true },
     taxable: { type: Boolean, required: true },
     taxRateBps: { type: Number, default: null },
+    extraTaxes: { type: [{ name: String, rateBps: Number, _id: false }], default: [] },
     lineTotal: { type: Number, required: true },
   },
   { _id: false },

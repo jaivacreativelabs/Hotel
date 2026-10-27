@@ -186,6 +186,7 @@ async function writeBills(setups: Setup[]) {
       ] as const),
       taxable: x.item.taxable,
       taxRateBps: x.item.taxRateBps ?? null,
+      extraTaxes: (x.item.extraTaxes ?? []).map((t) => ({ name: t.name, rateBps: t.rateBps })),
     }));
     const totals = calculateBill(lines, s.settings, null);
     const atTable = s.tables.length > 0 && rand() < 0.6;
@@ -226,6 +227,7 @@ async function writeBills(setups: Setup[]) {
         quantity: l.quantity,
         taxable: l.taxable,
         taxRateBps: l.taxRateBps,
+        extraTaxes: l.extraTaxes,
         lineTotal: totals.lineTotals[i],
       })),
       subtotal: totals.subtotal,
