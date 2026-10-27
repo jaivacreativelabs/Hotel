@@ -3,6 +3,7 @@
  * Cash / UPI (GPay) / Card split, item-wise sales, and the day's expenses with sale minus expenses. Sent once a day at DAILY_REPORT_TIME by the
  * in-process timer (long-running server) or by Vercel Cron (serverless), whichever comes first.
  */
+import dns from 'node:dns/promises';
 import fs from 'node:fs';
 import path from 'node:path';
 import nodemailer from 'nodemailer';
@@ -231,15 +232,22 @@ export async function updateDailyReportSettings(user: AuthUser, input: DailyRepo
 const LOGO_CID = 'logo@tiffinhouse';
 const logoPath = path.join(serverRoot, 'assets', 'report-logo.jpg');
 
-let transport: nodemailer.Transporter | null = null;
-function mailer() {
-  transport ??= nodemailer.createTransport({
-    host: env.SMTP_HOST,
+/**
+ * Connects over IPv4: nodemailer sometimes picks Gmail's IPv6 address, which Vercel's functions
+ * cannot reach ("connect ETIMEDOUT 2404:…"). TLS still checks the real host name.
+ */
+async function mailer() {
+  const ipv4 = await dns.lookup(env.SMTP_HOST, { family: 4 }).then(
+    (r) => r.address,
+    () => env.SMTP_HOST, // lookup failed: let nodemailer try the name itself
+  );
+  return nodemailer.createTransport({
+    host: ipv4,
     port: env.SMTP_PORT,
     secure: env.SMTP_PORT === 465,
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+    tls: { servername: env.SMTP_HOST },
   });
-  return transport;
 }
 
 export function reportSubject(r: DailyReport): string {
@@ -254,7 +262,7 @@ export async function previewDailyReport(date = todayIn(env.APP_TIMEZONE)): Prom
 
 async function deliver(report: DailyReport, recipients: string[]) {
   const hasLogo = fs.existsSync(logoPath);
-  await mailer().sendMail({
+  await (await mailer()).sendMail({
     from: { name: env.MAIL_FROM_NAME, address: env.SMTP_USER },
     to: recipients,
     subject: reportSubject(report),
