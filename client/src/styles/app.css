@@ -9,6 +9,11 @@ body,
 #root {
   height: 100%;
 }
+/* Tablets show the page zoomable (see viewport.js), so their browsers wait ~300 ms after every
+   tap in case it is a double-tap zoom. This turns that wait off; pinch-zoom still works. */
+html {
+  touch-action: manipulation;
+}
 body {
   margin: 0;
   font-family: var(--font-family);
@@ -1260,9 +1265,13 @@ a {
   display: flex;
   flex-direction: column;
 }
-.food-card:hover:not(.disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-panel);
+/* Lift on hover only with a real mouse: a tap on a touch screen counts as a hover, and the shadow
+   animation repaints the whole screen on every frame (the main tablet lag). */
+@media (hover: hover) {
+  .food-card:hover:not(.disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-panel);
+  }
 }
 .food-card .food-media {
   aspect-ratio: 16 / 10;
@@ -1519,9 +1528,11 @@ a {
   background: var(--status-available-soft);
   min-width: 0;
 }
-.table-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-card);
+@media (hover: hover) {
+  .table-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card);
+  }
 }
 .table-card.selected {
   border-color: var(--color-primary);
@@ -2646,8 +2657,10 @@ a {
   cursor: pointer;
   transition: box-shadow 0.12s;
 }
-.restaurant-card:hover {
-  box-shadow: var(--shadow-panel);
+@media (hover: hover) {
+  .restaurant-card:hover {
+    box-shadow: var(--shadow-panel);
+  }
 }
 .assign-group {
   border: 1px solid var(--color-border);
@@ -3682,9 +3695,11 @@ a {
   background: var(--color-surface-muted);
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
-.pick-table:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-card);
+@media (hover: hover) {
+  .pick-table:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card);
+  }
 }
 .pick-table.active {
   border-color: var(--color-primary);

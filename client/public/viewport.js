@@ -1,3 +1,4 @@
+/* global screen, document */
 // Tablets get the laptop layout: lay the page out 1280px wide and let the
 // browser scale it to the screen. Phones (short side < 600px) keep their own
 // layout; desktop browsers ignore the viewport meta tag anyway.

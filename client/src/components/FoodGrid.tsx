@@ -1,6 +1,6 @@
 import type { MenuItemDTO } from '@rb/shared';
 import { LayoutGrid, Pin, UtensilsCrossed } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCategories, useMenuItems } from '../services/queries';
 import type { LocalBill } from '../store/draftSync';
@@ -67,6 +67,64 @@ function VariantPicker({
   );
 }
 
+const FoodCard = memo(function FoodCard({
+  item,
+  variants,
+  qty,
+  available,
+  editable,
+  emoji,
+  onPress,
+}: {
+  item: MenuItemDTO;
+  variants: MenuItemDTO[] | undefined;
+  qty: number;
+  available: boolean;
+  editable: boolean;
+  emoji: string | undefined;
+  onPress: (item: MenuItemDTO) => void;
+}) {
+  return (
+    <div
+      className={cx('food-card', !available && 'disabled')}
+      onClick={() => onPress(item)}
+      role="button"
+      tabIndex={available ? 0 : -1}
+      aria-disabled={!available}
+      aria-label={variants ? `Choose ${item.name}` : `Add ${item.name}`}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onPress(item))}
+    >
+      <div className="food-media">
+        <FoodImage src={item.imageUrl} alt={item.name} emoji={emoji} />
+      </div>
+      {qty ? <span className="food-qty-badge">{qty}</span> : null}
+      {!available && <span className="unavailable-tag">Unavailable</span>}
+      {available && item.pinned && (
+        <span className="pin-mark" title="Pinned">
+          <Pin size={14} />
+        </span>
+      )}
+      <div className="food-body">
+        <div style={{ minWidth: 0 }}>
+          <div className="food-name">{item.name}</div>
+          <div className="food-price">{priceLabel(item, variants)}</div>
+        </div>
+        <button
+          className="btn btn-primary"
+          tabIndex={-1}
+          disabled={!available || !editable}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPress(item);
+          }}
+        >
+          {variants ? 'Choose' : 'Add'}
+        </button>
+      </div>
+    </div>
+  );
+});
+
 /** Category chips + food cards for the branch menu. Used by New Bill and table ordering. */
 export function FoodGrid({
   branchId,
@@ -104,6 +162,12 @@ export function FoodGrid({
     if (variantsFor(item)) setPicking(item);
     else onAdd(item);
   };
+  // One handler for every card that never changes, so a tap re-draws only the card whose count changed.
+  const addRef = useRef(add);
+  useLayoutEffect(() => {
+    addRef.current = add;
+  });
+  const press = useCallback((item: MenuItemDTO) => addRef.current(item), []);
 
   return (
     <>
@@ -129,47 +193,18 @@ export function FoodGrid({
         <div className="food-grid">
           {visibleItems.map((item) => {
             const variants = variantsFor(item);
-            const qty = variants ? variants.reduce((a, v) => a + (qtyById.get(v.id) ?? 0), 0) : qtyById.get(item.id);
-            const available = orderable(item);
+            const qty = variants ? variants.reduce((a, v) => a + (qtyById.get(v.id) ?? 0), 0) : (qtyById.get(item.id) ?? 0);
             return (
-              <div
+              <FoodCard
                 key={item.id}
-                className={cx('food-card', !available && 'disabled')}
-                onClick={() => add(item)}
-                role="button"
-                tabIndex={available ? 0 : -1}
-                aria-disabled={!available}
-                aria-label={variants ? `Choose ${item.name}` : `Add ${item.name}`}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), add(item))}
-              >
-                <div className="food-media">
-                  <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
-                </div>
-                {qty ? <span className="food-qty-badge">{qty}</span> : null}
-                {!available && <span className="unavailable-tag">Unavailable</span>}
-                {available && item.pinned && (
-                  <span className="pin-mark" title="Pinned">
-                    <Pin size={14} />
-                  </span>
-                )}
-                <div className="food-body">
-                  <div style={{ minWidth: 0 }}>
-                    <div className="food-name">{item.name}</div>
-                    <div className="food-price">{priceLabel(item, variants)}</div>
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    tabIndex={-1}
-                    disabled={!available || !editable}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      add(item);
-                    }}
-                  >
-                    {variants ? 'Choose' : 'Add'}
-                  </button>
-                </div>
-              </div>
+                item={item}
+                variants={variants}
+                qty={qty}
+                available={orderable(item)}
+                editable={editable}
+                emoji={categoryIcon.get(item.categoryId)}
+                onPress={press}
+              />
             );
           })}
         </div>
