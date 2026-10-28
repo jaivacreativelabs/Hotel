@@ -405,7 +405,12 @@ export function BillingView({
           <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || busy || hasUnavailable}>
             {busy ? <Spinner /> : <FileText />} Generate Bill
           </button>
-          {editable && hasItems && !payment && <span className="field-hint" style={{ textAlign: 'center' }}>Select a payment method to generate the bill</span>}
+          {/* The hint's line is always kept, so Cash / UPI / Card and Generate Bill never jump when it shows or hides. */}
+          {editable && (
+            <span className="field-hint" style={{ textAlign: 'center', visibility: hasItems && !payment ? 'visible' : 'hidden' }} aria-hidden={!(hasItems && !payment)}>
+              Select a payment method to generate the bill
+            </span>
+          )}
         </div>
       </aside>
 
