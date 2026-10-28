@@ -286,8 +286,5 @@ describe('GST per item', () => {
       ['SGST', 250, 125],
       ['Service charge', 1000, 500],
     ]);
-
-    // A branch still cannot rename a main-menu item.
-    expect((await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Idli' })).status).toBe(403);
   });
 });

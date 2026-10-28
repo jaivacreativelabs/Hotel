@@ -325,7 +325,7 @@ function ItemPanel({
   const queryClient = useQueryClient();
   const toast = useToast();
   const isEdit = Boolean(item);
-  const sharedOnly = Boolean(item && !item.editable); // shared item seen from a branch
+  const shared = Boolean(item?.isShared); // main-menu item seen from a branch: changes are for this branch only
   const usable = categories.filter((c) => c.status === 'ACTIVE' && (scope.branchId ? true : c.branchId === null));
 
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
@@ -368,8 +368,8 @@ function ItemPanel({
     e.preventDefault();
     const next: Record<string, string> = {};
     const paise = parseRupeesToPaise(price);
-    if (!sharedOnly && !categoryId) next.category = 'Select a category';
-    if (!sharedOnly && !name.trim()) next.name = 'Enter the item name';
+    if (!categoryId) next.category = 'Select a category';
+    if (!name.trim()) next.name = 'Enter the item name';
     if (!hasVariants && paise === null) next.price = 'Enter a price like 30 or 49.50';
     else if (!hasVariants && paise! > LIMITS.maxPricePaise) next.price = 'Price is too high';
     const variantRows = rows.map((r) => ({ ...r, paise: parseRupeesToPaise(r.price) }));
@@ -391,8 +391,10 @@ function ItemPanel({
       let saved: MenuItemDTO;
       // A dish with variants shows its lowest variant price.
       const dishPrice = hasVariants ? Math.min(...variantRows.map((r) => r.paise!)) : paise!;
-      if (sharedOnly) {
-        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? { isAvailable, taxRateBps: taxBps, extraTaxes: extras } : { price: paise, isAvailable, taxRateBps: taxBps, extraTaxes: extras });
+      if (shared) {
+        // The main-menu price stays the dish's lowest variant price; a branch sets variant prices only.
+        const body = { categoryId, name: name.trim(), description: description.trim(), isAvailable, taxRateBps: taxBps, extraTaxes: extras };
+        saved = await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, hasVariants ? body : { ...body, price: paise });
       } else {
         const body = { categoryId, name: name.trim(), description: description.trim(), price: dishPrice, taxRateBps: taxBps, taxable: taxBps! > 0, extraTaxes: extras, isAvailable };
         saved = isEdit ? await scoped.patch<MenuItemDTO>(`/menu/items/${item!.id}`, body) : await scoped.post<MenuItemDTO>('/menu/items', body);
@@ -482,10 +484,10 @@ function ItemPanel({
     <SidePanel title={isEdit ? 'Edit Food' : 'Add Food'} subtitle={isEdit ? item!.name : 'Photo → category → name → price'} onClose={onClose}>
       {!isEdit && noCategories && <CreateCategoryForm scope={scope} prominent onCreated={(c) => setCategoryId(c.id)} />}
 
-      {sharedOnly && (
+      {shared && (
         <div className="alert alert-info">
           <Info />
-          <span>This food comes from the main menu. Here you can change its photo, price and GST for this branch only.</span>
+          <span>This food comes from the main menu. Changes you make here are for this branch only.</span>
         </div>
       )}
 
@@ -516,54 +518,52 @@ function ItemPanel({
             <input type="file" accept={ACCEPTED.join(',')} hidden onChange={(e) => void pickFile(e.target.files?.[0] ?? null)} />
           </label>
           {file && <span className="field-hint">New photo selected – press {isEdit ? 'Save' : 'Add Food'} to keep it.</span>}
-          {isEdit && !file && (sharedOnly ? item!.imageOverridden : item?.imageUrl) && (
+          {isEdit && !file && (shared ? item!.imageOverridden : item?.imageUrl) && (
             <button type="button" className="link-btn danger" onClick={removeImage}>
-              <Trash2 size={14} /> {sharedOnly ? 'Use the main menu photo again' : 'Remove photo'}
+              <Trash2 size={14} /> {shared ? 'Use the main menu photo again' : 'Remove photo'}
             </button>
           )}
           {errors.image && <span className="field-error">{errors.image}</span>}
         </div>
 
-        {!sharedOnly && (
-          <div className="field">
-            <span className="field-label">
-              {step(<>Category</>)}
-            </span>
-            <div className="cat-picker" role="radiogroup" aria-label="Category">
-              {usable.map((c) => (
-                <button
-                  type="button"
-                  key={c.id}
-                  role="radio"
-                  aria-checked={categoryId === c.id}
-                  className={cx('cat-tile', categoryId === c.id && 'active')}
-                  onClick={() => setCategoryId(c.id)}
-                >
-                  {categoryId === c.id && <Check className="cat-tile-check" />}
-                  <span className="cat-tile-icon">{c.icon || '🍽️'}</span>
-                  <span className="cat-tile-name">{c.name}</span>
-                </button>
-              ))}
-              {!noCategories && (
-                <button type="button" className={cx('cat-tile cat-tile-new', showNewCategory && 'active')} onClick={() => setShowNewCategory((s) => !s)}>
-                  <span className="cat-tile-icon">{showNewCategory ? <X /> : <Plus />}</span>
-                  <span className="cat-tile-name">{showNewCategory ? 'Close' : 'New'}</span>
-                </button>
-              )}
-            </div>
-            {errors.category && <span className="field-error">{errors.category}</span>}
-            {showNewCategory && (
-              <CreateCategoryForm
-                scope={scope}
-                prominent={false}
-                onCreated={(c) => {
-                  setCategoryId(c.id);
-                  setShowNewCategory(false);
-                }}
-              />
+        <div className="field">
+          <span className="field-label">
+            {step(<>Category</>)}
+          </span>
+          <div className="cat-picker" role="radiogroup" aria-label="Category">
+            {usable.map((c) => (
+              <button
+                type="button"
+                key={c.id}
+                role="radio"
+                aria-checked={categoryId === c.id}
+                className={cx('cat-tile', categoryId === c.id && 'active')}
+                onClick={() => setCategoryId(c.id)}
+              >
+                {categoryId === c.id && <Check className="cat-tile-check" />}
+                <span className="cat-tile-icon">{c.icon || '🍽️'}</span>
+                <span className="cat-tile-name">{c.name}</span>
+              </button>
+            ))}
+            {!noCategories && (
+              <button type="button" className={cx('cat-tile cat-tile-new', showNewCategory && 'active')} onClick={() => setShowNewCategory((s) => !s)}>
+                <span className="cat-tile-icon">{showNewCategory ? <X /> : <Plus />}</span>
+                <span className="cat-tile-name">{showNewCategory ? 'Close' : 'New'}</span>
+              </button>
             )}
           </div>
-        )}
+          {errors.category && <span className="field-error">{errors.category}</span>}
+          {showNewCategory && (
+            <CreateCategoryForm
+              scope={scope}
+              prominent={false}
+              onCreated={(c) => {
+                setCategoryId(c.id);
+                setShowNewCategory(false);
+              }}
+            />
+          )}
+        </div>
 
         <Field
           label={step(
@@ -573,10 +573,10 @@ function ItemPanel({
           )}
           error={errors.name}
         >
-          {(id) => <input id={id} className="input input-xl" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} disabled={sharedOnly} placeholder="e.g. Masala Dosa" />}
+          {(id) => <input id={id} className="input input-xl" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g. Masala Dosa" />}
         </Field>
         {!hasVariants && (
-          <Field label={step(<>Price</>)} error={errors.price} hint={sharedOnly && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
+          <Field label={step(<>Price</>)} error={errors.price} hint={shared && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
             {(id) => (
               <div className="input-prefix">
                 <span>₹</span>
@@ -591,7 +591,7 @@ function ItemPanel({
           label="GST %"
           error={errors.tax}
           hint={
-            sharedOnly
+            shared
               ? undefined
               : Number(parsePercentToBps(tax || '0')) > 0
                 ? `CGST + SGST, ${taxSettings.pricesIncludeTax ? 'included in' : 'added to'} the price on the bill`
@@ -627,26 +627,24 @@ function ItemPanel({
         </Field>
         <ExtraTaxesEditor rows={extraTaxes} onChange={setExtraTaxes} error={errors.extraTaxes} />
 
-        {!sharedOnly && (
-          <details className="more-options">
-            <summary>More options (description)</summary>
-            <Field label="Description">
-              {(id) => <textarea id={id} className="textarea" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />}
-            </Field>
-          </details>
-        )}
+        <details className="more-options">
+          <summary>More options (description)</summary>
+          <Field label="Description">
+            {(id) => <textarea id={id} className="textarea" value={description} maxLength={300} onChange={(e) => setDescription(e.target.value)} placeholder="Optional" />}
+          </Field>
+        </details>
 
         {errors.form && <div className="alert alert-danger">{errors.form}</div>}
         <div className="form-actions">
           <CancelButton onClick={onClose} disabled={busy} className="btn-lg" />
           <ConfirmButton type="submit" busy={busy} disabled={!isEdit && noCategories} label={isEdit ? 'Save' : 'Add Food'} className="btn-lg" />
         </div>
-        {sharedOnly && item!.hasOverride && (
+        {shared && item!.hasOverride && (
           <button type="button" className="btn btn-outline btn-block" onClick={resetOverride}>
             Use main menu price
           </button>
         )}
-        {isEdit && item!.editable && (
+        {isEdit && (
           <button type="button" className="btn btn-danger-soft btn-block" onClick={() => setConfirmArchive(true)}>
             <Trash2 /> Remove this food from the menu
           </button>

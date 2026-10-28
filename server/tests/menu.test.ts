@@ -95,8 +95,38 @@ describe('menu items', () => {
     expect(a2.map((i) => i.name)).not.toContain('Rava Masala Dosa');
   });
 
+  it('renames, describes and removes a shared item for one branch only', async () => {
+    const cat = ok<{ id: string }>(await w.adminA1.post('/api/v1/menu/categories', { name: 'Tiffin' }), 201);
+    const o = ok<Item & { description: string; categoryId: string }>(
+      await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Mini Idly', description: 'Soft', categoryId: cat.id }),
+    );
+    expect(o).toMatchObject({ name: 'Mini Idly', description: 'Soft', categoryId: cat.id, editable: true, isShared: true });
+    // The other branch and the main menu keep the dish as it was.
+    const a2 = ok<Item[]>(await w.adminA2.get('/api/v1/menu/items'));
+    expect(a2.find((i) => i.id === w.items.idly)?.name).toBe('Idly');
+    const main = ok<Item[]>(await w.sa.get(`/api/v1/menu/items?restaurantId=${w.restaurantA}`));
+    expect(main.find((i) => i.id === w.items.idly)?.name).toBe('Idly');
+    // A name another dish of this branch already has is refused.
+    expect((await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Vada' })).status).toBe(409);
+    // Bills use the branch's name.
+    const bill = ok<{ id: string; version: number }>(await w.adminA1.get('/api/v1/bills/counter'));
+    const saved = ok<{ items: { name: string }[] }>(
+      await w.adminA1.put(`/api/v1/bills/${bill.id}`, { version: bill.version, items: [{ menuItemId: w.items.idly, quantity: 1 }] }),
+    );
+    expect(saved.items[0].name).toBe('Mini Idly');
+    ok(await w.adminA1.put(`/api/v1/bills/${bill.id}`, { version: bill.version + 1, items: [] }));
+
+    // Removing it hides it in this branch only; restoring brings it back.
+    ok(await w.adminA1.post(`/api/v1/menu/items/${w.items.idly}/archive`));
+    expect(ok<Item[]>(await w.adminA1.get('/api/v1/menu/items')).map((i) => i.id)).not.toContain(w.items.idly);
+    expect(ok<Item[]>(await w.adminA2.get('/api/v1/menu/items')).map((i) => i.id)).toContain(w.items.idly);
+    ok(await w.adminA1.post(`/api/v1/menu/items/${w.items.idly}/restore`));
+    // Back to the main menu's name and category for the tests below.
+    ok(await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Idly', description: '', categoryId: w.categoryId }));
+    expect(ok<Item[]>(await w.adminA1.get('/api/v1/menu/items')).find((i) => i.id === w.items.idly)?.name).toBe('Idly');
+  });
+
   it('turns branch edits of shared items into overrides', async () => {
-    expect((await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { name: 'Renamed' })).status).toBe(403);
     const o = ok<Item>(await w.adminA1.patch(`/api/v1/menu/items/${w.items.idly}`, { price: 3300 }));
     expect(o.price).toBe(3300);
     expect(o.basePrice).toBe(3000);
@@ -176,7 +206,7 @@ describe('images', () => {
       .set('X-Branch-Id', w.branchA1)
       .attach('image', PNG, { filename: 'dosa.png', contentType: 'image/png' });
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ imageOverridden: true, editable: false });
+    expect(res.body.data).toMatchObject({ imageOverridden: true, isShared: true });
     expect(res.body.data.imageUrl).toMatch(/^\/uploads\/menu\//);
     // The other branch and the main menu are untouched.
     const a2 = ok<(Item & { imageOverridden: boolean })[]>(await w.adminA2.get('/api/v1/menu/items'));

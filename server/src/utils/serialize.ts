@@ -106,9 +106,19 @@ export function toCategoryDTO(c: WithId<Category>, scopeBranchId: Types.ObjectId
   };
 }
 
-/** Price/availability/photo of an item as seen from a branch (overrides applied). */
-export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId | null) {
+/** "Idly (Full, 2 pcs)" – what bills, receipts and the kitchen show. */
+export const variantFullName = (dish: string, variant: string, qty = '') => `${dish} (${variant}${qty ? `, ${qty}` : ''})`;
+
+/**
+ * An item as seen from a branch (overrides applied). Pass a variant's dish so the variant follows
+ * the branch's own name and category for it, and leaves the branch's menu with it.
+ */
+export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId | null, dish?: WithId<MenuItem>) {
   const override = branchId ? item.branchOverrides?.find((o) => o.branchId.equals(branchId)) : undefined;
+  const dishOverride = dish && branchId ? dish.branchOverrides?.find((o) => o.branchId.equals(branchId)) : undefined;
+  const name = override?.name
+    ?? (dishOverride?.name ? variantFullName(dishOverride.name, item.variantName ?? '', item.variantQty ?? '') : item.name);
+  const categoryId = override?.categoryId ?? dishOverride?.categoryId ?? item.categoryId;
   const price = override?.price ?? item.price;
   const isAvailable = override?.isAvailable ?? item.isAvailable;
   const imageUrl = override?.imageUrl ?? item.imageUrl ?? null;
@@ -117,6 +127,9 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
   const taxable = override?.taxRateBps != null ? override.taxRateBps > 0 : item.taxable;
   const extraTaxes = (override?.extraTaxes ?? item.extraTaxes ?? []).map((t) => ({ name: t.name, rateBps: t.rateBps }));
   return {
+    name,
+    description: override?.description ?? item.description ?? '',
+    categoryId,
     price,
     isAvailable,
     imageUrl,
@@ -124,7 +137,7 @@ export function effectiveItem(item: WithId<MenuItem>, branchId: Types.ObjectId |
     taxable,
     extraTaxes,
     pinned: Boolean(override?.pinned),
-    hidden: Boolean(override?.hidden),
+    hidden: Boolean(override?.hidden || dishOverride?.hidden),
     hasOverride: override?.price != null || override?.isAvailable != null,
     imageOverridden: override?.imageUrl != null,
   };
@@ -137,9 +150,9 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     id: String(item._id),
     restaurantId: String(item.restaurantId),
     branchId: item.branchId ? String(item.branchId) : null,
-    categoryId: String(item.categoryId),
-    name: item.name,
-    description: item.description ?? '',
+    categoryId: String(eff.categoryId),
+    name: eff.name,
+    description: eff.description,
     imageUrl: eff.imageUrl,
     imageOverridden: eff.imageOverridden,
     pinned: eff.pinned,
@@ -152,7 +165,8 @@ export function toMenuItemDTO(item: WithId<MenuItem>, scopeBranchId: Types.Objec
     status: item.status,
     isShared: !item.branchId && scopeBranchId !== null,
     hasOverride: eff.hasOverride,
-    editable: owned,
+    // A branch manages a main-menu item too, for itself only (stored as its override).
+    editable: owned || (!item.branchId && scopeBranchId !== null),
     parentId: item.parentId ? String(item.parentId) : null,
     variantName: item.variantName ?? '',
     variantQty: item.variantQty ?? '',

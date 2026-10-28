@@ -2,7 +2,7 @@
  * Menu management. Scope rules:
  *  - Restaurant scope (Super Admin, branch = null): manages the shared menu.
  *  - Branch scope: sees shared + branch-only entries. Branch-only entries are fully editable;
- *    for shared items only price/availability can change, stored as a branch override.
+ *    a shared item can be changed and removed too, for that branch only (stored as its override).
  */
 import type { Types } from 'mongoose';
 import type { CategoryCreateInput, MenuItemCreateInput, MenuItemUpdateInput, RecordStatus, VariantsInput } from '@rb/shared';
@@ -10,7 +10,7 @@ import type { AuthUser } from '../middleware/auth.js';
 import type { Scope } from '../middleware/scope.js';
 import { CategoryModel, MenuItemModel, type Category, type MenuItem } from '../models/index.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
-import { effectiveCategory, effectiveItem, toCategoryDTO, toMenuItemDTO } from '../utils/serialize.js';
+import { effectiveCategory, effectiveItem, toCategoryDTO, toMenuItemDTO, variantFullName } from '../utils/serialize.js';
 import { escapeRegex, nameKey, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { saveImage } from './storage.service.js';
@@ -189,14 +189,16 @@ export async function listItems(
   }
   // Pinned dishes first; Array.sort is stable, so the menu order is kept within each group.
   const branchId = branchOf(scope);
+  const dishOf = (i: MenuItemLean) => (i.parentId ? dishes.get(String(i.parentId)) : undefined);
   return items
-    .filter((i) => !effectiveItem(i, branchId).hidden) // main-menu variants this branch removed
+    .filter((i) => !effectiveItem(i, branchId, dishOf(i)).hidden) // main-menu dishes and variants this branch removed
     .map((i) => {
       const dto = toMenuItemDTO(i, branchId);
-      const dish = i.parentId ? dishes.get(String(i.parentId)) : undefined;
+      const dish = dishOf(i);
       if (!dish) return dto;
+      const { name, categoryId } = effectiveItem(i, branchId, dish);
       const { taxable, taxRateBps, extraTaxes } = effectiveItem(dish, branchId);
-      return { ...dto, taxable, taxRateBps, extraTaxes };
+      return { ...dto, name, categoryId: String(categoryId), taxable, taxRateBps, extraTaxes };
     })
     .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 }
@@ -204,12 +206,6 @@ export async function listItems(
 async function getVisibleItem(scope: Scope, id: string) {
   const item = await MenuItemModel.findOne({ _id: toObjectId(id, 'item'), ...visibleFilter(scope) });
   if (!item) throw notFound('Menu item');
-  return item;
-}
-
-async function getOwnedItem(scope: Scope, id: string) {
-  const item = await getVisibleItem(scope, id);
-  if (!owns(scope, item)) throw forbidden('This shared item is managed from the restaurant-wide menu');
   return item;
 }
 
@@ -229,6 +225,12 @@ async function assertItemNameFree(scope: Scope, name: string, exceptId?: Types.O
     ...(exceptId && { _id: { $ne: exceptId } }),
   });
   if (clash) throw conflict(`An item named "${name}" already exists`, 'DUPLICATE');
+}
+
+/** A main-menu dish renamed in a branch: no other dish this branch sees may have that name. */
+async function assertBranchNameFree(scope: Scope, name: string, dishId: Types.ObjectId) {
+  const others = (await listItems(scope, {})).filter((i) => i.id !== String(dishId) && i.parentId !== String(dishId));
+  if (others.some((i) => nameKey(i.name) === nameKey(name))) throw conflict(`An item named "${name}" already exists`, 'DUPLICATE');
 }
 
 export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemCreateInput) {
@@ -260,10 +262,24 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
 function setOverride(
   item: InstanceType<typeof MenuItemModel>,
   branchId: Types.ObjectId,
-  patch: { price?: number; isAvailable?: boolean; imageUrl?: string; pinned?: boolean; hidden?: boolean; taxRateBps?: number | null; extraTaxes?: { name: string; rateBps: number }[] },
+  patch: {
+    price?: number;
+    isAvailable?: boolean;
+    imageUrl?: string;
+    pinned?: boolean;
+    hidden?: boolean;
+    taxRateBps?: number | null;
+    extraTaxes?: { name: string; rateBps: number }[];
+    name?: string | null;
+    description?: string | null;
+    categoryId?: Types.ObjectId | null;
+  },
 ) {
   const existing = item.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) {
+    if (patch.name !== undefined) existing.name = patch.name;
+    if (patch.description !== undefined) existing.description = patch.description;
+    if (patch.categoryId !== undefined) existing.categoryId = patch.categoryId;
     if (patch.price !== undefined) existing.price = patch.price;
     if (patch.isAvailable !== undefined) existing.isAvailable = patch.isAvailable;
     if (patch.imageUrl !== undefined) existing.imageUrl = patch.imageUrl;
@@ -281,6 +297,9 @@ function setOverride(
       hidden: patch.hidden ?? null,
       taxRateBps: patch.taxRateBps ?? null,
       ...(patch.extraTaxes && { extraTaxes: patch.extraTaxes }),
+      name: patch.name ?? null,
+      description: patch.description ?? null,
+      categoryId: patch.categoryId ?? null,
     });
   }
 }
@@ -313,14 +332,18 @@ export async function updateItem(actor: AuthUser, scope: Scope, id: string, inpu
       ...(input.taxRateBps != null && { taxable: input.taxRateBps > 0 }),
     });
   } else {
-    // A branch may set its own price, availability, GST % and other taxes for a main-menu item.
-    const allowed = ['price', 'isAvailable', 'taxRateBps', 'taxable', 'extraTaxes'];
-    const disallowed = Object.keys(input).filter((k) => !allowed.includes(k));
-    if (disallowed.length) {
-      throw forbidden(`Only price, availability and taxes of shared items can be changed for a branch (${disallowed.join(', ')})`);
-    }
-    const { taxable: _derived, ...patch } = input; // taxable follows the GST %
-    setOverride(item, branchId!, patch);
+    // A main-menu item changed in a branch: for that branch only. A value equal to the main
+    // menu's clears the branch's own one, so later main-menu changes show again.
+    const { taxable: _derived, name, description, categoryId, ...patch } = input; // taxable follows the GST %
+    const eff = effectiveItem(item.toObject() as MenuItemLean, branchId);
+    if (name !== undefined && nameKey(name) !== nameKey(eff.name)) await assertBranchNameFree(scope, name, item._id);
+    if (categoryId !== undefined && !eff.categoryId.equals(categoryId)) await assertCategoryUsable(scope, categoryId);
+    setOverride(item, branchId!, {
+      ...patch,
+      ...(name !== undefined && { name: name === item.name ? null : name }),
+      ...(description !== undefined && { description: description === item.description ? null : description }),
+      ...(categoryId !== undefined && { categoryId: item.categoryId.equals(categoryId) ? null : toObjectId(categoryId) }),
+    });
   }
   await item.save();
   if (owns(scope, item)) await syncVariantsWithDish(item.toObject() as MenuItemLean);
@@ -412,8 +435,10 @@ export async function removeItemImage(actor: AuthUser, scope: Scope, id: string)
 }
 
 export async function setItemArchived(actor: AuthUser, scope: Scope, id: string, archived: boolean) {
-  const item = await getOwnedItem(scope, id);
-  item.status = archived ? 'ARCHIVED' : 'ACTIVE';
+  const item = await getVisibleItem(scope, id);
+  // A main-menu item removed in a branch leaves that branch's menu only.
+  if (owns(scope, item)) item.status = archived ? 'ARCHIVED' : 'ACTIVE';
+  else setOverride(item, branchOf(scope)!, { hidden: archived });
   await item.save();
   await audit(actor, {
     ...auditBase(scope),
@@ -426,9 +451,6 @@ export async function setItemArchived(actor: AuthUser, scope: Scope, id: string,
 }
 
 // ---------------- Variants ----------------
-
-/** "Idly (Full, 2 pcs)" – what bills, receipts and the kitchen show. */
-const variantFullName = (dish: string, variant: string, qty = '') => `${dish} (${variant}${qty ? `, ${qty}` : ''})`;
 
 /** Variants follow their dish's name, category and tax setting. */
 async function syncVariantsWithDish(dish: MenuItemLean) {

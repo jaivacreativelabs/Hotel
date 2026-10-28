@@ -66,9 +66,6 @@ export async function priceLines(
   })
     .session(session ?? null)
     .lean<(MenuItem & { _id: Types.ObjectId })[]>();
-  const cats = await CategoryModel.find({ _id: { $in: items.map((i) => i.categoryId) } })
-    .session(session ?? null)
-    .lean<(Category & { _id: Types.ObjectId })[]>();
   // Variants take their photo and availability from their dish; a dish that has variants is
   // ordered by variant, so it counts as unavailable itself.
   const parentIds = items.filter((i) => i.parentId).map((i) => i.parentId!);
@@ -84,6 +81,11 @@ export async function priceLines(
       .lean<(MenuItem & { _id: Types.ObjectId })[]>(),
   ]);
   const parentById = new Map(parents.map((p) => [String(p._id), p]));
+  // A branch may give a main-menu dish its own name and category (its variants follow it).
+  const effById = new Map(items.map((i) => [String(i._id), effectiveItem(i, scope.branch._id, i.parentId ? parentById.get(String(i.parentId)) : undefined)]));
+  const cats = await CategoryModel.find({ _id: { $in: [...effById.values()].map((e) => e.categoryId) } })
+    .session(session ?? null)
+    .lean<(Category & { _id: Types.ObjectId })[]>();
   const hasVariants = new Set(withVariants.filter((v) => !effectiveItem(v, scope.branch._id).hidden).map((v) => String(v.parentId)));
   const itemById = new Map(items.map((i) => [String(i._id), i]));
   const catById = new Map(cats.map((c) => [String(c._id), c]));
@@ -91,8 +93,8 @@ export async function priceLines(
   return requested.map((r) => {
     const item = itemById.get(String(r.menuItemId));
     if (!item) throw badRequest('An item on this bill is not on this branch’s menu', 'ITEM_NOT_FOUND');
-    const eff = effectiveItem(item, scope.branch._id);
-    const cat = catById.get(String(item.categoryId));
+    const eff = effById.get(String(item._id))!;
+    const cat = catById.get(String(eff.categoryId));
     const catEff = cat ? effectiveCategory(cat, scope.branch._id) : undefined; // the branch's own on/off and name
     const parent = item.parentId ? parentById.get(String(item.parentId)) : undefined;
     const parentEff = parent ? effectiveItem(parent, scope.branch._id) : undefined;
@@ -100,7 +102,7 @@ export async function priceLines(
     const available = item.status === 'ACTIVE' && eff.isAvailable && !eff.hidden && catEff?.status === 'ACTIVE' && parentOk && !hasVariants.has(String(item._id));
     return {
       menuItemId: item._id,
-      name: item.name,
+      name: eff.name,
       imageUrl: eff.imageUrl ?? parentEff?.imageUrl ?? null,
       unitPrice: eff.price,
       // GST follows the dish (and this branch's own GST for it, if set).

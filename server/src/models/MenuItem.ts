@@ -18,6 +18,10 @@ const overrideSchema = new Schema(
     taxRateBps: { type: Number, default: null },
     // This branch's own other taxes (unset → the dish's).
     extraTaxes: { type: [extraTaxSchema], default: undefined },
+    // This branch's own name, description and category for a main-menu dish (null → the dish's).
+    name: { type: String, default: null, trim: true, maxlength: 80 },
+    description: { type: String, default: null, maxlength: 300 },
+    categoryId: { type: Schema.Types.ObjectId, ref: 'Category', default: null },
   },
   { _id: false },
 );
