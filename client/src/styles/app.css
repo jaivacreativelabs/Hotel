@@ -14,6 +14,10 @@ body,
 html {
   touch-action: manipulation;
 }
+/* Tablets (viewport.js): scrolling only, no pinch or double-tap zoom. */
+html.no-zoom {
+  touch-action: pan-x pan-y;
+}
 body {
   margin: 0;
   font-family: var(--font-family);
