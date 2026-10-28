@@ -4,7 +4,7 @@ import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, Shoppi
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBadge, TableBadge, TxStatusBadge } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
-import { openReceipt } from '../../components/PaymentButtons';
+import { printReceipt } from '../../components/PaymentButtons';
 import { CancelButton, ConfirmButton, Empty, Field, Loading, Modal, PageHeader, Pagination, SidePanel, Spinner } from '../../components/ui';
 import { useDebounce } from '../../hooks/useDebounce';
 import { api, downloadFile } from '../../services/api';
@@ -120,7 +120,7 @@ function BillDetails({
               <Pencil /> {anyTime ? 'Edit bill' : `Edit bill (${minutesLeft} min left)`}
             </button>
           )}
-          <button className="btn btn-primary btn-lg btn-block" onClick={() => openReceipt(tx.id)}>
+          <button className="btn btn-primary btn-lg btn-block" onClick={() => printReceipt(tx)}>
             <Printer /> Print Bill Again
           </button>
           {tx.status === 'COMPLETED' && (
@@ -354,7 +354,7 @@ function TxCard({
           <SquareArrowOutUpRight size={15} /> See details
         </button>
         <span className="spacer" />
-        <button type="button" className="icon-btn" onClick={() => openReceipt(tx.id)} aria-label={`Print bill #${tx.billNumber}`} title="Print bill">
+        <button type="button" className="icon-btn" onClick={() => printReceipt(tx)} aria-label={`Print bill #${tx.billNumber}`} title="Print bill">
           <Printer />
         </button>
         {canEdit && (
