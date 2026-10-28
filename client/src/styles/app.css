@@ -92,7 +92,22 @@ a {
   grid-template-columns: var(--sidebar-width) 1fr;
   grid-template-rows: var(--topbar-height) 1fr;
   height: 100vh;
+  /* The visible screen: on iPad Safari 100vh also counts the space behind its toolbars, so the
+     whole page moved (bill panel included) instead of only the food list. */
+  height: 100dvh;
   overflow: hidden;
+}
+/* With the app open only its own areas scroll (food list, bill lines, pages): the page itself
+   never scrolls or bounces, and a list that reaches its end does not drag the page along. */
+html:has(.app),
+html:has(.app) body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.page,
+.billing-main,
+.bill-lines {
+  overscroll-behavior: contain;
 }
 .brand {
   grid-row: 1;
