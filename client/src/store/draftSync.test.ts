@@ -102,6 +102,51 @@ describe('DraftSync', () => {
     expect(sync.busy).toBe(false);
   });
 
+  it('flushSync saves within the call (Generate Bill prints from the same tap)', async () => {
+    const server = fakeServer();
+    const sync = new DraftSync('d1', 'b', server.transport, 10_000);
+    await sync.load();
+    // A synchronous save with the same rules as the server.
+    let stored = server.stored;
+    const saveSync = (_id: string, _b: string, body: DraftSaveBody) => {
+      if (body.version !== stored.version) throw new ApiError(409, 'CONFLICT', 'changed by Asha', { current: stored });
+      stored = draft(stored.version + 1, body.items.map((i) => [i.menuItemId, i.quantity]));
+      return stored;
+    };
+    expect(sync.flushSync(saveSync)).toBe(true); // nothing to save
+    sync.update(add('vada'));
+    expect(sync.flushSync(saveSync)).toBe(true);
+    expect(stored.items.map((i) => i.menuItemId)).toEqual(['vada']);
+    expect(sync.getState()).toMatchObject({ status: 'saved', dirty: false });
+    expect(sync.busy).toBe(false); // the debounced save was cancelled
+    // A refused save is reported, not swallowed.
+    sync.update(add('idly'));
+    stored = draft(stored.version + 5);
+    expect(() => sync.flushSync(saveSync)).toThrow('changed by Asha');
+    expect(sync.getState().status).toBe('conflict');
+  });
+
+  it('flushSync leaves a save that is already on its way to flushNow', async () => {
+    const server = fakeServer();
+    // The server answers only when told to.
+    let answer = () => {};
+    const slow: DraftTransport = {
+      load: server.transport.load,
+      save: (...args) => new Promise((resolve, reject) => (answer = () => server.transport.save(...args).then(resolve, reject))),
+    };
+    const sync = new DraftSync('d1', 'b', slow, 0);
+    await sync.load();
+    sync.update(add('vada'));
+    await vi.advanceTimersByTimeAsync(0); // the save has started, not finished
+    const saveSync = vi.fn();
+    expect(sync.flushSync(saveSync)).toBe(false);
+    expect(saveSync).not.toHaveBeenCalled();
+    const done = sync.flushNow();
+    answer();
+    await done;
+    expect(server.stored.items).toHaveLength(1);
+  });
+
   it('shows the other user’s version on conflict instead of overwriting it', async () => {
     const server = fakeServer();
     const sync = new DraftSync('d1', 'b', server.transport, 10);

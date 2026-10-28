@@ -9,7 +9,7 @@
  *   cancels a pending save; they are dropped only once everything is saved.
  */
 import type { DiscountInput, DraftDTO, DraftItemDTO } from '@rb/shared';
-import { api, ApiError } from '../services/api';
+import { api, ApiError, apiSync } from '../services/api';
 
 export type SyncStatus =
   | 'loading'
@@ -52,6 +52,16 @@ export const httpTransport: DraftTransport = {
   load: (id, branchId) => api.get<DraftDTO>(`/bills/${id}`, { branchId }),
   save: (id, branchId, body) => api.put<DraftDTO>(`/bills/${id}`, body, { branchId }),
 };
+
+/** Saves a draft synchronously (see DraftSync.flushSync). */
+export const saveDraftSync = (id: string, branchId: string, body: DraftSaveBody) => apiSync.put<DraftDTO>(`/bills/${id}`, body, { branchId });
+
+const toBody = (draft: DraftDTO, local: LocalBill): DraftSaveBody => ({
+  version: draft.version,
+  items: local.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+  customerName: local.customerName,
+  discount: local.discount,
+});
 
 const toLocal = (d: DraftDTO): LocalBill => ({ items: d.items, customerName: d.customerName, discount: d.discount });
 
@@ -147,12 +157,7 @@ export class DraftSync {
     this.inFlight = true;
     this.set({ status: 'saving' });
     try {
-      const saved = await this.transport.save(this.id, this.branchId, {
-        version: draft.version,
-        items: local.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
-        customerName: local.customerName,
-        discount: local.discount,
-      });
+      const saved = await this.transport.save(this.id, this.branchId, toBody(draft, local));
       this.retryDelay = 0;
       if (this.revision === sentRevision) {
         this.set({ draft: saved, local: toLocal(saved), dirty: false, status: 'saved', message: null });
@@ -190,6 +195,32 @@ export class DraftSync {
   /** Retries immediately (e.g. when the browser comes back online). */
   retryNow() {
     if (this.state.dirty && !this.inFlight) this.schedule(0);
+  }
+
+  /**
+   * Saves pending edits right now with a synchronous request, so a print can stay inside the tap
+   * that asked for it. Returns false when a save is already on its way (then use flushNow);
+   * throws when the bill could not be saved.
+   */
+  flushSync(save: (id: string, branchId: string, body: DraftSaveBody) => DraftDTO = saveDraftSync): boolean {
+    if (this.inFlight) return false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    const { draft, local, dirty } = this.state;
+    if (!dirty || !draft || !local) return true;
+    try {
+      const saved = save(this.id, this.branchId, toBody(draft, local));
+      this.retryDelay = 0;
+      this.set({ draft: saved, local: toLocal(saved), dirty: false, status: 'saved', message: null });
+      return true;
+    } catch (err) {
+      this.handleSaveError(err, draft);
+      throw new Error(this.state.message ?? 'The bill could not be saved');
+    } finally {
+      this.settleWaiters();
+    }
   }
 
   /** Saves pending edits now; resolves when everything is persisted, rejects otherwise. */

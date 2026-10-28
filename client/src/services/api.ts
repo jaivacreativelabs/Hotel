@@ -73,16 +73,54 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
 
   if (res.status === 204) return { data: undefined as T };
   const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    const e = json?.error ?? {};
-    // A 401 from these auth calls just means "not signed in" – not an expired session – so it
-    // must not trigger the sign-out handler (which also clears cached data such as the
-    // login page's demo buttons).
-    if (res.status === 401 && onUnauthorized && !AUTH_PROBES.has(path)) onUnauthorized();
-    throw new ApiError(res.status, e.code ?? 'HTTP_ERROR', e.message ?? `Request failed (${res.status})`, e.details);
-  }
+  if (!res.ok) throw failure(res.status, json, path);
   return json as { data: T; meta?: PageMeta };
 }
+
+function failure(status: number, json: { error?: { code?: string; message?: string; details?: unknown } } | null, path: string): ApiError {
+  const e = json?.error ?? {};
+  // A 401 from these auth calls just means "not signed in" – not an expired session – so it
+  // must not trigger the sign-out handler (which also clears cached data such as the
+  // login page's demo buttons).
+  if (status === 401 && onUnauthorized && !AUTH_PROBES.has(path)) onUnauthorized();
+  return new ApiError(status, e.code ?? 'HTTP_ERROR', e.message ?? `Request failed (${status})`, e.details);
+}
+
+/**
+ * A synchronous request: the page waits until the server answers. Only for printing a bill
+ * straight from the tap that generated it – Safari (iPad) prints only from a tap, and a normal
+ * request would end the tap before the bill exists.
+ */
+function requestSync<T>(method: string, path: string, opts: RequestOptions = {}): T {
+  const xhr = new XMLHttpRequest();
+  xhr.open(method, buildUrl(path, opts.query), false);
+  xhr.setRequestHeader('Accept', 'application/json');
+  xhr.setRequestHeader(CSRF_HEADER, CSRF_HEADER_VALUE);
+  const branch = opts.branchId === undefined ? activeBranchId : opts.branchId;
+  if (branch) xhr.setRequestHeader(BRANCH_HEADER, branch);
+  if (opts.body !== undefined) xhr.setRequestHeader('Content-Type', 'application/json');
+  try {
+    xhr.send(opts.body === undefined ? null : JSON.stringify(opts.body));
+  } catch {
+    throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Check your connection.');
+  }
+  if (xhr.status === 0) throw new ApiError(0, 'NETWORK', 'Cannot reach the server. Check your connection.');
+  if (xhr.status === 204) return undefined as T;
+  let json = null;
+  try {
+    json = JSON.parse(xhr.responseText);
+  } catch {
+    // not JSON – handled below
+  }
+  if (xhr.status < 200 || xhr.status >= 300) throw failure(xhr.status, json, path);
+  return (json as { data: T }).data;
+}
+
+export const apiSync = {
+  get: <T>(path: string, opts?: RequestOptions) => requestSync<T>('GET', path, opts),
+  post: <T>(path: string, body?: unknown, opts?: RequestOptions) => requestSync<T>('POST', path, { ...opts, body: body ?? {} }),
+  put: <T>(path: string, body?: unknown, opts?: RequestOptions) => requestSync<T>('PUT', path, { ...opts, body }),
+};
 
 export const api = {
   get: async <T>(path: string, opts?: RequestOptions) => (await request<T>('GET', path, opts)).data,

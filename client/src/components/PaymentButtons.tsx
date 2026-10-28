@@ -84,25 +84,22 @@ const IN_PAGE_CSS = `
 }
 ${RECEIPT_CSS}
 `;
-let printing: { root: Root; el: HTMLElement; frame: HTMLIFrameElement; timer: number } | null = null;
+let printing: { root: Root; el: HTMLElement; timer?: number } | null = null;
 
 function clearPrint() {
   if (!printing) return;
   clearTimeout(printing.timer);
   printing.root.unmount();
   printing.el.remove();
-  printing.frame.remove();
   printing = null;
 }
 
 /**
- * Prints a bill without leaving the page, the same way on every device:
- *  - a hidden frame loads the receipt page, which prints itself. Laptops print that frame (the
- *    bill), and Safari does not block it although the bill is saved a moment after the tap.
- *  - tablets (iPad Safari, Android Chrome) print the whole page instead of the frame, so the
- *    receipt is also put into this page, and on paper the page shows only the receipt.
- * The receipt stays (hidden on screen) while the print dialog may still read it: until the next
- * print, or ten minutes.
+ * Prints a bill: the receipt is put into this page and printed at once, and on paper the page
+ * shows only the receipt. Call it straight from the tap (Safari on an iPad prints only from a
+ * tap – see apiSync); the logo is normally ready because the sidebar already shows it.
+ * The receipt stays (hidden on screen) a minute after printing, as Safari may still be reading
+ * the page for its print preview.
  */
 export function printReceipt(t: TransactionDTO) {
   clearPrint();
@@ -118,11 +115,14 @@ export function printReceipt(t: TransactionDTO) {
       </>,
     ),
   );
-  const frame = document.createElement('iframe');
-  frame.title = 'Bill';
-  frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-  frame.src = `/print/transactions/${t.id}?autoprint=1`;
-  document.body.appendChild(frame);
-  printing = { root, el, frame, timer: window.setTimeout(clearPrint, 10 * 60_000) };
+  const current: NonNullable<typeof printing> = { root, el };
+  printing = current;
+  window.addEventListener(
+    'afterprint',
+    () => {
+      if (printing === current) current.timer = window.setTimeout(clearPrint, 60_000);
+    },
+    { once: true },
+  );
+  window.print();
 }

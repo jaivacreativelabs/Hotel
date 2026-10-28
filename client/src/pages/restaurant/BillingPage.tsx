@@ -33,7 +33,7 @@ import { PaymentButtons, printReceipt } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
-import { api, ApiError, errorMessage } from '../../services/api';
+import { api, ApiError, apiSync, errorMessage } from '../../services/api';
 import { useCategories, useMenuItems } from '../../services/queries';
 import { useAuth } from '../../store/auth';
 import type { DraftSyncState, LocalBill } from '../../store/draftSync';
@@ -201,27 +201,48 @@ export function BillingView({
     if (await kitchen.send(draft.id, sync)) setSentNow({ draftId: draft.id, sent: [...most].map(([menuItemId, quantity]) => ({ menuItemId, quantity })) });
   };
 
-  const generate = async () => {
+  const finalizeBody = (current: DraftDTO) => {
+    if (keyRef.current?.draftId !== current.id) keyRef.current = { draftId: current.id, key: newIdempotencyKey() };
+    return { version: current.version, paymentMethod: payment, idempotencyKey: keyRef.current.key };
+  };
+  const billed = (current: DraftDTO, transaction: TransactionDTO) => {
+    keyRef.current = null;
+    printReceipt(transaction); // no message: the print itself shows the bill was saved
+    void sync!.load();
+    void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    void queryClient.invalidateQueries({ queryKey: ['tables'] });
+    finishBill(current);
+  };
+  const generateFailed = (err: unknown) => {
+    toast.error(err);
+    if (err instanceof ApiError && err.status === 409) void sync!.load();
+  };
+
+  /**
+   * Saves and generates the bill within this tap (synchronous requests – the screen waits a
+   * moment), so it prints at once: Safari on an iPad prints only from a tap. While an edit is
+   * still being sent the tap cannot wait for it, so then it is done the usual way.
+   */
+  const generate = () => {
     if (!sync || !payment) return;
+    try {
+      if (!sync.flushSync()) return void generateAfterSave();
+      const current = sync.getState().draft!;
+      const res = apiSync.post<{ transaction: TransactionDTO }>(`/bills/${current.id}/finalize`, finalizeBody(current));
+      billed(current, res.transaction);
+    } catch (err) {
+      generateFailed(err);
+    }
+  };
+  const generateAfterSave = async () => {
     setBusy(true);
     try {
-      await sync.flushNow();
-      const current = sync.getState().draft!;
-      if (keyRef.current?.draftId !== current.id) keyRef.current = { draftId: current.id, key: newIdempotencyKey() };
-      const res = await api.post<{ transaction: TransactionDTO }>(`/bills/${current.id}/finalize`, {
-        version: current.version,
-        paymentMethod: payment,
-        idempotencyKey: keyRef.current.key,
-      });
-      keyRef.current = null;
-      printReceipt(res.transaction); // no message: the print itself shows the bill was saved
-      void sync.load();
-      void queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      void queryClient.invalidateQueries({ queryKey: ['tables'] });
-      finishBill(current);
+      await sync!.flushNow();
+      const current = sync!.getState().draft!;
+      const res = await api.post<{ transaction: TransactionDTO }>(`/bills/${current.id}/finalize`, finalizeBody(current));
+      billed(current, res.transaction);
     } catch (err) {
-      toast.error(err);
-      if (err instanceof ApiError && err.status === 409) void sync.load();
+      generateFailed(err);
     } finally {
       setBusy(false);
     }
