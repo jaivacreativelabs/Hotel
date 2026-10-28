@@ -95,6 +95,8 @@ a {
   /* The visible screen: on iPad Safari 100vh also counts the space behind its toolbars, so the
      whole page moved (bill panel included) instead of only the food list. */
   height: 100dvh;
+  /* Measured by viewport.js: the visible height, also where 100dvh is not supported. */
+  height: var(--app-height, 100dvh);
   overflow: hidden;
 }
 /* With the app open only its own areas scroll (food list, bill lines, pages): the page itself
@@ -2910,6 +2912,7 @@ html:has(.app) body {
     grid-template-columns: 1fr;
     grid-template-rows: var(--topbar-height) 1fr;
     height: 100dvh;
+    height: var(--app-height, 100dvh);
   }
   .app.has-bottom-nav {
     grid-template-rows: var(--topbar-height) 1fr var(--bottom-nav-height);
