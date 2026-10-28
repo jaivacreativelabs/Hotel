@@ -12,7 +12,7 @@ import { ArrowLeft, Building2, Camera, CirclePlus, FileText, Pencil, Plus, Power
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ActiveBadge } from '../../components/badges';
-import { ConfirmDialog, Empty, Field, Loading, LogoMark, PageHeader, SidePanel, Spinner } from '../../components/ui';
+import { ConfirmButton, ConfirmDialog, Empty, Field, Loading, LogoMark, Modal, PageHeader, SidePanel, Spinner, CancelButton } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { useToast } from '../../store/toast';
 import { cx } from '../../utils/format';
@@ -224,6 +224,62 @@ function KitchenSwitch({ branch }: { branch: BranchDTO }) {
   );
 }
 
+/** Deleting is for good, so the restaurant's name has to be typed first. */
+function DeleteRestaurantDialog({ restaurant, branchCount, onClose }: { restaurant: RestaurantDTO; branchCount: number; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const matches = typed.trim().toLowerCase() === restaurant.name.trim().toLowerCase();
+
+  const remove = async () => {
+    if (!matches) return;
+    setBusy(true);
+    try {
+      await api.delete(`/admin/restaurants/${restaurant.id}`, { branchId: null });
+      navigate('/admin/restaurants', { replace: true });
+      queryClient.removeQueries({ queryKey: adminKeys.restaurant(restaurant.id) });
+      await queryClient.invalidateQueries();
+      toast.success(`“${restaurant.name}” deleted`);
+    } catch (err) {
+      toast.error(err);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Delete ${restaurant.name}?`} onClose={busy ? () => undefined : onClose}>
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="alert alert-danger">
+          <Trash2 />
+          <span>
+            This deletes the restaurant for good, with its {branchCount} branch{branchCount === 1 ? '' : 'es'}, menu, tables, all bills and
+            expenses, and its Restaurant Admin logins. It cannot be undone. To keep the records, use Deactivate instead.
+          </span>
+        </div>
+        <Field label={<>Type <strong>{restaurant.name}</strong> to confirm</>}>
+          {(id) => (
+            <input
+              id={id}
+              className="input"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void remove()}
+              autoComplete="off"
+              autoFocus
+            />
+          )}
+        </Field>
+        <div className="modal-actions">
+          <CancelButton onClick={onClose} disabled={busy} label="No" />
+          <ConfirmButton onClick={() => void remove()} busy={busy} disabled={!matches} label="Delete for good" />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function RestaurantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -232,6 +288,7 @@ export function RestaurantDetailPage() {
   const [tab, setTab] = useState<'branches' | 'admins' | 'settings'>('branches');
   const [panel, setPanel] = useState<{ kind: 'branch'; branch?: BranchDTO } | { kind: 'admin' } | { kind: 'edit' } | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'restaurant' } | { kind: 'branch'; branch: BranchDTO } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const detail = useQuery({ queryKey: adminKeys.restaurant(id!), queryFn: () => api.get<Detail>(`/admin/restaurants/${id}`, { branchId: null }) });
 
   if (detail.isLoading) return <Loading />;
@@ -275,6 +332,9 @@ export function RestaurantDetailPage() {
               </button>
               <button className="btn btn-outline" onClick={() => setConfirm({ kind: 'restaurant' })}>
                 <Power /> {restaurant.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+              </button>
+              <button className="btn btn-danger-soft" onClick={() => setDeleting(true)}>
+                <Trash2 /> Delete
               </button>
               <button className="btn btn-soft" onClick={() => navigate(`/admin/transactions?restaurantId=${restaurant.id}`)}>
                 <FileText /> Transactions
@@ -391,6 +451,7 @@ export function RestaurantDetailPage() {
           }}
         />
       )}
+      {deleting && <DeleteRestaurantDialog restaurant={restaurant} branchCount={branches.length} onClose={() => setDeleting(false)} />}
       {confirm && (
         <ConfirmDialog
           title={

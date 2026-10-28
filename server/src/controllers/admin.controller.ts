@@ -54,6 +54,9 @@ export const setRestaurantStatus = async (req: Request, res: Response) => {
   const { status } = parse(statusSchema, req.body);
   res.json({ data: await admin.setRestaurantStatus(currentUser(req), id(req), status) });
 };
+export const deleteRestaurant = async (req: Request, res: Response) => {
+  res.json({ data: await admin.deleteRestaurant(currentUser(req), id(req)) });
+};
 export const updateRestaurantSettings = async (req: Request, res: Response) => {
   res.json({
     data: await admin.updateRestaurantSettings(currentUser(req), id(req), parse(restaurantSettingsSchema, req.body)),

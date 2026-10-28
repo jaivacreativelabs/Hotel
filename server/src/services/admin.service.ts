@@ -11,13 +11,26 @@ import {
 import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchLean, RestaurantLean } from '../middleware/scope.js';
-import { BranchModel, RestaurantModel, UserModel } from '../models/index.js';
+import {
+  BranchModel,
+  CategoryModel,
+  CounterModel,
+  DraftModel,
+  ExpenseModel,
+  KitchenTicketModel,
+  MenuImageModel,
+  MenuItemModel,
+  RestaurantModel,
+  TableModel,
+  TransactionModel,
+  UserModel,
+} from '../models/index.js';
 import { badRequest, conflict, notFound } from '../utils/errors.js';
 import { toBranchDTO, toRestaurantDTO, toUserDTO } from '../utils/serialize.js';
 import { nameKey, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { hashPassword } from './auth.service.js';
-import { saveImage } from './storage.service.js';
+import { MENU_IMAGE_DIR, saveImage } from './storage.service.js';
 
 // ---------------- Restaurants ----------------
 
@@ -144,6 +157,51 @@ export async function setRestaurantStatus(actor: AuthUser, id: string, status: R
     summary: `${status === 'ACTIVE' ? 'Activated' : 'Deactivated'} restaurant "${r.name}"`,
   });
   return toRestaurantDTO(r.toObject() as RestaurantLean);
+}
+
+/**
+ * Deletes a restaurant for good with everything in it: branches, menu, tables, open and past
+ * bills, expenses, kitchen tickets, its photos and its Restaurant Admin / Kitchen logins. The
+ * audit log keeps a record of the deletion. The restaurant itself goes last, so a delete that
+ * stops halfway can simply be run again.
+ */
+export async function deleteRestaurant(actor: AuthUser, id: string) {
+  const r = await getRestaurantOr404(id);
+  const restaurantId = r._id;
+  const branches = await BranchModel.find({ restaurantId }).select('_id').lean<{ _id: Types.ObjectId }[]>();
+  const items = await MenuItemModel.find({ restaurantId }).select('imageUrl branchOverrides.imageUrl').lean<
+    { imageUrl?: string | null; branchOverrides?: { imageUrl?: string | null }[] }[]
+  >();
+  const prefix = `/uploads/${MENU_IMAGE_DIR}/`;
+  const photos = [r.logoUrl, ...items.flatMap((i) => [i.imageUrl, ...(i.branchOverrides ?? []).map((o) => o.imageUrl)])]
+    .filter((u): u is string => Boolean(u?.startsWith(prefix)))
+    .map((u) => u.slice(prefix.length));
+  // Bill and kitchen-ticket numbers are counted per branch.
+  const counterKeys = new RegExp(`^(bill|kot):(${branches.map((b) => String(b._id)).join('|') || '-'}):`);
+
+  const byRestaurant = { restaurantId };
+  const [bills, staff] = await Promise.all([
+    // Bills refuse deletes through the model (a guard against slips); this one is deliberate.
+    TransactionModel.collection.deleteMany(byRestaurant),
+    UserModel.deleteMany({ role: { $in: STAFF_ROLES }, restaurantIds: restaurantId }),
+    DraftModel.deleteMany(byRestaurant),
+    ExpenseModel.deleteMany(byRestaurant),
+    KitchenTicketModel.deleteMany(byRestaurant),
+    TableModel.deleteMany(byRestaurant),
+    MenuItemModel.deleteMany(byRestaurant),
+    CategoryModel.deleteMany(byRestaurant),
+    CounterModel.deleteMany({ _id: counterKeys }),
+    photos.length ? MenuImageModel.deleteMany({ _id: { $in: photos } }) : null,
+  ]);
+  await BranchModel.deleteMany(byRestaurant);
+  await RestaurantModel.deleteOne({ _id: restaurantId });
+  await audit(actor, {
+    action: 'RESTAURANT_DELETED',
+    entityType: 'Restaurant',
+    entityId: restaurantId,
+    summary: `Deleted restaurant "${r.name}" with ${branches.length} branch(es), ${bills.deletedCount} bill(s) and ${staff.deletedCount} login(s)`,
+  });
+  return { id: String(restaurantId) };
 }
 
 export async function updateRestaurantSettings(actor: AuthUser, id: string, input: RestaurantSettingsInput) {

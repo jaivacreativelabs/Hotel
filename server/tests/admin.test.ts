@@ -73,6 +73,28 @@ describe('Super Admin – restaurants and branches', () => {
     expect((await w.adminB1.get('/api/v1/tables')).status).toBe(403);
     ok(await w.sa.patch(`/api/v1/admin/restaurants/${w.restaurantB}/status`, { status: 'ACTIVE' }));
   });
+
+  it('deletes a restaurant with everything in it, leaving the others untouched', async () => {
+    const r = ok<{ id: string; mainBranchId: string }>(await w.sa.post('/api/v1/admin/restaurants', { name: 'Closing Down' }), 201);
+    ok(await w.sa.post('/api/v1/admin/users', { name: 'Gone', email: 'gone@test.local', password: PASSWORD, branchIds: [r.mainBranchId] }), 201);
+    const admin = (await new Client().login('gone@test.local')).useBranch(r.mainBranchId);
+    const cat = ok<{ id: string }>(await admin.post('/api/v1/menu/categories', { name: 'Meals' }), 201);
+    const item = ok<{ id: string }>(await admin.post('/api/v1/menu/items', { categoryId: cat.id, name: 'Thali', price: 12000 }), 201);
+    const bill = ok<{ id: string; version: number }>(await admin.get('/api/v1/bills/counter'));
+    ok(await admin.put(`/api/v1/bills/${bill.id}`, { version: bill.version, items: [{ menuItemId: item.id, quantity: 1 }] }));
+
+    // Restaurant Admins cannot delete restaurants.
+    expect((await w.adminA1.delete(`/api/v1/admin/restaurants/${r.id}`)).status).toBe(403);
+    ok(await w.sa.delete(`/api/v1/admin/restaurants/${r.id}`));
+
+    expect((await w.sa.get(`/api/v1/admin/restaurants/${r.id}`)).status).toBe(404);
+    expect(ok<{ id: string }[]>(await w.sa.get('/api/v1/admin/restaurants')).map((x) => x.id)).not.toContain(r.id);
+    expect((await new Client().post('/api/v1/auth/login', { email: 'gone@test.local', password: PASSWORD })).status).toBe(401);
+    expect(await AuditLogModel.exists({ action: 'RESTAURANT_DELETED', entityId: r.id })).toBeTruthy();
+    // Other restaurants keep their menu.
+    expect(ok<unknown[]>(await w.adminA1.get('/api/v1/menu/items')).length).toBeGreaterThan(0);
+    expect((await w.sa.delete(`/api/v1/admin/restaurants/${r.id}`)).status).toBe(404);
+  });
 });
 
 describe('Super Admin – Restaurant Admin accounts', () => {
@@ -123,7 +145,7 @@ describe('Super Admin – Restaurant Admin accounts', () => {
   });
 
   it('writes audit logs for administrative actions', async () => {
-    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(3); // A, B and C
+    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(4); // A, B, C and the deleted one
     expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_ADMIN_REASSIGNED' })).toBe(1);
     const logs = ok<unknown[]>(await w.sa.get('/api/v1/admin/audit-logs?limit=5'));
     expect(logs).toHaveLength(5);
