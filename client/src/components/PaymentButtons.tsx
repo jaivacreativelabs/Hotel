@@ -1,7 +1,8 @@
 import { PAYMENT_METHODS, type PaymentMethod, type TransactionDTO } from '@rb/shared';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import type { ToastApi } from '../store/toast';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
 import { Receipt, RECEIPT_CSS } from './Receipt';
@@ -92,23 +93,11 @@ function clearPrint() {
   printing = null;
 }
 
-function InPageReceipt({ t, onReady }: { t: TransactionDTO; onReady: () => void }) {
-  const [logoDone, setLogoDone] = useState(!t.restaurantSnapshot.logoUrl);
-  useEffect(() => {
-    if (logoDone) onReady();
-  }, [logoDone, onReady]);
-  return (
-    <>
-      <style>{IN_PAGE_CSS}</style>
-      <Receipt t={t} onLogoDone={() => setLogoDone(true)} />
-    </>
-  );
-}
-
 /**
  * Prints a bill without leaving the page. The receipt is put into this page and printed on its
  * own – tablets (iPad Safari, Android Chrome) print the whole page when a frame or a popup tries
- * to print, and popups after generating a bill are blocked anyway.
+ * to print. Call it straight from a tap: Safari only prints from a tap, so it prints right away
+ * when the logo is ready (it is normally cached – the sidebar shows it).
  */
 export function printReceipt(t: TransactionDTO) {
   clearPrint();
@@ -117,19 +106,41 @@ export function printReceipt(t: TransactionDTO) {
   document.body.appendChild(el);
   const root = createRoot(el);
   printing = { root, el };
-  let started = false;
-  const print = () => {
-    if (started) return;
-    started = true;
-    window.addEventListener('afterprint', () => printing?.el === el && clearPrint(), { once: true });
-    // A frame for the receipt to be laid out before the print dialog reads the page.
-    requestAnimationFrame(() => setTimeout(() => window.print(), 50));
-  };
-  flushSync(() => root.render(<InPageReceipt t={t} onReady={print} />));
+  flushSync(() =>
+    root.render(
+      <>
+        <style>{IN_PAGE_CSS}</style>
+        <Receipt t={t} onLogoDone={() => undefined} />
+      </>,
+    ),
+  );
+  window.addEventListener('afterprint', () => printing?.el === el && clearPrint(), { once: true });
+  const logo = el.querySelector('img');
+  if (!logo || logo.complete) window.print();
+  else {
+    const print = () => window.print();
+    logo.addEventListener('load', print, { once: true });
+    logo.addEventListener('error', print, { once: true });
+  }
 }
 
-/** A bill was generated: say so and print it. */
-export function billGenerated(tx: TransactionDTO, toast: { success: (m: string) => void }) {
-  toast.success(`Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]}) – printing…`);
+/**
+ * Safari – and every browser on an iPad or iPhone – only prints from a tap. After Generate Bill
+ * the print would start once the server has saved the bill, which Safari blocks.
+ */
+function printNeedsTap() {
+  const ua = navigator.userAgent;
+  const appleTouch = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  return appleTouch || (/Safari\//.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/.test(ua));
+}
+
+/** A bill was generated: say so and print it (where printing needs a tap, with a Print button). */
+export function billGenerated(tx: TransactionDTO, toast: Pick<ToastApi, 'success' | 'withAction'>) {
+  const saved = `Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]})`;
+  if (printNeedsTap()) {
+    toast.withAction(saved, 'Print bill', () => printReceipt(tx));
+    return;
+  }
+  toast.success(`${saved} – printing…`);
   printReceipt(tx);
 }

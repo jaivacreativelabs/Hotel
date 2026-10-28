@@ -1185,6 +1185,34 @@ a {
 .toast.error {
   background: #8f2323;
 }
+/* More specific than .toasts, so the phone layout keeps it at the top too */
+.toasts.toasts-top {
+  top: 12px;
+  bottom: auto;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 20px));
+}
+.toast:has(.toast-action) {
+  align-items: center;
+}
+.toast .toast-action {
+  flex-shrink: 0;
+  min-height: 44px;
+}
+.toast .toast-action svg {
+  color: inherit;
+}
+.toast-close {
+  background: none;
+  border: 0;
+  color: #fff;
+  opacity: 0.7;
+  padding: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
 
 /* ============ Food images ============ */
 .food-img {
