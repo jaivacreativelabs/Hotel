@@ -2,7 +2,6 @@ import { PAYMENT_METHODS, type PaymentMethod, type TransactionDTO } from '@rb/sh
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
-import type { ToastApi } from '../store/toast';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
 import { Receipt, RECEIPT_CSS } from './Receipt';
@@ -126,11 +125,4 @@ export function printReceipt(t: TransactionDTO) {
   frame.src = `/print/transactions/${t.id}?autoprint=1`;
   document.body.appendChild(frame);
   printing = { root, el, frame, timer: window.setTimeout(clearPrint, 10 * 60_000) };
-}
-
-/** A bill was generated: say so and print it (with a button to print it again). */
-export function billGenerated(tx: TransactionDTO, toast: Pick<ToastApi, 'withAction'>) {
-  const saved = `Bill #${tx.billNumber} for ${formatMoney(tx.grandTotal)} saved (${PAYMENT_LABEL[tx.paymentMethod]})`;
-  toast.withAction(`${saved} – printing…`, 'Print again', () => printReceipt(tx));
-  printReceipt(tx);
 }
