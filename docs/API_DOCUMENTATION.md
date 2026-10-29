@@ -26,6 +26,12 @@ rejects inactive users or revoked sessions (`tokenVersion`).
 **CSRF:** every non-GET request must send `X-Requested-With: rb-client`; when an `Origin`
 header is present it must be in `CORS_ORIGINS` / the app origin.
 
+**Retries:** the app sends every non-GET request with a random `Idempotency-Key` (16–100 of
+`A–Z a–z 0–9 _ -`) and sends it again with the same key when no answer arrives (or on 502/503/504).
+The server keeps the answer for 24 hours (`requestlogs`) and returns it again for that key
+(`Idempotent-Replayed: true`) instead of running the request twice. 5xx answers are not kept;
+a key used for another method/URL gets `422`; `/auth/*` is not covered.
+
 **Branch scope:** restaurant-level endpoints take the branch from the `X-Branch-Id` header
 (or `branchId` query). Restaurant Admins must be assigned to that branch, and the branch and
 its restaurant must be active. The Super Admin may pass any branch, or `restaurantId` alone

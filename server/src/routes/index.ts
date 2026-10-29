@@ -9,6 +9,7 @@ import * as menu from '../controllers/menu.controller.js';
 import * as ops from '../controllers/operations.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
+import { repeatSafe } from '../middleware/idempotency.js';
 import { apiNotFound } from '../middleware/error.js';
 import { requireBranchScope, requireMenuScope } from '../middleware/scope.js';
 import { imageUpload } from '../middleware/upload.js';
@@ -58,6 +59,7 @@ export function createApiRouter(): Router {
 
   api.use(apiLimiter);
   api.use(csrfProtection);
+  api.use(repeatSafe);
 
   api.get('/health', (_req, res) => {
     res.json({ data: { status: 'ok', db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected' } });

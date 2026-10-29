@@ -97,6 +97,8 @@ export const MAX_EXPENSE_PAISE = 1_000_000_000;
 export const CSRF_HEADER = 'x-requested-with';
 export const CSRF_HEADER_VALUE = 'rb-client';
 export const BRANCH_HEADER = 'x-branch-id';
+/** One random key per save; a retried save with the same key gets the first answer back. */
+export const REQUEST_KEY_HEADER = 'idempotency-key';
 
 /**
  * Bill numbers are the branch code + a running number, e.g. ITH0001. A code ending in a digit
