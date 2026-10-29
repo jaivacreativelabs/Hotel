@@ -57,6 +57,9 @@ export const setRestaurantStatus = async (req: Request, res: Response) => {
 export const deleteRestaurant = async (req: Request, res: Response) => {
   res.json({ data: await admin.deleteRestaurant(currentUser(req), id(req)) });
 };
+export const deleteBranch = async (req: Request, res: Response) => {
+  res.json({ data: await admin.deleteBranch(currentUser(req), id(req)) });
+};
 export const updateRestaurantSettings = async (req: Request, res: Response) => {
   res.json({
     data: await admin.updateRestaurantSettings(currentUser(req), id(req), parse(restaurantSettingsSchema, req.body)),

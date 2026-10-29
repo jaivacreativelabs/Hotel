@@ -91,6 +91,7 @@ export function createApiRouter(): Router {
   adminRouter.post('/branches', admin.createBranch);
   adminRouter.patch('/branches/:id', admin.updateBranch);
   adminRouter.patch('/branches/:id/status', admin.setBranchStatus);
+  adminRouter.delete('/branches/:id', admin.deleteBranch);
   adminRouter.get('/users', admin.listUsers);
   adminRouter.post('/users', admin.createUser);
   adminRouter.patch('/users/:id', admin.updateUser);

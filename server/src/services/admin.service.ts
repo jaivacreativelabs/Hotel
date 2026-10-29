@@ -225,6 +225,58 @@ export async function deleteRestaurant(actor: AuthUser, id: string) {
   return { id: String(restaurantId) };
 }
 
+/**
+ * Deletes one location of a restaurant that has several, for good: its bills, open bills, tables,
+ * kitchen tickets, expenses, its own dishes and categories and its prices/photos for shared ones,
+ * and the logins that only worked there. A restaurant's last location goes with the restaurant.
+ */
+export async function deleteBranch(actor: AuthUser, id: string) {
+  const b = await BranchModel.findById(toObjectId(id, 'branch')).lean<BranchLean>();
+  if (!b) throw notFound('Location');
+  const branchId = b._id;
+  if ((await BranchModel.countDocuments({ restaurantId: b.restaurantId })) < 2) {
+    throw conflict('This is the restaurant’s only location – delete the restaurant instead', 'LAST_LOCATION');
+  }
+  const r = await RestaurantModel.findById(b.restaurantId).select('name').lean<{ name: string }>();
+  const own = await MenuItemModel.find({ branchId }).select('_id imageUrl').lean<{ _id: Types.ObjectId; imageUrl?: string | null }[]>();
+  const overridden = await MenuItemModel.find({ 'branchOverrides.branchId': branchId }).select('branchOverrides').lean<
+    { branchOverrides: { branchId: Types.ObjectId; imageUrl?: string | null }[] }[]
+  >();
+  const prefix = `/uploads/${MENU_IMAGE_DIR}/`;
+  const photos = [...own.map((i) => i.imageUrl), ...overridden.flatMap((i) => i.branchOverrides.filter((o) => o.branchId.equals(branchId)).map((o) => o.imageUrl))]
+    .filter((u): u is string => Boolean(u?.startsWith(prefix)))
+    .map((u) => u.slice(prefix.length));
+  const byBranch = { branchId };
+  const [bills, staff] = await Promise.all([
+    // Bills refuse deletes through the model (a guard against slips); this one is deliberate.
+    TransactionModel.collection.deleteMany(byBranch),
+    // Logins of this location only; others just lose it.
+    UserModel.deleteMany({ role: { $in: STAFF_ROLES }, branchIds: { $size: 1, $all: [branchId] } }),
+    DraftModel.deleteMany(byBranch),
+    ExpenseModel.deleteMany(byBranch),
+    KitchenTicketModel.deleteMany(byBranch),
+    TableModel.deleteMany(byBranch),
+    MenuItemModel.deleteMany({ $or: [byBranch, { parentId: { $in: own.map((i) => i._id) } }] }),
+    CategoryModel.deleteMany(byBranch),
+    CounterModel.deleteMany({ _id: new RegExp(`^(bill|kot):${String(branchId)}:`) }),
+    photos.length ? MenuImageModel.deleteMany({ _id: { $in: photos } }) : null,
+  ]);
+  await Promise.all([
+    UserModel.updateMany({ branchIds: branchId }, { $pull: { branchIds: branchId } }),
+    MenuItemModel.updateMany({ 'branchOverrides.branchId': branchId }, { $pull: { branchOverrides: { branchId } } }),
+    CategoryModel.updateMany({ 'branchOverrides.branchId': branchId }, { $pull: { branchOverrides: { branchId } } }),
+  ]);
+  await BranchModel.deleteOne({ _id: branchId });
+  await audit(actor, {
+    action: 'BRANCH_DELETED',
+    entityType: 'Branch',
+    entityId: branchId,
+    restaurantId: b.restaurantId,
+    summary: `Deleted location "${b.name}" of "${r?.name ?? ''}" with ${bills.deletedCount} bill(s) and ${staff.deletedCount} login(s)`,
+  });
+  return { id: String(branchId) };
+}
+
 export async function updateRestaurantSettings(actor: AuthUser, id: string, input: RestaurantSettingsInput) {
   const r = await getRestaurantOr404(id);
   const before = r.toObject().settings;

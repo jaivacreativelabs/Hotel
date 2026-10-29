@@ -327,6 +327,60 @@ function DeleteRestaurantDialog({ restaurant, branchCount, onClose }: { restaura
   );
 }
 
+/** Deletes one location of a restaurant that has several (type its name to confirm). */
+function DeleteLocationDialog({ branch, onClose }: { branch: BranchDTO; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const matches = typed.trim().toLowerCase() === branch.name.trim().toLowerCase();
+
+  const remove = async () => {
+    if (!matches) return;
+    setBusy(true);
+    try {
+      await api.delete(`/admin/branches/${branch.id}`, { branchId: null });
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success(`“${branch.name}” deleted`);
+      onClose();
+    } catch (err) {
+      toast.error(err);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Delete ${branch.name}?`} onClose={busy ? () => undefined : onClose}>
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="alert alert-danger">
+          <Trash2 />
+          <span>
+            This deletes this location for good, with its tables, all its bills and expenses, and the logins that work only there. The
+            restaurant and its other locations stay. It cannot be undone.
+          </span>
+        </div>
+        <Field label={<>Type <strong>{branch.name}</strong> to confirm</>}>
+          {(id) => (
+            <input
+              id={id}
+              className="input"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void remove()}
+              autoComplete="off"
+              autoFocus
+            />
+          )}
+        </Field>
+        <div className="modal-actions">
+          <CancelButton onClick={onClose} disabled={busy} label="No" />
+          <ConfirmButton onClick={() => void remove()} busy={busy} disabled={!matches} label="Delete for good" />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function RestaurantDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -336,6 +390,7 @@ export function RestaurantDetailPage() {
   const [panel, setPanel] = useState<{ kind: 'branch'; branch?: BranchDTO } | { kind: 'admin' } | { kind: 'edit' } | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'restaurant' } | { kind: 'branch'; branch: BranchDTO } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState<BranchDTO | null>(null);
   const detail = useQuery({ queryKey: adminKeys.restaurant(id!), queryFn: () => api.get<Detail>(`/admin/restaurants/${id}`, { branchId: null }) });
 
   if (detail.isLoading) return <Loading />;
@@ -458,6 +513,9 @@ export function RestaurantDetailPage() {
                           <button className="icon-btn plain" onClick={() => setConfirm({ kind: 'branch', branch: b })} title={b.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} aria-label={`Toggle ${b.name}`}>
                             <Power />
                           </button>
+                          <button className="icon-btn plain danger-text" onClick={() => setDeletingBranch(b)} title="Delete" aria-label={`Delete ${b.name}`}>
+                            <Trash2 />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -496,6 +554,7 @@ export function RestaurantDetailPage() {
           }}
         />
       )}
+      {deletingBranch && <DeleteLocationDialog branch={deletingBranch} onClose={() => setDeletingBranch(null)} />}
       {deleting && <DeleteRestaurantDialog restaurant={restaurant} branchCount={branches.length} onClose={() => setDeleting(false)} />}
       {confirm && (
         <ConfirmDialog
