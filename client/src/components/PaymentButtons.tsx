@@ -4,6 +4,7 @@ import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
+import { ChangeCalculator } from './ChangeCalculator';
 import { Receipt, RECEIPT_CSS } from './Receipt';
 import { CancelButton, ConfirmButton, Modal } from './ui';
 
@@ -52,6 +53,7 @@ export function PaymentModal({
         <strong>{formatMoney(amount)}</strong>
       </div>
       <PaymentButtons value={method} onChange={setMethod} disabled={busy} />
+      {method === 'CASH' && <ChangeCalculator total={amount} />}
       <div className="modal-actions">
         <CancelButton onClick={onClose} disabled={busy} />
         <ConfirmButton

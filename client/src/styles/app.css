@@ -1564,6 +1564,41 @@ html.app-open body {
 .pay-methods.order-types {
   grid-template-columns: repeat(2, 1fr);
 }
+/* Cash received → balance to return (calculation only) */
+.change-calc {
+  display: grid;
+  grid-template-columns: auto 84px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+}
+.change-calc-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.change-calc-input span {
+  left: 11px;
+}
+.change-calc-input .input {
+  padding-left: 26px;
+  width: 100%;
+  font-weight: 600;
+}
+.change-calc-result {
+  text-align: right;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.change-calc-result strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+.change-calc-result.short strong {
+  color: var(--color-danger);
+}
 .discount-row {
   display: grid;
   grid-template-columns: 90px 1fr auto;

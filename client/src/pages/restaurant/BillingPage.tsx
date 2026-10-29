@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ChangeCalculator } from '../../components/ChangeCalculator';
 import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodImage } from '../../components/FoodImage';
 import { ManualSaleModal } from '../../components/ManualSale';
@@ -228,7 +229,7 @@ export function BillingView({
   const needOrderType = askOrderType && !orderType;
   const hint = needOrderType
     ? payment
-      ? 'Choose Dine In or Take Away to generate the bill'
+      ? 'Choose Dine In or Take Away'
       : 'Choose Dine In / Take Away and payment'
     : !payment && 'Select a payment method to generate the bill';
   const showBreakdown = Boolean(totals && (totals.discountAmount > 0 || totals.taxes.length > 0));
@@ -397,6 +398,8 @@ export function BillingView({
             <span>Total</span>
             <span>{formatMoney(totals?.grandTotal ?? 0)}</span>
           </div>
+          {/* Above the payment buttons: it appears on tapping Cash without moving Cash or Generate Bill. */}
+          {payment === 'CASH' && hasItems && editable && <ChangeCalculator key={draft?.id} total={totals?.grandTotal ?? 0} />}
           {activeBranch!.kitchenDisplay && editable && hasItems && <KitchenSendButton pending={toKitchen} sending={kitchen.sending} onSend={() => void sendToKitchen()} />}
           <PaymentButtons value={payment} onChange={setPayment} disabled={!editable || busy} />
           <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needOrderType || busy || hasUnavailable}>
