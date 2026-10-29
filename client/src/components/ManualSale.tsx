@@ -1,10 +1,10 @@
 /** New Bill › Add Sale: a bill of just an amount and a payment mode, without choosing dishes. */
-import { parseRupeesToPaise, type PaymentMethod, type TransactionDTO } from '@rb/shared';
+import { formatMoney, parseRupeesToPaise, type PaymentMethod, type TransactionDTO } from '@rb/shared';
 import { useRef, useState } from 'react';
-import { apiSync } from '../services/api';
+import { api } from '../services/api';
 import { useToast } from '../store/toast';
 import { newIdempotencyKey } from '../utils/format';
-import { PaymentButtons, printReceipt } from './PaymentButtons';
+import { PaymentButtons } from './PaymentButtons';
 import { CancelButton, ConfirmButton, Field, Modal } from './ui';
 
 export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDone: (t: TransactionDTO) => void }) {
@@ -13,29 +13,30 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
   const [method, setMethod] = useState<PaymentMethod | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   // One key for this sale: a second tap returns the same bill instead of a new one.
   const keyRef = useRef(newIdempotencyKey());
 
-  /**
-   * Saved within this tap (a synchronous request – the screen waits a moment), so the bill
-   * prints at once: Safari on an iPad prints only from a tap.
-   */
-  const save = () => {
+  /** Only saves the sale – no bill is printed (it can be printed later from Transactions). */
+  const save = async () => {
     const paise = parseRupeesToPaise(amount);
     if (paise === null || paise < 100) return setError('Enter an amount like 250 or 49.50');
     if (!method) return;
     setError(null);
+    setBusy(true);
     try {
-      const { transaction } = apiSync.post<{ transaction: TransactionDTO }>('/bills/manual-sale', {
+      const { transaction } = await api.post<{ transaction: TransactionDTO }>('/bills/manual-sale', {
         amount: paise,
         paymentMethod: method,
         ...(customerName.trim() && { customerName: customerName.trim() }),
         idempotencyKey: keyRef.current,
       });
-      printReceipt(transaction); // no message: the print itself shows the sale was saved
+      toast.success(`Sale of ${formatMoney(transaction.grandTotal)} saved (#${transaction.billNumber})`);
       onDone(transaction);
     } catch (err) {
       toast.error(err);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -46,7 +47,7 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
         style={{ gap: 18 }}
         onSubmit={(e) => {
           e.preventDefault();
-          save();
+          void save();
         }}
       >
         <Field label="Amount" error={error} hint="Just the total – no need to pick dishes">
@@ -57,7 +58,7 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
             </div>
           )}
         </Field>
-        <Field label="Name (optional)" hint="e.g. the customer or what was sold – printed on the bill">
+        <Field label="Name (optional)" hint="e.g. the customer or what was sold – shown in Transactions">
           {(id) => <input id={id} className="input" value={customerName} maxLength={80} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. Ravi" />}
         </Field>
         <div className="field">
@@ -65,8 +66,8 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
           <PaymentButtons value={method} onChange={setMethod} />
         </div>
         <div className="modal-actions">
-          <CancelButton onClick={onClose} />
-          <ConfirmButton type="submit" label="Add Sale" disabled={!amount.trim() || !method} />
+          <CancelButton onClick={onClose} disabled={busy} />
+          <ConfirmButton type="submit" label="Add Sale" busy={busy} disabled={!amount.trim() || !method} />
         </div>
       </form>
     </Modal>
