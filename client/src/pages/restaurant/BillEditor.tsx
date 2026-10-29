@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronUp, Clock, Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { FoodGrid, addItemToBill, setBillQuantity } from '../../components/FoodGrid';
 import { FoodImage } from '../../components/FoodImage';
+import { useRootClass } from '../../hooks/useRootClass';
 import { PaymentButtons } from '../../components/PaymentButtons';
 import { CancelButton, ConfirmButton, Field, SidePanel } from '../../components/ui';
 import { ApiError, api } from '../../services/api';
@@ -48,6 +49,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [panelOnPhone, setPanelOnPhone] = useState(false);
+  useRootClass('has-bill-bar');
   const minutesLeft = useEditMinutesLeft(anyTime ? null : tx.editableUntil);
   const canEdit = anyTime || minutesLeft > 0;
 

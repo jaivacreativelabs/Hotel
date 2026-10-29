@@ -101,8 +101,8 @@ a {
 }
 /* With the app open only its own areas scroll (food list, bill lines, pages): the page itself
    never scrolls or bounces, and a list that reaches its end does not drag the page along. */
-html:has(.app),
-html:has(.app) body {
+html.app-open,
+html.app-open body {
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -237,6 +237,37 @@ html:has(.app) body {
   background: var(--color-surface-muted);
   padding: 0 16px 0 44px;
   font-size: var(--font-size-md);
+}
+.search input {
+  padding-right: 44px;
+}
+/* Our own clear button on every browser (Safari on iPad shows none); the browser's own is hidden. */
+.search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search .search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+}
+.search .search-clear svg {
+  position: static;
+  transform: none;
+  width: 18px;
+  height: 18px;
+}
+.search .search-clear:active {
+  background: var(--color-border);
 }
 .search input:focus {
   outline: none;
@@ -1225,6 +1256,7 @@ html:has(.app) body {
   container-type: size;
 }
 .food-emoji {
+  font-size: 2.4rem; /* browsers without container units */
   font-size: 46cqmin;
   line-height: 1;
 }
@@ -2208,7 +2240,7 @@ html:has(.app) body {
   font-size: 1.1rem;
   font-weight: 600;
 }
-.input-prefix:has(.input-xl) span {
+.input-prefix-xl span {
   font-size: 1.1rem;
   color: var(--color-text);
 }
@@ -3180,14 +3212,14 @@ html:has(.app) body {
     box-shadow: none;
   }
   /* a list with phone cards hides its wide table */
-  .data-table-wrap:has(+ .tx-cards) {
+  .data-table-wrap.has-cards {
     display: none;
   }
   /* Ordering at a table: the menu fills the screen; the table panel opens from the bottom bar. */
   .side-panel.phone-hidden {
     display: none;
   }
-  .content:has(.bill-mobile-bar) .page {
+  .has-bill-bar .content .page {
     padding-bottom: calc(84px + env(safe-area-inset-bottom));
   }
   .tx-cards {

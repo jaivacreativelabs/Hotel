@@ -134,7 +134,7 @@ function ExpenseForm({
       >
         <Field label="Amount" error={errors.amount}>
           {(id) => (
-            <div className="input-prefix">
+            <div className="input-prefix input-prefix-xl">
               <span>₹</span>
               <input id={id} className="input input-xl" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
             </div>
@@ -360,7 +360,7 @@ export function ExpensesView({
           </Empty>
         ) : (
           <>
-            <div className="data-table-wrap">
+            <div className="data-table-wrap has-cards">
               <table className="data-table">
                 <thead>
                   <tr>

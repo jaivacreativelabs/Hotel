@@ -34,6 +34,7 @@ import { splitVariant } from '../../utils/menu';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { useDraftSync } from '../../hooks/useDraftSync';
+import { useRootClass } from '../../hooks/useRootClass';
 import { MergeGroupModal, MoveGroupModal, SplitGroupModal, type GroupAction, type SplitChoice } from './TableGroupActions';
 
 /** Same default naming as the server: the first free "Group N". */
@@ -812,6 +813,7 @@ export function TablesPage() {
   const selectedTable = tables.data?.tables.find((t) => t.id === selectedId) ?? null;
   const activeGroup = order ? (selectedTable?.groups.find((g) => g.draftId === order) ?? null) : null;
   const ordering = Boolean(order && selectedTable && activeGroup && !panel);
+  useRootClass('has-bill-bar', ordering);
   const search = usePageSearch(ordering ? 'Search food items...' : 'Search tables...');
   const live = useDraftSync(ordering ? order : null, branchId);
   const liveCount = live.state.local?.items.reduce((a, i) => a + i.quantity, 0) ?? 0;

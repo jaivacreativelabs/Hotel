@@ -34,6 +34,7 @@ import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodG
 import { PaymentButtons, printReceipt } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
+import { useRootClass } from '../../hooks/useRootClass';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { api, ApiError, apiSync, errorMessage } from '../../services/api';
 import { useCategories, useMenuItems } from '../../services/queries';
@@ -124,6 +125,7 @@ export function BillingView({
   const [confirmClear, setConfirmClear] = useState(false);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
   const [billOpen, setBillOpen] = useState(false);
+  useRootClass('has-bill-bar');
   const keyRef = useRef<{ draftId: string; key: string } | null>(null);
 
   // Category picture for bill lines whose dish has no photo.

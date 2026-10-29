@@ -20,11 +20,13 @@ import {
   Users,
   Utensils,
   Wallet,
+  X,
 } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
 import { Loading, LogoMark } from '../components/ui';
+import { useRootClass } from '../hooks/useRootClass';
 import { ChangePasswordModal } from '../pages/auth/ChangePasswordModal';
 import { useAuth } from '../store/auth';
 import { getSyncSummary, subscribeSyncSummary } from '../store/draftSync';
@@ -182,6 +184,7 @@ export function AppLayout() {
   // login has a single page and needs neither.
   const bottomNav = user?.role === 'RESTAURANT_ADMIN';
   const [navOpen, setNavOpen] = useState(false);
+  useRootClass('app-open');
   const location = useLocation();
   useEffect(() => setNavOpen(false), [location.pathname]);
 
@@ -207,6 +210,11 @@ export function AppLayout() {
           <div className="search">
             <Search />
             <input type="search" value={query} placeholder={placeholder} onChange={(e) => setQuery(e.target.value)} aria-label={placeholder} />
+            {query && (
+              <button type="button" className="search-clear" onClick={() => setQuery('')} aria-label="Clear search" title="Clear search">
+                <X />
+              </button>
+            )}
           </div>
         ) : (
           <div className="spacer" />

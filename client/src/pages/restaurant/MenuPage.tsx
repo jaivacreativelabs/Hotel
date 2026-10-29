@@ -578,7 +578,7 @@ function ItemPanel({
         {!hasVariants && (
           <Field label={step(<>Price</>)} error={errors.price} hint={shared && item!.hasOverride ? `Main menu price: ${formatMoney(item!.basePrice)}` : undefined}>
             {(id) => (
-              <div className="input-prefix">
+              <div className="input-prefix input-prefix-xl">
                 <span>₹</span>
                 <input id={id} className="input input-xl" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" />
               </div>
