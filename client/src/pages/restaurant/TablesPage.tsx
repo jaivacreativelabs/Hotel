@@ -18,6 +18,7 @@ import { ArrowLeft, ArrowRightLeft, ChevronUp, CirclePlus, FileText, Merge, Minu
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
+import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodImage } from '../../components/FoodImage';
 import { PaymentModal, printReceipt } from '../../components/PaymentButtons';
 import { TableIllustration } from '../../components/TableIllustration';
@@ -297,6 +298,12 @@ function ActiveGroupCard({
               </button>
             </div>
           ))}
+        </div>
+      )}
+      {sync && local && lines.length > 0 && (
+        <div className="group-discount">
+          <DiscountEditor key={group.draftId} value={local.discount} onApply={(d) => sync.update((b) => ({ ...b, discount: d }))} />
+          {totals && totals.discountAmount > 0 && <span className="group-discount-amount num">Discount − {formatMoney(totals.discountAmount)}</span>}
         </div>
       )}
       <div className="group-actions">

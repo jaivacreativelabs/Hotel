@@ -1672,6 +1672,23 @@ html:has(.app) body {
   font-weight: 600;
   font-size: 1.1rem;
 }
+.group-discount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.group-discount > :first-child {
+  align-self: stretch;
+}
+.group-discount .discount-row {
+  grid-template-columns: 64px 1fr auto;
+}
+.group-discount-amount {
+  align-self: flex-end;
+  font-weight: 600;
+  color: var(--color-primary);
+}
 .group-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
