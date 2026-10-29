@@ -319,7 +319,12 @@ async function getRestaurantAdminOr404(id: string) {
 }
 
 /** Audit wording per account type. */
-const accountKind = (role: string) => (role === 'KITCHEN' ? { action: 'KITCHEN_LOGIN', label: 'Kitchen login' } : { action: 'RESTAURANT_ADMIN', label: 'Restaurant Admin' });
+const accountKind = (role: string) =>
+  role === 'KITCHEN'
+    ? { action: 'KITCHEN_LOGIN', label: 'Kitchen login' }
+    : role === 'WAITER'
+      ? { action: 'WAITER_LOGIN', label: 'Waiter login' }
+      : { action: 'RESTAURANT_ADMIN', label: 'Restaurant Admin' };
 
 export async function listRestaurantAdmins(query: { restaurantId?: unknown; status?: unknown }) {
   const filter: Record<string, unknown> = { role: { $in: STAFF_ROLES } };

@@ -14,6 +14,7 @@ import {
   Mail,
   Menu as MenuIcon,
   MonitorPlay,
+  ConciergeBell,
   Search,
   Store,
   UserRound,
@@ -51,6 +52,8 @@ const RESTAURANT_NAV: NavItem[] = [
 ];
 // Shown only when the Super Admin has switched the Kitchen Display on for the branch.
 const KITCHEN_NAV: NavItem = { to: '/kitchen', label: 'Kitchen', icon: ChefHat };
+// Food the kitchen marked Ready (also needs the Kitchen Display).
+const WAITER_NAV: NavItem = { to: '/waiter', label: 'Ready to Serve', icon: ConciergeBell };
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/restaurants', label: 'Restaurants', icon: Store },
@@ -100,7 +103,7 @@ function UserMenu() {
     user.role === 'SUPER_ADMIN'
       ? 'Super Admin'
       : activeBranch
-        ? `${user.role === 'KITCHEN' ? 'Kitchen · ' : ''}${activeBranch.restaurant.name} · ${activeBranch.name}`
+        ? `${user.role === 'KITCHEN' ? 'Kitchen · ' : user.role === 'WAITER' ? 'Waiter · ' : ''}${activeBranch.restaurant.name} · ${activeBranch.name}`
         : ROLE_LABEL[user.role];
   return (
     <div className="user-menu" ref={ref}>
@@ -175,11 +178,20 @@ export function AppLayout() {
   const { placeholder, query, setQuery, extra } = useTopbar();
   const isSuper = user?.role === 'SUPER_ADMIN';
   const isKitchen = user?.role === 'KITCHEN';
+  const isWaiter = user?.role === 'WAITER';
   // Branch staff see their restaurant's own logo and name (set by the Super Admin).
   const ownRestaurant = isSuper ? null : activeBranch?.restaurant;
   const brandLogo = ownRestaurant ? ownRestaurant.logoUrl : '/logo.jpeg';
   const brandName = ownRestaurant?.name ?? 'Tiffin House';
-  const nav = isSuper ? ADMIN_NAV : isKitchen ? [KITCHEN_NAV] : activeBranch?.kitchenDisplay ? [...RESTAURANT_NAV, KITCHEN_NAV] : RESTAURANT_NAV;
+  const nav = isSuper
+    ? ADMIN_NAV
+    : isKitchen
+      ? [KITCHEN_NAV]
+      : isWaiter
+        ? [WAITER_NAV]
+        : activeBranch?.kitchenDisplay
+          ? [...RESTAURANT_NAV, KITCHEN_NAV, WAITER_NAV]
+          : RESTAURANT_NAV;
   // Phones: Restaurant Admins get a bottom tab bar, the Super Admin a slide-in menu; a Kitchen
   // login has a single page and needs neither.
   const bottomNav = user?.role === 'RESTAURANT_ADMIN';
@@ -196,7 +208,7 @@ export function AppLayout() {
           <div className="brand-name" title={brandName}>
             {brandName}
           </div>
-          <div className="brand-sub">{isSuper ? 'Super Admin Panel' : isKitchen ? 'Kitchen Display' : 'Billing & POS'}</div>
+          <div className="brand-sub">{isSuper ? 'Super Admin Panel' : isKitchen ? 'Kitchen Display' : isWaiter ? 'Waiter' : 'Billing & POS'}</div>
         </div>
       </div>
       <header className="topbar">

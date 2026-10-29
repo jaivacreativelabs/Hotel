@@ -31,6 +31,7 @@ export function toKitchenTicketDTO(t: TicketLean): KitchenTicketDTO {
     createdByName: t.createdByName ?? '',
     createdAt: new Date(t.createdAt).toISOString(),
     statusAt: new Date(t.statusAt).toISOString(),
+    servedByName: t.servedByName ?? '',
   };
 }
 
@@ -108,20 +109,35 @@ async function findTicket(scope: BranchScope, id: string) {
 }
 
 /** Moves a ticket one step on. `from` must match, so two screens cannot skip a step. */
-export async function advanceTicket(scope: BranchScope, id: string, from: KitchenStatus): Promise<KitchenTicketDTO> {
+export async function advanceTicket(actor: AuthUser, scope: BranchScope, id: string, from: KitchenStatus): Promise<KitchenTicketDTO> {
   assertKitchenOn(scope);
   const next = KITCHEN_NEXT[from];
   if (!next) throw conflict('This ticket is already finished', 'INVALID_STATUS');
   const t = await findTicket(scope, id);
   const updated = await KitchenTicketModel.findOneAndUpdate(
     { _id: t._id, status: from },
-    { $set: { status: next, statusAt: new Date() } },
+    { $set: { status: next, statusAt: new Date(), ...(next === 'SERVED' && { servedBy: actor._id, servedByName: actor.name }) } },
     { new: true },
   ).lean<TicketLean>();
   if (!updated) {
     throw conflict(`Ticket #${t.number} was already moved to ${t.status.toLowerCase()}`, 'CONFLICT', { current: toKitchenTicketDTO(t) });
   }
   return toKitchenTicketDTO(updated);
+}
+
+/** Waiter board: food the kitchen marked Ready, longest waiting first (priority on top). */
+export async function listReady(scope: BranchScope): Promise<KitchenTicketDTO[]> {
+  assertKitchenOn(scope);
+  const rows = await KitchenTicketModel.find({ branchId: scope.branch._id, status: 'READY' })
+    .sort({ priority: -1, statusAt: 1 })
+    .limit(200)
+    .lean<TicketLean[]>();
+  return rows.map(toKitchenTicketDTO);
+}
+
+/** A waiter carried a Ready order to its table. */
+export function serveTicket(actor: AuthUser, scope: BranchScope, id: string): Promise<KitchenTicketDTO> {
+  return advanceTicket(actor, scope, id, 'READY');
 }
 
 export async function setTicketPriority(scope: BranchScope, id: string, priority: boolean): Promise<KitchenTicketDTO> {

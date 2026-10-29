@@ -1,6 +1,6 @@
 import { passwordSchema, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChefHat, CirclePlus, KeyRound, Pencil, Power, Store, Users } from 'lucide-react';
+import { ChefHat, CirclePlus, ConciergeBell, KeyRound, Pencil, Power, Store, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ActiveBadge } from '../../components/badges';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, Modal, PageHeader, SidePanel, Spinner } from '../../components/ui';
@@ -48,8 +48,8 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
   const [password, setPassword] = useState('');
   // Older accounts may still list several branches; editing keeps only one.
   const [branchId, setBranchId] = useState<string | null>(initial?.branchIds[0] ?? null);
-  const [role, setRole] = useState<StaffRole>(initial?.role === 'KITCHEN' ? 'KITCHEN' : 'RESTAURANT_ADMIN');
-  const kind = role === 'KITCHEN' ? 'Kitchen login' : 'Restaurant Admin';
+  const [role, setRole] = useState<StaffRole>(initial?.role === 'KITCHEN' || initial?.role === 'WAITER' ? initial.role : 'RESTAURANT_ADMIN');
+  const kind = role === 'KITCHEN' ? 'Kitchen login' : role === 'WAITER' ? 'Waiter login' : 'Restaurant Admin';
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +59,10 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
       const check = passwordSchema.safeParse(password);
       if (!check.success) return setError(`Password: ${check.error.issues[0].message}`);
     }
-    if (!branchId) return setError(role === 'KITCHEN' ? 'Choose the branch whose kitchen this login shows' : 'Choose the branch this admin manages');
+    if (!branchId)
+      return setError(
+        role === 'KITCHEN' ? 'Choose the branch whose kitchen this login shows' : role === 'WAITER' ? 'Choose the branch this waiter works in' : 'Choose the branch this admin manages',
+      );
     const branchIds = [branchId];
     setBusy(true);
     setError(null);
@@ -82,7 +85,9 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
       subtitle={
         role === 'KITCHEN'
           ? 'A Kitchen login only sees the Kitchen Display of one branch – no bills, sales or prices'
-          : 'A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch'
+          : role === 'WAITER'
+            ? 'A Waiter login (one per waiter) only sees food the kitchen marked Ready in one branch, and marks it Served'
+            : 'A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch'
       }
       onClose={onClose}
     >
@@ -95,6 +100,7 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
                 [
                   ['RESTAURANT_ADMIN', 'Branch Admin', Store],
                   ['KITCHEN', 'Kitchen login', ChefHat],
+                  ['WAITER', 'Waiter login', ConciergeBell],
                 ] as const
               ).map(([value, label, Icon]) => (
                 <button key={value} type="button" role="radio" aria-checked={role === value} className={cx('chip outline', role === value && 'active')} onClick={() => setRole(value)}>
@@ -122,7 +128,7 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
         </div>
         {error && <div className="alert alert-danger">{error}</div>}
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>
-          {busy ? <Spinner /> : <CirclePlus />} {initial ? 'Save Changes' : role === 'KITCHEN' ? 'Create Kitchen Login' : 'Create Admin'}
+          {busy ? <Spinner /> : <CirclePlus />} {initial ? 'Save Changes' : role === 'KITCHEN' ? 'Create Kitchen Login' : role === 'WAITER' ? 'Create Waiter Login' : 'Create Admin'}
         </button>
       </form>
     </SidePanel>
@@ -203,6 +209,11 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
                   {u.role === 'KITCHEN' && (
                     <span className="badge badge-amber badge-sm" style={{ marginLeft: 6 }}>
                       Kitchen
+                    </span>
+                  )}
+                  {u.role === 'WAITER' && (
+                    <span className="badge badge-purple badge-sm" style={{ marginLeft: 6 }}>
+                      Waiter
                     </span>
                   )}
                   <span className="cell-sub">{u.email}</span>

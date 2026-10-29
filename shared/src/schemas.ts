@@ -113,7 +113,7 @@ export const userCreateSchema = z.strictObject({
   email: z.string().trim().toLowerCase().email('Invalid email').max(200),
   password: passwordSchema,
   branchIds: singleBranchSchema,
-  /** Branch Admin (default) or a Kitchen login that only sees the Kitchen Display */
+  /** Branch Admin (default), a Kitchen login (Kitchen Display only) or a Waiter login (Waiter board only) */
   role: z.enum(STAFF_ROLES).default('RESTAURANT_ADMIN'),
 });
 export const userUpdateSchema = z.strictObject({

@@ -29,6 +29,8 @@ const kitchenTicketSchema = new Schema(
     statusAt: { type: Date, default: Date.now },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdByName: { type: String, default: '' },
+    servedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    servedByName: { type: String, default: '' },
   },
   { timestamps: true },
 );

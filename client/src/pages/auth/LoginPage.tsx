@@ -1,6 +1,6 @@
 import type { DemoAccountDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
-import { ChefHat, LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
+import { ChefHat, ConciergeBell, LogIn, Mail, Lock, ShieldCheck, Store, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Field, Spinner } from '../../components/ui';
@@ -93,7 +93,7 @@ export function LoginPage() {
               <div className="demo-logins-buttons">
                 {demos.data!.map((d) => (
                   <button key={d.id} type="button" className="demo-login" disabled={busy !== null} onClick={() => void run(d.id, () => demoLogin(d.id))}>
-                    {busy === d.id ? <Spinner /> : d.role === 'SUPER_ADMIN' ? <ShieldCheck /> : d.role === 'KITCHEN' ? <ChefHat /> : <Store />}
+                    {busy === d.id ? <Spinner /> : d.role === 'SUPER_ADMIN' ? <ShieldCheck /> : d.role === 'KITCHEN' ? <ChefHat /> : d.role === 'WAITER' ? <ConciergeBell /> : <Store />}
                     <span>
                       <strong>{d.label}</strong>
                       <small>{d.hint}</small>

@@ -170,6 +170,13 @@ export function createApiRouter(): Router {
   kitchenRouter.post('/tickets/:id/priority', ops.kitchenTicketPriority);
   api.use('/kitchen', kitchenRouter);
 
+  // ---- Waiter board (food the kitchen marked Ready) ----
+  const waiterRouter = Router();
+  waiterRouter.use(authenticate, requireBranchScope);
+  waiterRouter.get('/tickets', ops.waiterBoard);
+  waiterRouter.post('/tickets/:id/served', ops.serveTicket);
+  api.use('/waiter', waiterRouter);
+
   // ---- Transactions (role-filtered in the service) ----
   const txRouter = Router();
   txRouter.use(authenticate);

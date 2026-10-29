@@ -270,6 +270,8 @@ export interface KitchenTicketDTO {
   createdAt: string;
   /** When the ticket entered its current status */
   statusAt: string;
+  /** who marked it Served (a waiter, or the kitchen); "" until then */
+  servedByName: string;
 }
 
 export interface TransactionItemDTO {

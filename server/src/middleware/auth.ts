@@ -71,11 +71,16 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   if (user.role === 'KITCHEN' && !KITCHEN_ROUTES.some((r) => req.baseUrl.endsWith(r))) {
     throw forbidden('Kitchen logins can only open the Kitchen Display');
   }
+  // Waiter logins likewise: only the Waiter board.
+  if (user.role === 'WAITER' && !WAITER_ROUTES.some((r) => req.baseUrl.endsWith(r))) {
+    throw forbidden('Waiter logins can only open the Waiter board');
+  }
   req.user = user;
   next();
 }
 
 const KITCHEN_ROUTES = ['/kitchen', '/auth'];
+const WAITER_ROUTES = ['/waiter', '/auth'];
 
 export function requireRole(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {

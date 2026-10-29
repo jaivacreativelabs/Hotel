@@ -102,7 +102,14 @@ export const kitchenTicket = async (req: Request, res: Response) => {
   res.json({ data: await kitchen.getTicket(getBranchScope(req), id(req)) });
 };
 export const advanceKitchenTicket = async (req: Request, res: Response) => {
-  res.json({ data: await kitchen.advanceTicket(getBranchScope(req), id(req), parse(kitchenAdvanceSchema, req.body).from) });
+  res.json({ data: await kitchen.advanceTicket(currentUser(req), getBranchScope(req), id(req), parse(kitchenAdvanceSchema, req.body).from) });
+};
+export const waiterBoard = async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ data: await kitchen.listReady(getBranchScope(req)) });
+};
+export const serveTicket = async (req: Request, res: Response) => {
+  res.json({ data: await kitchen.serveTicket(currentUser(req), getBranchScope(req), id(req)) });
 };
 export const kitchenTicketPriority = async (req: Request, res: Response) => {
   res.json({ data: await kitchen.setTicketPriority(getBranchScope(req), id(req), parse(kitchenPrioritySchema, req.body).priority) });

@@ -10,6 +10,7 @@ import { ExpensesPage } from './pages/restaurant/ExpensesPage';
 import { MenuPage } from './pages/restaurant/MenuPage';
 import { PrintReceiptPage } from './pages/restaurant/PrintReceiptPage';
 import { KitchenPage, PrintKitchenTicketPage } from './pages/restaurant/KitchenPage';
+import { WaiterPage } from './pages/restaurant/WaiterPage';
 import { TablesPage } from './pages/restaurant/TablesPage';
 import { TransactionsPage } from './pages/restaurant/TransactionsPage';
 import { useAuth } from './store/auth';
@@ -87,6 +88,15 @@ export function App() {
         }
       >
         <Route path="/kitchen" element={<KitchenPage />} />
+      </Route>
+      <Route
+        element={
+          <RequireRole roles={['RESTAURANT_ADMIN', 'WAITER']}>
+            <AppLayout />
+          </RequireRole>
+        }
+      >
+        <Route path="/waiter" element={<WaiterPage />} />
       </Route>
       <Route
         path="/admin"
