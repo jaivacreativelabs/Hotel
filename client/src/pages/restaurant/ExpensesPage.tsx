@@ -19,6 +19,7 @@ import {
   Calendar,
   Carrot,
   Check,
+  Cookie,
   Ellipsis,
   Flame,
   House,
@@ -49,6 +50,7 @@ export const EXPENSE_ICON: Record<ExpenseCategory, LucideIcon> = {
   GROCERIES: ShoppingBasket,
   VEGETABLES: Carrot,
   MILK: Milk,
+  SNACKS: Cookie,
   GAS: Flame,
   SALARY: Users,
   RENT: House,
@@ -122,7 +124,7 @@ function ExpenseForm({
   };
 
   return (
-    <Modal title={expense ? 'Edit expense' : 'Add expense'} onClose={busy ? () => undefined : onClose} width={560}>
+    <Modal title={expense ? 'Edit expense' : 'Add expense'} onClose={busy ? () => undefined : onClose} width={600}>
       <form
         className="stack"
         onSubmit={(e) => {

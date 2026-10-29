@@ -75,12 +75,13 @@ export const LIMITS = {
 export const BILL_EDIT_WINDOW_MINUTES = 30;
 
 /** What a branch spends money on (shown in the Expenses page and the daily report). */
-export const EXPENSE_CATEGORIES = ['GROCERIES', 'VEGETABLES', 'MILK', 'GAS', 'SALARY', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'OTHER'] as const;
+export const EXPENSE_CATEGORIES = ['GROCERIES', 'VEGETABLES', 'MILK', 'SNACKS', 'GAS', 'SALARY', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'OTHER'] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 export const EXPENSE_CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   GROCERIES: 'Groceries',
   VEGETABLES: 'Vegetables',
   MILK: 'Milk',
+  SNACKS: 'Snacks',
   GAS: 'Gas',
   SALARY: 'Salary',
   RENT: 'Rent',

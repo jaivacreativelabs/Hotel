@@ -2135,7 +2135,8 @@ html:has(.app) body {
 }
 .cat-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Two rows of five keep Add expense short on tablets; phones get three across (below). */
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 .cat-tile {
