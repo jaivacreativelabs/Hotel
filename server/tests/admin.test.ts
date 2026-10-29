@@ -16,7 +16,7 @@ describe('Super Admin – restaurants and branches', () => {
     expect(list.find((r) => r.name === 'Restaurant A')?.branchCount).toBe(3);
   });
 
-  it('creates a Main Branch automatically with the restaurant', async () => {
+  it('creates its one branch (same name, bill code from the initials) with the restaurant', async () => {
     const r = ok<{ id: string; branchCount: number; mainBranchId: string }>(
       await w.sa.post('/api/v1/admin/restaurants', { name: 'Restaurant C', phone: '+91 99999 00000', address: 'Madurai' }),
       201,
@@ -26,10 +26,20 @@ describe('Super Admin – restaurants and branches', () => {
       await w.sa.get(`/api/v1/admin/restaurants/${r.id}`),
     );
     expect(d.branches).toEqual([
-      expect.objectContaining({ id: r.mainBranchId, name: 'Main Branch', code: 'MAIN', phone: '+91 99999 00000', address: 'Madurai', status: 'ACTIVE' }),
+      expect.objectContaining({ id: r.mainBranchId, name: 'Restaurant C', code: 'RC', phone: '+91 99999 00000', address: 'Madurai', status: 'ACTIVE' }),
     ]);
     // Ready to use straight away: an admin can be assigned to it.
     ok(await w.sa.post('/api/v1/admin/users', { name: 'C Admin', email: 'c@test.local', password: 'Passw0rd!', branchIds: [r.mainBranchId] }), 201);
+  });
+
+  it('takes a given bill code, and keeps its one branch in step when the restaurant is edited', async () => {
+    const r = ok<{ id: string; mainBranchId: string }>(
+      await w.sa.post('/api/v1/admin/restaurants', { name: 'Keda Kari Virundhu', billCode: 'kkv2', address: 'Thisayanvillai' }),
+      201,
+    );
+    ok(await w.sa.patch(`/api/v1/admin/restaurants/${r.id}`, { name: 'Keda Kari', phone: '98765 43210', address: 'Tirunelveli' }));
+    const d = ok<{ branches: { name: string; code: string; phone: string; address: string }[] }>(await w.sa.get(`/api/v1/admin/restaurants/${r.id}`));
+    expect(d.branches).toEqual([expect.objectContaining({ name: 'Keda Kari', code: 'KKV2', phone: '98765 43210', address: 'Tirunelveli' })]);
   });
 
   it('rejects duplicate restaurant names (case-insensitive)', async () => {
@@ -145,7 +155,7 @@ describe('Super Admin – Restaurant Admin accounts', () => {
   });
 
   it('writes audit logs for administrative actions', async () => {
-    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(4); // A, B, C and the deleted one
+    expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_CREATED' })).toBe(5); // A, B, C, Keda Kari and the deleted one
     expect(await AuditLogModel.countDocuments({ action: 'RESTAURANT_ADMIN_REASSIGNED' })).toBe(1);
     const logs = ok<unknown[]>(await w.sa.get('/api/v1/admin/audit-logs?limit=5'));
     expect(logs).toHaveLength(5);

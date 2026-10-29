@@ -36,7 +36,7 @@ export function toKitchenTicketDTO(t: TicketLean): KitchenTicketDTO {
 }
 
 function assertKitchenOn(scope: BranchScope) {
-  if (!scope.branch.kitchenDisplay) throw new AppError(409, 'KITCHEN_OFF', 'The Kitchen Display is not switched on for this branch');
+  if (!scope.branch.kitchenDisplay) throw new AppError(409, 'KITCHEN_OFF', 'The Kitchen Display is not switched on for this restaurant');
 }
 
 /** What is on the bill but not yet sent to the kitchen. */

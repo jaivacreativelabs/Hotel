@@ -30,6 +30,7 @@ import { Loading, LogoMark } from '../components/ui';
 import { useRootClass } from '../hooks/useRootClass';
 import { ChangePasswordModal } from '../pages/auth/ChangePasswordModal';
 import { useAuth } from '../store/auth';
+import { placeName } from '@rb/shared';
 import { getSyncSummary, subscribeSyncSummary } from '../store/draftSync';
 import { useTopbar } from '../store/topbar';
 import { cx } from '../utils/format';
@@ -50,7 +51,7 @@ const RESTAURANT_NAV: NavItem[] = [
   { to: '/tables', label: 'Tables', icon: TableIcon },
   { to: '/expenses', label: 'Expenses', icon: Wallet },
 ];
-// Shown only when the Super Admin has switched the Kitchen Display on for the branch.
+// Shown only when the Super Admin has switched the Kitchen Display on for the restaurant.
 const KITCHEN_NAV: NavItem = { to: '/kitchen', label: 'Kitchen', icon: ChefHat };
 // Food the kitchen marked Ready (also needs the Kitchen Display).
 const WAITER_NAV: NavItem = { to: '/waiter', label: 'Ready to Serve', icon: ConciergeBell };
@@ -103,7 +104,7 @@ function UserMenu() {
     user.role === 'SUPER_ADMIN'
       ? 'Super Admin'
       : activeBranch
-        ? `${user.role === 'KITCHEN' ? 'Kitchen · ' : user.role === 'WAITER' ? 'Waiter · ' : ''}${activeBranch.restaurant.name} · ${activeBranch.name}`
+        ? `${user.role === 'KITCHEN' ? 'Kitchen · ' : user.role === 'WAITER' ? 'Waiter · ' : ''}${placeName(activeBranch.restaurant.name, activeBranch.name)}`
         : ROLE_LABEL[user.role];
   return (
     <div className="user-menu" ref={ref}>
@@ -123,7 +124,7 @@ function UserMenu() {
         <div className="menu-popover" role="menu">
           {branches.length > 1 && (
             <>
-              <div className="menu-label">Branch</div>
+              <div className="menu-label">Restaurant</div>
               {branches.map((b) => (
                 <button
                   key={b.id}
@@ -136,10 +137,7 @@ function UserMenu() {
                   }}
                 >
                   <Building2 size={18} />
-                  <span>
-                    {b.name}
-                    <small>{b.restaurant.name}</small>
-                  </span>
+                  <span>{placeName(b.restaurant.name, b.name)}</span>
                   {b.id === activeBranch?.id && <CircleCheck size={18} style={{ marginLeft: 'auto' }} />}
                 </button>
               ))}

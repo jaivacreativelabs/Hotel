@@ -1,4 +1,4 @@
-import { passwordSchema, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
+import { passwordSchema, placeName, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChefHat, CirclePlus, ConciergeBell, KeyRound, Pencil, Power, Store, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -21,21 +21,18 @@ function BranchAssignment({ value, onChange, restrictTo }: { value: string | nul
     .filter((r) => !restrictTo || r.id === restrictTo)
     .map((r) => ({ restaurant: r, branches: (branches.data ?? []).filter((b) => b.restaurantId === r.id) }))
     .filter((g) => g.branches.length > 0);
-  if (groups.length === 0) return <span className="field-hint">Create a branch first.</span>;
+  if (groups.length === 0) return <span className="field-hint">Create a restaurant first.</span>;
   return (
-    <div className="stack" style={{ gap: 10 }} role="radiogroup" aria-label="Branch">
-      {groups.map(({ restaurant, branches: list }) => (
-        <div key={restaurant.id} className="assign-group">
-          <h4>{restaurant.name}</h4>
-          {list.map((b) => (
-            <label key={b.id} className="check">
-              <input type="radio" name="admin-branch" checked={value === b.id} onChange={() => onChange(b.id)} />
-              {b.name} <span className="muted">({b.code})</span>
-              {b.status === 'INACTIVE' && <span className="badge badge-gray badge-sm">inactive</span>}
-            </label>
-          ))}
-        </div>
-      ))}
+    <div className="stack" style={{ gap: 6 }} role="radiogroup" aria-label="Restaurant">
+      {groups.flatMap(({ restaurant, branches: list }) =>
+        list.map((b) => (
+          <label key={b.id} className="check">
+            <input type="radio" name="admin-branch" checked={value === b.id} onChange={() => onChange(b.id)} />
+            {placeName(restaurant.name, b.name)}
+            {(restaurant.status === 'INACTIVE' || b.status === 'INACTIVE') && <span className="badge badge-gray badge-sm">inactive</span>}
+          </label>
+        )),
+      )}
     </div>
   );
 }
@@ -61,7 +58,7 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
     }
     if (!branchId)
       return setError(
-        role === 'KITCHEN' ? 'Choose the branch whose kitchen this login shows' : role === 'WAITER' ? 'Choose the branch this waiter works in' : 'Choose the branch this admin manages',
+        role === 'KITCHEN' ? 'Choose the restaurant whose kitchen this login shows' : role === 'WAITER' ? 'Choose the restaurant this waiter works in' : 'Choose the restaurant this admin manages',
       );
     const branchIds = [branchId];
     setBusy(true);
@@ -84,10 +81,10 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
       title={initial ? `Edit ${kind}` : 'Add Account'}
       subtitle={
         role === 'KITCHEN'
-          ? 'A Kitchen login only sees the Kitchen Display of one branch – no bills, sales or prices'
+          ? 'A Kitchen login only sees the Kitchen Display of one restaurant – no bills, sales or prices'
           : role === 'WAITER'
-            ? 'A Waiter login (one per waiter) only sees food the kitchen marked Ready in one branch, and marks it Served'
-            : 'A Restaurant Admin runs one branch only – billing, tables, menu and transactions of that branch'
+            ? 'A Waiter login (one per waiter) only sees food the kitchen marked Ready in one restaurant, and marks it Served'
+            : 'A Restaurant Admin runs one restaurant – its billing, tables, menu and transactions'
       }
       onClose={onClose}
     >
@@ -98,7 +95,7 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
             <div className="row" style={{ gap: 8 }} role="radiogroup" aria-label="Account type">
               {(
                 [
-                  ['RESTAURANT_ADMIN', 'Branch Admin', Store],
+                  ['RESTAURANT_ADMIN', 'Restaurant Admin', Store],
                   ['KITCHEN', 'Kitchen login', ChefHat],
                   ['WAITER', 'Waiter login', ConciergeBell],
                 ] as const
@@ -120,10 +117,10 @@ export function AdminForm({ initial, restrictTo, onClose }: { initial?: UserDTO;
           </Field>
         )}
         <div className="field">
-          <span className="field-label">Branch</span>
+          <span className="field-label">Restaurant</span>
           <BranchAssignment value={branchId} onChange={setBranchId} restrictTo={initial ? undefined : restrictTo} />
           {initial && initial.branchIds.length > 1 && (
-            <span className="field-hint">This admin had several branches. Saving keeps only the selected one.</span>
+            <span className="field-hint">This admin had several restaurants. Saving keeps only the selected one.</span>
           )}
         </div>
         {error && <div className="alert alert-danger">{error}</div>}
@@ -168,6 +165,7 @@ function ResetPasswordModal({ user, onClose }: { user: UserDTO; onClose: () => v
 }
 
 export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: BranchDTO[] }) {
+  const restaurantName = new Map((useRestaurants().data ?? []).map((r) => [r.id, r.name]));
   const queryClient = useQueryClient();
   const toast = useToast();
   const [editing, setEditing] = useState<UserDTO | null>(null);
@@ -195,7 +193,7 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
           <thead>
             <tr>
               <th>Name</th>
-              <th>Branches</th>
+              <th>Restaurant</th>
               <th>Status</th>
               <th>Last sign-in</th>
               <th className="right">Actions</th>
@@ -218,13 +216,16 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
                   )}
                   <span className="cell-sub">{u.email}</span>
                 </td>
-                <td data-label="Branch">
+                <td data-label="Restaurant">
                   <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-                    {u.branchIds.map((id) => (
-                      <span key={id} className="badge badge-primary badge-sm">
-                        {branchName.get(id)?.name ?? 'Unknown'}
-                      </span>
-                    ))}
+                    {u.branchIds.map((id) => {
+                      const b = branchName.get(id);
+                      return (
+                        <span key={id} className="badge badge-primary badge-sm">
+                          {b ? placeName(restaurantName.get(b.restaurantId) ?? '', b.name) : 'Unknown'}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
                 <td data-label="Status">
@@ -278,7 +279,7 @@ export function AdminsPage() {
       <div className="page">
         <PageHeader
           title="Admins &amp; Kitchen Logins"
-          subtitle="Branch Admins run billing; Kitchen logins only see the Kitchen Display"
+          subtitle="Restaurant Admins run billing; Kitchen and Waiter logins only see their own screen"
           actions={
             <button className="btn btn-primary btn-lg" onClick={() => setAdding(true)}>
               <CirclePlus /> Add Account

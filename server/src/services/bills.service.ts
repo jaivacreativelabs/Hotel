@@ -103,7 +103,7 @@ export async function priceLines(
 
   return requested.map((r) => {
     const item = itemById.get(String(r.menuItemId));
-    if (!item) throw badRequest('An item on this bill is not on this branch’s menu', 'ITEM_NOT_FOUND');
+    if (!item) throw badRequest('An item on this bill is not on this restaurant’s menu', 'ITEM_NOT_FOUND');
     const eff = effById.get(String(item._id))!;
     const cat = catById.get(String(eff.categoryId));
     const catEff = cat ? effectiveCategory(cat, scope.branch._id) : undefined; // the branch's own on/off and name

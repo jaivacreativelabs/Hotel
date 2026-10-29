@@ -307,7 +307,7 @@ function setOverride(
 /** Pins a dish to the top of this branch's menu and New Bill screen (any dish the branch sees). */
 export async function setItemPinned(scope: Scope, id: string, pinned: boolean) {
   const branchId = branchOf(scope);
-  if (!branchId) throw badRequest('Choose a branch to pin dishes');
+  if (!branchId) throw badRequest('Choose a restaurant to pin dishes');
   const item = await getVisibleItem(scope, id);
   setOverride(item, branchId, { pinned });
   await item.save();

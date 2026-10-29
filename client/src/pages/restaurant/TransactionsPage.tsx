@@ -1,4 +1,4 @@
-import { ORDER_TYPE_LABEL, PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
+import { ORDER_TYPE_LABEL, ownBranchName, PAYMENT_METHODS, placeName, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -172,10 +172,10 @@ function BillDetails({
         )}
         {showBranch && (
           <div>
-            <dt>Branch</dt>
+            <dt>Restaurant</dt>
             <dd>
               {tx.restaurantSnapshot.name}
-              <span className="cell-sub">{tx.branchSnapshot.name}</span>
+              {ownBranchName(tx.restaurantSnapshot.name, tx.branchSnapshot.name) && <span className="cell-sub">{tx.branchSnapshot.name}</span>}
             </dd>
           </div>
         )}
@@ -311,7 +311,7 @@ function TxCard({
         <div className="bill-card-sub">
           #{tx.billNumber} / {ORDER_TYPE_LABEL[tx.orderType]}
           {tx.groupName && ` · ${tx.groupName}`}
-          {showBranch && ` · ${tx.branchSnapshot.name}`}
+          {showBranch && ` · ${placeName(tx.restaurantSnapshot.name, tx.branchSnapshot.name)}`}
         </div>
       </div>
       <div className="bill-card-when">

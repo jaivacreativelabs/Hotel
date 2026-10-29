@@ -113,7 +113,7 @@ export function AdminMenuPage() {
       restaurantId={restaurantId}
       branchId={branchId}
       allRestaurantsLabel="All restaurants"
-      allBranchesLabel="Main menu (all branches)"
+      allBranchesLabel="Main menu (all locations)"
       onChange={(next) => go(next)}
     />
   );
@@ -147,7 +147,7 @@ function AllRestaurantsMenu({
   const search = usePageSearch('Search food items in all restaurants...');
   return (
     <div className="page">
-      <PageHeader title="Menu" subtitle="Every restaurant's main menu – choose one to add dishes, categories or branch prices" actions={selector} />
+      <PageHeader title="Menu" subtitle="Every restaurant's menu – choose one to add dishes, categories or prices" actions={selector} />
       {loading ? (
         <Loading />
       ) : !restaurants?.length ? (

@@ -5,6 +5,7 @@ import {
   type BranchCreateInput,
   type RecordStatus,
   type RestaurantCreateInput,
+  type RestaurantUpdateInput,
   type RestaurantSettingsInput,
   type UserCreateInput,
 } from '@rb/shared';
@@ -55,24 +56,35 @@ async function assertRestaurantNameFree(name: string, exceptId?: Types.ObjectId)
   if (clash) throw conflict('A restaurant with this name already exists', 'DUPLICATE');
 }
 
-export const MAIN_BRANCH = { name: 'Main Branch', code: 'MAIN' } as const;
+/** "Keda Kari Virundhu" → "KKV": the bill code of a new restaurant (MAIN when the name has no letters). */
+export function initialsCode(name: string): string {
+  const code = name
+    .split(/\s+/)
+    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0] ?? '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 10);
+  return code || 'MAIN';
+}
 
 /**
- * Creates a restaurant together with its "Main Branch" (code MAIN, contact details copied from
- * the restaurant), in one transaction, so a new restaurant is ready for tables, menu and
- * admins straight away. The branch can be renamed later.
+ * Creates a restaurant together with the one branch everything in it belongs to (its tables,
+ * bills, admins). The app shows no branches: that branch has the restaurant's name and contact
+ * details, and its code (the bill prefix) is given or taken from the name's initials.
  */
 export async function createRestaurant(actor: AuthUser, input: RestaurantCreateInput) {
   await assertRestaurantNameFree(input.name);
+  const { billCode, ...fields } = input;
+  const code = billCode || initialsCode(input.name);
   const { restaurant, branch } = await runInTransaction(async (session) => {
-    const [r] = await RestaurantModel.create([{ ...input, nameKey: nameKey(input.name) }], { session });
+    const [r] = await RestaurantModel.create([{ ...fields, nameKey: nameKey(input.name) }], { session });
     const [b] = await BranchModel.create(
       [
         {
           restaurantId: r._id,
-          name: MAIN_BRANCH.name,
-          nameKey: nameKey(MAIN_BRANCH.name),
-          code: MAIN_BRANCH.code,
+          name: r.name,
+          nameKey: nameKey(r.name),
+          code,
           address: input.address ?? '',
           phone: input.phone ?? '',
           email: input.email ?? '',
@@ -88,7 +100,7 @@ export async function createRestaurant(actor: AuthUser, input: RestaurantCreateI
         entityId: r._id,
         restaurantId: r._id,
         branchId: b._id,
-        summary: `Created restaurant "${r.name}" with its ${MAIN_BRANCH.name} (${MAIN_BRANCH.code})`,
+        summary: `Created restaurant "${r.name}" (bills ${code}0001…)`,
       },
       session,
     );
@@ -110,7 +122,7 @@ export async function getRestaurantDetail(id: string) {
   };
 }
 
-export async function updateRestaurant(actor: AuthUser, id: string, input: Partial<RestaurantCreateInput>) {
+export async function updateRestaurant(actor: AuthUser, id: string, input: RestaurantUpdateInput) {
   const r = await getRestaurantOr404(id);
   if (input.name && nameKey(input.name) !== r.nameKey) {
     await assertRestaurantNameFree(input.name, r._id);
@@ -118,6 +130,15 @@ export async function updateRestaurant(actor: AuthUser, id: string, input: Parti
   }
   r.set(input);
   await r.save();
+  // A restaurant with one branch is that branch: keep its name and contact details (printed on
+  // bills) the same as the restaurant's.
+  const branches = await BranchModel.find({ restaurantId: r._id }).select('_id').lean();
+  if (branches.length === 1) {
+    const keep: Record<string, string> = {};
+    if (input.name !== undefined) Object.assign(keep, { name: r.name, nameKey: r.nameKey });
+    for (const k of ['address', 'phone', 'email'] as const) if (input[k] !== undefined) keep[k] = input[k] ?? '';
+    if (Object.keys(keep).length) await BranchModel.updateOne({ _id: branches[0]._id }, { $set: keep });
+  }
   await audit(actor, {
     action: 'RESTAURANT_UPDATED',
     entityType: 'Restaurant',
@@ -231,10 +252,10 @@ export async function listBranches(restaurantId?: unknown) {
 async function assertBranchUnique(restaurantId: Types.ObjectId, name?: string, code?: string, exceptId?: Types.ObjectId) {
   const except = exceptId ? { _id: { $ne: exceptId } } : {};
   if (code && (await BranchModel.exists({ restaurantId, code, ...except }))) {
-    throw conflict(`Branch code "${code}" is already used in this restaurant`, 'DUPLICATE');
+    throw conflict(`Bill code "${code}" is already used in this restaurant`, 'DUPLICATE');
   }
   if (name && (await BranchModel.exists({ restaurantId, nameKey: nameKey(name), ...except }))) {
-    throw conflict(`A branch named "${name}" already exists in this restaurant`, 'DUPLICATE');
+    throw conflict(`A location named "${name}" already exists in this restaurant`, 'DUPLICATE');
   }
 }
 

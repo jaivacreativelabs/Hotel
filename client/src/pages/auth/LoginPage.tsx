@@ -51,7 +51,7 @@ export function LoginPage() {
       <section className="login-brand">
         <img src="/logo.jpeg" alt="Idly Tiffin House logo" />
         <h2>Tiffin House Billing</h2>
-        <p>Billing, tables, menu and sales for every branch – in one place.</p>
+        <p>Billing, tables, menu and sales for every restaurant – in one place.</p>
       </section>
       <section className="login-form-wrap">
         <form className="login-form" onSubmit={submit}>

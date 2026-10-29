@@ -46,8 +46,8 @@ function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }
   if (user.role !== 'SUPER_ADMIN' && !activeBranch) {
     return (
       <div className="center-screen">
-        <Empty icon={<Building2 />} title="No active branch assigned">
-          Your account is not assigned to an active branch. Please contact your Super Admin.
+        <Empty icon={<Building2 />} title="No active restaurant assigned">
+          Your account is not assigned to an active restaurant. Please contact your Super Admin.
         </Empty>
       </div>
     );

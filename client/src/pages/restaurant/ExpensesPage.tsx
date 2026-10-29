@@ -288,13 +288,13 @@ export function ExpensesView({
     <div className="page">
       <PageHeader
         title="Expenses"
-        subtitle={anyTime ? 'Money spent by each branch' : `Record what the branch spends. You can edit an entry any time, and delete it within ${EXPENSE_EDIT_WINDOW_MINUTES} minutes.`}
+        subtitle={anyTime ? 'Money spent by each restaurant' : `Record what the restaurant spends. You can edit an entry any time, and delete it within ${EXPENSE_EDIT_WINDOW_MINUTES} minutes.`}
         actions={
           <button
             className="btn btn-primary btn-lg"
             onClick={() => setForm({ expense: null })}
             disabled={!addBranchId}
-            title={addBranchId ? undefined : 'Choose a restaurant and branch first'}
+            title={addBranchId ? undefined : 'Choose a restaurant first'}
           >
             <Plus /> Add Expense
           </button>
@@ -356,7 +356,7 @@ export function ExpensesView({
           <Empty title="Could not load expenses">{(list.error as Error).message}</Empty>
         ) : data!.expenses.length === 0 ? (
           <Empty icon={<Wallet />} title="No expenses found">
-            {addBranchId ? 'Tap “Add Expense” to record money spent.' : 'Try another date range or branch.'}
+            {addBranchId ? 'Tap “Add Expense” to record money spent.' : 'Try another date range or restaurant.'}
           </Empty>
         ) : (
           <>
@@ -365,7 +365,7 @@ export function ExpensesView({
                 <thead>
                   <tr>
                     <th>Date</th>
-                    {showBranch && <th>Branch</th>}
+                    {showBranch && <th>Restaurant</th>}
                     <th>Spent on</th>
                     <th>Note</th>
                     <th>Paid by</th>

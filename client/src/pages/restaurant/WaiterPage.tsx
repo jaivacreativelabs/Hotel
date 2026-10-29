@@ -93,7 +93,7 @@ export function WaiterPage() {
     return (
       <div className="page">
         <Empty icon={<ConciergeBell />} title="The Waiter board needs the Kitchen Display">
-          Food shows here when the kitchen marks it Ready. The Super Admin can switch the Kitchen Display on under Restaurants › Branches.
+          Food shows here when the kitchen marks it Ready. The Super Admin can switch the Kitchen Display on under Restaurants › Bills &amp; Kitchen.
         </Empty>
       </div>
     );

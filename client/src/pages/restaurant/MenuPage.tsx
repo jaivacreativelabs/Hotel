@@ -487,7 +487,7 @@ function ItemPanel({
       {shared && (
         <div className="alert alert-info">
           <Info />
-          <span>This food comes from the main menu. Changes you make here are for this branch only.</span>
+          <span>This food comes from the main menu. Changes you make here are for this location only.</span>
         </div>
       )}
 

@@ -38,12 +38,12 @@ export async function loadBranchScope(user: AuthUser, rawBranchId: unknown): Pro
   const branch = await BranchModel.findById(branchId).lean<BranchLean>();
   const isBranchUser = user.role !== 'SUPER_ADMIN';
   // Branch accounts get 403 for unknown branches too, so ids cannot be probed.
-  if (!branch) throw isBranchUser ? forbidden('You are not assigned to this branch') : notFound('Branch');
-  if (!canAccessBranch(user, branch)) throw forbidden('You are not assigned to this branch');
+  if (!branch) throw isBranchUser ? forbidden('You are not assigned to this restaurant') : notFound('Branch');
+  if (!canAccessBranch(user, branch)) throw forbidden('You are not assigned to this restaurant');
   const restaurant = await RestaurantModel.findById(branch.restaurantId).lean<RestaurantLean>();
   if (!restaurant) throw notFound('Restaurant');
   if (isBranchUser && (branch.status !== 'ACTIVE' || restaurant.status !== 'ACTIVE')) {
-    throw forbidden('This branch or restaurant is inactive');
+    throw forbidden('This restaurant is inactive');
   }
   return { restaurant, branch };
 }
@@ -55,7 +55,7 @@ function branchIdFrom(req: Request): unknown {
 /** Requires a concrete branch (billing, tables). */
 export async function requireBranchScope(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const raw = branchIdFrom(req);
-  if (!raw) throw badRequest('Select a branch first', 'BRANCH_REQUIRED');
+  if (!raw) throw badRequest('Select a restaurant first', 'BRANCH_REQUIRED');
   req.scope = await loadBranchScope(currentUser(req), raw);
   next();
 }
@@ -71,7 +71,7 @@ export async function requireMenuScope(req: Request, _res: Response, next: NextF
     req.scope = await loadBranchScope(user, raw);
     return next();
   }
-  if (user.role !== 'SUPER_ADMIN') throw badRequest('Select a branch first', 'BRANCH_REQUIRED');
+  if (user.role !== 'SUPER_ADMIN') throw badRequest('Select a restaurant first', 'BRANCH_REQUIRED');
   const restaurantId = toObjectId(req.query.restaurantId, 'restaurant');
   const restaurant = await RestaurantModel.findById(restaurantId).lean<RestaurantLean>();
   if (!restaurant) throw notFound('Restaurant');
@@ -80,12 +80,12 @@ export async function requireMenuScope(req: Request, _res: Response, next: NextF
 }
 
 export function getScope(req: Request): Scope {
-  if (!req.scope) throw badRequest('Select a branch first', 'BRANCH_REQUIRED');
+  if (!req.scope) throw badRequest('Select a restaurant first', 'BRANCH_REQUIRED');
   return req.scope;
 }
 
 export function getBranchScope(req: Request): BranchScope {
   const scope = getScope(req);
-  if (!scope.branch) throw badRequest('Select a branch first', 'BRANCH_REQUIRED');
+  if (!scope.branch) throw badRequest('Select a restaurant first', 'BRANCH_REQUIRED');
   return scope as BranchScope;
 }

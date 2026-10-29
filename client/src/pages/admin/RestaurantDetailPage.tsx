@@ -61,11 +61,11 @@ function BranchForm({ restaurant, initial, onClose }: { restaurant: RestaurantDT
   };
 
   return (
-    <SidePanel title={initial ? 'Edit Branch' : 'Add Branch'} onClose={onClose}>
+    <SidePanel title={initial ? 'Edit Location' : 'Add Location'} onClose={onClose}>
       <form className="stack" style={{ gap: 18 }} onSubmit={submit}>
-        <Field label="Branch name">{(id) => <input id={id} className="input" value={form.name} onChange={set('name')} maxLength={100} required autoFocus />}</Field>
+        <Field label="Location name">{(id) => <input id={id} className="input" value={form.name} onChange={set('name')} maxLength={100} required autoFocus />}</Field>
         <Field
-          label="Branch code"
+          label="Bill code"
           hint={
             code
               ? `Short code, letters and digits. Bills are numbered ${formatBillNumber(code, 1)}, ${formatBillNumber(code, 2)} …`
@@ -225,6 +225,53 @@ function KitchenSwitch({ branch }: { branch: BranchDTO }) {
 }
 
 /** Deleting is for good, so the restaurant's name has to be typed first. */
+/** A restaurant run as one branch (all new ones): its bill code and Kitchen Display, with no branch wording. */
+function BillsAndKitchen({ branch }: { branch: BranchDTO }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [code, setCode] = useState(branch.code);
+  const [busy, setBusy] = useState(false);
+  const clean = code.trim().toUpperCase();
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.patch(`/admin/branches/${branch.id}`, { code: clean }, { branchId: null });
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success('Bill code saved');
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card card-pad stack" style={{ gap: 22, maxWidth: 560 }}>
+      <form className="field" onSubmit={save}>
+        <label className="field-label" htmlFor="bill-code">
+          Bill code
+        </label>
+        <div className="row" style={{ gap: 8 }}>
+          <input id="bill-code" className="input" value={code} onChange={(e) => setCode(e.target.value)} maxLength={10} required style={{ textTransform: 'uppercase', maxWidth: 160 }} />
+          <button className="btn btn-primary" disabled={busy || !clean || clean === branch.code}>
+            {busy ? <Spinner /> : null} Save
+          </button>
+        </div>
+        <span className="field-hint">
+          Bills are numbered {formatBillNumber(clean || branch.code, 1)}, {formatBillNumber(clean || branch.code, 2)} … A new code starts again at 0001.
+        </span>
+      </form>
+      <div className="field">
+        <span className="field-label">Kitchen Display</span>
+        <KitchenSwitch branch={branch} />
+        <span className="field-hint">Orders go to the Kitchen screen, and food the kitchen marks Ready to the Waiter screen.</span>
+      </div>
+    </div>
+  );
+}
+
 function DeleteRestaurantDialog({ restaurant, branchCount, onClose }: { restaurant: RestaurantDTO; branchCount: number; onClose: () => void }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -254,7 +301,7 @@ function DeleteRestaurantDialog({ restaurant, branchCount, onClose }: { restaura
         <div className="alert alert-danger">
           <Trash2 />
           <span>
-            This deletes the restaurant for good, with its {branchCount} branch{branchCount === 1 ? '' : 'es'}, menu, tables, all bills and
+            This deletes the restaurant for good{branchCount > 1 ? `, with its ${branchCount} locations` : ''}, with its menu, tables, all bills and
             expenses, and its Restaurant Admin logins. It cannot be undone. To keep the records, use Deactivate instead.
           </span>
         </div>
@@ -348,7 +395,7 @@ export function RestaurantDetailPage() {
         <div className="tabs" role="tablist">
           {(
             [
-              ['branches', `Branches (${branches.length})`],
+              ['branches', branches.length > 1 ? `Locations (${branches.length})` : 'Bills & Kitchen'],
               ['admins', `Admins (${admins.length})`],
               ['settings', 'Taxes & Receipt'],
             ] as const
@@ -359,26 +406,24 @@ export function RestaurantDetailPage() {
           ))}
         </div>
 
-        {tab === 'branches' && (
+        {tab === 'branches' && branches.length === 1 && <BillsAndKitchen key={branches[0].id} branch={branches[0]} />}
+        {/* Older restaurants with several locations keep their list (no new ones are added). */}
+        {tab === 'branches' && branches.length !== 1 && (
           <div className="card">
             <div className="row card-pad" style={{ paddingBottom: 0 }}>
-              <span className="card-title">Branches</span>
-              <span className="spacer" />
-              <button className="btn btn-primary btn-sm" onClick={() => setPanel({ kind: 'branch' })}>
-                <CirclePlus size={16} /> Add Branch
-              </button>
+              <span className="card-title">Locations</span>
             </div>
             {branches.length === 0 ? (
-              <Empty icon={<Building2 />} title="No branches yet">
-                Add a branch, then create a Restaurant Admin for it.
+              <Empty icon={<Building2 />} title="Nothing set up yet">
+                This restaurant has no location for its bills.
               </Empty>
             ) : (
               <div className="data-table-wrap" style={{ marginTop: 14 }}>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Branch</th>
-                      <th>Code</th>
+                      <th>Location</th>
+                      <th>Bill code</th>
                       <th>Contact</th>
                       <th>Status</th>
                       <th>Kitchen Display</th>
@@ -404,7 +449,7 @@ export function RestaurantDetailPage() {
                           <KitchenSwitch branch={b} />
                         </td>
                         <td className="right nowrap">
-                          <button className="icon-btn plain" onClick={() => navigate(`/admin/menu?restaurantId=${restaurant.id}&branchId=${b.id}`)} title="Branch menu" aria-label={`Menu of ${b.name}`}>
+                          <button className="icon-btn plain" onClick={() => navigate(`/admin/menu?restaurantId=${restaurant.id}&branchId=${b.id}`)} title="Location menu" aria-label={`Menu of ${b.name}`}>
                             <Utensils />
                           </button>
                           <button className="icon-btn plain" onClick={() => setPanel({ kind: 'branch', branch: b })} title="Edit" aria-label={`Edit ${b.name}`}>

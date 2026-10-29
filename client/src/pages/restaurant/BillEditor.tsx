@@ -1,4 +1,4 @@
-import { BILL_EDIT_WINDOW_MINUTES, calculateBill, type PaymentPart, type RestaurantDTO, type TaxSettings, type TransactionDTO } from '@rb/shared';
+import { BILL_EDIT_WINDOW_MINUTES, calculateBill, placeName, type PaymentPart, type RestaurantDTO, type TaxSettings, type TransactionDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronUp, Clock, Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -132,7 +132,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
         title={`Edit Bill #${tx.billNumber}`}
         subtitle={
           anyTime ? (
-            `${tx.branchSnapshot.name} · billed ${formatDateTime(tx.finalizedAt)}`
+            `${placeName(tx.restaurantSnapshot.name, tx.branchSnapshot.name)} · billed ${formatDateTime(tx.finalizedAt)}`
           ) : (
             <span className={minutesLeft <= 5 ? 'danger-text' : undefined}>
               <Clock size={13} /> {minutesLeft > 0 ? `${minutesLeft} min left to edit` : `The ${BILL_EDIT_WINDOW_MINUTES}-minute edit time is over`}

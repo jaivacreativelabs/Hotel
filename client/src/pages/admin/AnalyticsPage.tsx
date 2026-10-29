@@ -1,4 +1,4 @@
-import type { AnalyticsOverviewDTO } from '@rb/shared';
+import { placeName, type AnalyticsOverviewDTO } from '@rb/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Ban, IndianRupee, Receipt, ReceiptText, TrendingUp, Undo2 } from 'lucide-react';
 import { useState } from 'react';
@@ -165,12 +165,15 @@ export function AnalyticsPage() {
               </div>
               <HBarList rows={o.byRestaurant.map((r) => ({ key: r.key, label: r.name, value: r.sales, sub: `${r.bills} bills` }))} />
             </div>
-            <div className="card chart-card">
-              <div className="chart-head">
-                <span className="card-title">Branch-wise sales</span>
+            {/* Only when a restaurant has several locations; otherwise it repeats the chart above. */}
+            {o.byBranch.length > o.byRestaurant.length && (
+              <div className="card chart-card">
+                <div className="chart-head">
+                  <span className="card-title">Sales by location</span>
+                </div>
+                <HBarList rows={o.byBranch.slice(0, 12).map((b) => ({ key: b.key, label: placeName(b.restaurantName, b.name), value: b.sales, sub: `${b.bills} bills` }))} />
               </div>
-              <HBarList rows={o.byBranch.slice(0, 12).map((b) => ({ key: b.key, label: `${b.name} · ${b.restaurantName}`, value: b.sales, sub: `${b.bills} bills` }))} />
-            </div>
+            )}
           </div>
         </>
       )}

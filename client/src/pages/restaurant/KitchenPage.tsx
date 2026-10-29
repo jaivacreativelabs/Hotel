@@ -118,8 +118,8 @@ export function KitchenPage() {
   if (!activeBranch!.kitchenDisplay) {
     return (
       <div className="page">
-        <Empty icon={<ChefHat />} title="Kitchen Display is off for this branch">
-          The Super Admin can switch it on under Restaurants › Branches.
+        <Empty icon={<ChefHat />} title="Kitchen Display is off for this restaurant">
+          The Super Admin can switch it on under Restaurants › Bills &amp; Kitchen.
         </Empty>
       </div>
     );

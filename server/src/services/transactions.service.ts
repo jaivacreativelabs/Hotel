@@ -32,7 +32,7 @@ export function transactionFilter(user: AuthUser, q: Partial<TransactionQuery>):
   if (user.role !== 'SUPER_ADMIN') {
     if (q.branchId) {
       const id = toObjectId(q.branchId, 'branch');
-      if (!user.branchIds.some((b) => b.equals(id))) throw forbidden('You are not assigned to this branch');
+      if (!user.branchIds.some((b) => b.equals(id))) throw forbidden('You are not assigned to this restaurant');
       filter.branchId = id;
     } else {
       filter.branchId = { $in: user.branchIds };

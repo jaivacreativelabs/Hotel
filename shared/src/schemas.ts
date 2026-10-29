@@ -59,14 +59,24 @@ export const changePasswordSchema = z.strictObject({
 // ---------- Restaurants / branches ----------
 export const statusSchema = z.strictObject({ status: z.enum(RECORD_STATUSES) });
 
-export const restaurantCreateSchema = z.strictObject({
+const restaurantFields = {
   name: name(100),
   phone: optionalPhone,
   email: optionalEmail,
   address: optionalText(300),
   gstin: optionalText(20),
+};
+export const restaurantCreateSchema = z.strictObject({
+  ...restaurantFields,
+  /** Bills are numbered with it (KKV0001 …); left out → the name's initials */
+  billCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{1,10}$/, 'Letters and digits only, max 10')
+    .optional(),
 });
-export const restaurantUpdateSchema = restaurantCreateSchema.partial();
+export const restaurantUpdateSchema = z.strictObject(restaurantFields).partial();
 
 export const taxRateSchema = z.strictObject({
   name: name(30),
@@ -373,6 +383,7 @@ export const auditQuerySchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RestaurantCreateInput = z.infer<typeof restaurantCreateSchema>;
+export type RestaurantUpdateInput = z.infer<typeof restaurantUpdateSchema>;
 export type RestaurantSettingsInput = z.infer<typeof restaurantSettingsSchema>;
 export type BranchCreateInput = z.infer<typeof branchCreateSchema>;
 export type UserCreateInput = z.infer<typeof userCreateSchema>;

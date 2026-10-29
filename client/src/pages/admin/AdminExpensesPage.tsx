@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ExpensesView } from '../restaurant/ExpensesPage';
-import { ScopeSelect } from './adminShared';
+import { ScopeSelect, useAllBranches } from './adminShared';
 
 export function AdminExpensesPage() {
   const [params, setParams] = useSearchParams();
   const restaurantId = params.get('restaurantId') ?? '';
   const branchId = params.get('branchId') ?? '';
+  // A restaurant with one branch needs no location choice to add an expense.
+  const only = (useAllBranches().data ?? []).filter((b) => b.restaurantId === restaurantId);
+  const addTo = branchId || (only.length === 1 ? only[0].id : '');
   const scope = useMemo(
     () => ({ ...(restaurantId && { restaurantId }), ...(branchId && { branchId }) }),
     [restaurantId, branchId],
@@ -14,8 +17,8 @@ export function AdminExpensesPage() {
   return (
     <ExpensesView
       scope={scope}
-      // The Super Admin adds an expense for the branch picked in the filter.
-      addBranchId={branchId || null}
+      // The Super Admin adds an expense for the restaurant picked in the filter.
+      addBranchId={addTo || null}
       showBranch
       scopeFilters={
         <ScopeSelect

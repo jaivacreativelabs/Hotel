@@ -5,6 +5,7 @@
  */
 import type { Types } from 'mongoose';
 import {
+  placeName,
   EXPENSE_CATEGORY_LABEL,
   EXPENSE_EDIT_WINDOW_MINUTES,
   formatMoney,
@@ -17,7 +18,7 @@ import {
 import { env } from '../config/env.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchScope } from '../middleware/scope.js';
-import { BranchModel, ExpenseModel, type Expense } from '../models/index.js';
+import { BranchModel, ExpenseModel, RestaurantModel, type Expense } from '../models/index.js';
 import { todayIn } from '../utils/dates.js';
 import { badRequest, forbidden, notFound } from '../utils/errors.js';
 import { escapeRegex, toObjectId } from '../utils/validate.js';
@@ -51,11 +52,16 @@ function toExpenseDTO(e: ExpenseLean, branchName: string): ExpenseDTO {
   };
 }
 
+/** Where each expense was spent, as the app names it: the restaurant (plus its location when it has several). */
 async function branchNames(ids: Types.ObjectId[]): Promise<Map<string, string>> {
   const rows = await BranchModel.find({ _id: { $in: [...new Set(ids.map(String))] } })
+    .select('name restaurantId')
+    .lean<{ _id: Types.ObjectId; name: string; restaurantId: Types.ObjectId }[]>();
+  const restaurants = await RestaurantModel.find({ _id: { $in: rows.map((b) => b.restaurantId) } })
     .select('name')
     .lean<{ _id: Types.ObjectId; name: string }[]>();
-  return new Map(rows.map((b) => [String(b._id), b.name]));
+  const restaurantName = new Map(restaurants.map((r) => [String(r._id), r.name]));
+  return new Map(rows.map((b) => [String(b._id), placeName(restaurantName.get(String(b.restaurantId)) ?? '', b.name)]));
 }
 
 /** Filter limited to what the caller may see: Restaurant Admins only ever get their own branch. */
@@ -64,7 +70,7 @@ function expenseFilter(user: AuthUser, q: Partial<ExpenseQuery>): Record<string,
   if (user.role !== 'SUPER_ADMIN') {
     if (q.branchId) {
       const id = toObjectId(q.branchId, 'branch');
-      if (!user.branchIds.some((b) => b.equals(id))) throw forbidden('You are not assigned to this branch');
+      if (!user.branchIds.some((b) => b.equals(id))) throw forbidden('You are not assigned to this restaurant');
       filter.branchId = id;
     } else {
       filter.branchId = { $in: user.branchIds };

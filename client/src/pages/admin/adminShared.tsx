@@ -17,13 +17,16 @@ export function useAllBranches() {
   return useQuery({ queryKey: adminKeys.branches, queryFn: () => api.get<BranchDTO[]>('/admin/branches', { branchId: null }) });
 }
 
-/** Restaurant + branch selectors used by Super Admin menu, transactions, reports and analytics. */
+/**
+ * Restaurant selector used by Super Admin menu, transactions, reports and analytics. A second
+ * "location" selector shows only for an older restaurant with several branches.
+ */
 export function ScopeSelect({
   restaurantId,
   branchId,
   onChange,
   allRestaurantsLabel = 'All restaurants',
-  allBranchesLabel = 'All branches',
+  allBranchesLabel = 'All locations',
   requireRestaurant = false,
 }: {
   restaurantId: string;
@@ -53,21 +56,23 @@ export function ScopeSelect({
           </option>
         ))}
       </select>
-      <select
-        className="select select-sm"
-        style={{ width: 220 }}
-        value={branchId}
-        disabled={!restaurantId}
-        onChange={(e) => onChange({ restaurantId, branchId: e.target.value })}
-        aria-label="Branch"
-      >
-        <option value="">{allBranchesLabel}</option>
-        {branchOptions.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name} ({b.code}){b.status === 'INACTIVE' ? ' – inactive' : ''}
-          </option>
-        ))}
-      </select>
+      {branchOptions.length > 1 && (
+        <select
+          className="select select-sm"
+          style={{ width: 220 }}
+          value={branchId}
+          disabled={!restaurantId}
+          onChange={(e) => onChange({ restaurantId, branchId: e.target.value })}
+          aria-label="Location"
+        >
+          <option value="">{allBranchesLabel}</option>
+          {branchOptions.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name} ({b.code}){b.status === 'INACTIVE' ? ' – inactive' : ''}
+            </option>
+          ))}
+        </select>
+      )}
     </>
   );
 }

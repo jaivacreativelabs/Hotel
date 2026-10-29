@@ -1,6 +1,6 @@
-import type { AnalyticsOverviewDTO } from '@rb/shared';
+import { placeName, type AnalyticsOverviewDTO } from '@rb/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Building2, CalendarDays, CalendarRange, Download, FileSpreadsheet, Store } from 'lucide-react';
+import { CalendarDays, CalendarRange, Download, FileSpreadsheet, Store } from 'lucide-react';
 import { useState, type ComponentType } from 'react';
 import { Loading, PageHeader, Spinner } from '../../components/ui';
 import { api, downloadFile } from '../../services/api';
@@ -22,7 +22,6 @@ const REPORTS: Report[] = [
   { id: 'daily', title: 'Daily sales', description: 'Completed bills and sales per day', icon: CalendarDays, path: '/admin/reports/sales.csv', extra: { granularity: 'day' } },
   { id: 'monthly', title: 'Monthly sales', description: 'Completed bills and sales per month', icon: CalendarRange, path: '/admin/reports/sales.csv', extra: { granularity: 'month' } },
   { id: 'restaurants', title: 'Restaurant-wise', description: 'Sales and average bill per restaurant', icon: Store, path: '/admin/reports/restaurants.csv' },
-  { id: 'branches', title: 'Branch-wise', description: 'Sales and average bill per branch', icon: Building2, path: '/admin/reports/branches.csv' },
 ];
 
 export function ReportsPage() {
@@ -68,7 +67,7 @@ export function ReportsPage() {
 
       <div className="card">
         <div className="card-pad row">
-          <span className="card-title">Branch summary</span>
+          <span className="card-title">Restaurant summary</span>
           {overview.data && (
             <span className="muted">
               {formatDay(overview.data.range.from)} – {formatDay(overview.data.range.to)}
@@ -83,7 +82,6 @@ export function ReportsPage() {
               <thead>
                 <tr>
                   <th>Restaurant</th>
-                  <th>Branch</th>
                   <th className="right">Completed bills</th>
                   <th className="right">Sales</th>
                   <th className="right">Average bill</th>
@@ -99,8 +97,7 @@ export function ReportsPage() {
                 ) : (
                   overview.data.byBranch.map((b) => (
                     <tr key={b.key}>
-                      <td>{b.restaurantName}</td>
-                      <td data-label="Branch">{b.name}</td>
+                      <td>{placeName(b.restaurantName, b.name)}</td>
                       <td data-label="Bills" className="right num">{b.bills}</td>
                       <td data-label="Sales" className="right num">{formatMoney(b.sales)}</td>
                       <td data-label="Average bill" className="right num">{formatMoney(b.bills ? Math.round(b.sales / b.bills) : 0)}</td>

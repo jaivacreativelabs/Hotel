@@ -1,4 +1,4 @@
-import type { RestaurantDTO } from '@rb/shared';
+import { formatBillNumber, type RestaurantDTO } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { Building2, CirclePlus, MapPin, Phone, Store } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -10,6 +10,15 @@ import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { adminKeys, useRestaurants } from './adminShared';
 
+/** "Keda Kari Virundhu" → "KKV": the suggested bill code of a new restaurant. */
+const suggestCode = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((w) => w.replace(/[^A-Za-z0-9]/g, '')[0] ?? '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 10);
+
 export function RestaurantForm({ initial, onClose, onSaved }: { initial?: RestaurantDTO; onClose: () => void; onSaved: (r: RestaurantDTO) => void }) {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -19,6 +28,9 @@ export function RestaurantForm({ initial, onClose, onSaved }: { initial?: Restau
     address: initial?.address ?? '',
     gstin: initial?.gstin ?? '',
   });
+  // New restaurants: the bill code (KKV0001 …), suggested from the name until typed.
+  const [billCode, setBillCode] = useState<string | null>(null);
+  const code = (billCode ?? suggestCode(form.name)).trim().toUpperCase();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
@@ -30,8 +42,8 @@ export function RestaurantForm({ initial, onClose, onSaved }: { initial?: Restau
     try {
       const saved = initial
         ? await api.patch<RestaurantDTO>(`/admin/restaurants/${initial.id}`, form, { branchId: null })
-        : await api.post<RestaurantDTO>('/admin/restaurants', form, { branchId: null });
-      toast.success(initial ? 'Restaurant updated' : `Restaurant “${saved.name}” created with its Main Branch`);
+        : await api.post<RestaurantDTO>('/admin/restaurants', { ...form, ...(code && { billCode: code }) }, { branchId: null });
+      toast.success(initial ? 'Restaurant updated' : `Restaurant “${saved.name}” created`);
       onSaved(saved);
     } catch (err) {
       setError(errorMessage(err));
@@ -51,13 +63,11 @@ export function RestaurantForm({ initial, onClose, onSaved }: { initial?: Restau
           {(id) => <input id={id} className="input" value={form.gstin} onChange={set('gstin')} maxLength={20} />}
         </Field>
         {!initial && (
-          <div className="alert alert-info">
-            <Building2 />
-            <span>
-              A <strong>Main Branch</strong> is created automatically with these contact details. You can rename it or add more
-              branches afterwards.
-            </span>
-          </div>
+          <Field label="Bill code" hint={code ? `Bills are numbered ${formatBillNumber(code, 1)}, ${formatBillNumber(code, 2)} …` : 'Short code, letters and digits (e.g. KKV)'}>
+            {(id) => (
+              <input id={id} className="input" value={code} onChange={(e) => setBillCode(e.target.value)} maxLength={10} style={{ textTransform: 'uppercase' }} />
+            )}
+          </Field>
         )}
         {error && <div className="alert alert-danger">{error}</div>}
         <button className="btn btn-primary btn-lg btn-block" disabled={busy}>
@@ -84,7 +94,7 @@ export function RestaurantsPage() {
       <div className="page">
         <PageHeader
           title="Restaurants"
-          subtitle="Create restaurants, branches and Restaurant Admin accounts"
+          subtitle="Create restaurants and their admin accounts"
           actions={
             <button className="btn btn-primary btn-lg" onClick={() => setAdding(true)}>
               <CirclePlus /> Add Restaurant
@@ -122,10 +132,15 @@ export function RestaurantsPage() {
                   </div>
                 </div>
                 <div className="row muted" style={{ fontSize: 'var(--font-size-sm)' }}>
-                  <Building2 size={16} /> {r.branchCount ?? 0} branch{r.branchCount === 1 ? '' : 'es'}
+                  {/* Only an older restaurant with several locations shows a count. */}
+                  {(r.branchCount ?? 0) > 1 && (
+                    <>
+                      <Building2 size={16} /> {r.branchCount} locations
+                    </>
+                  )}
                   {r.phone && (
                     <>
-                      <Phone size={16} style={{ marginLeft: 10 }} /> {r.phone}
+                      <Phone size={16} style={{ marginLeft: (r.branchCount ?? 0) > 1 ? 10 : 0 }} /> {r.phone}
                     </>
                   )}
                 </div>
