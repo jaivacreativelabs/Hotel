@@ -1419,6 +1419,14 @@ html.app-open body {
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
+}
+.bill-add-sale {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sync-status + .bill-add-sale {
+  margin-left: 0;
 }
 .sync-status {
   margin-left: auto;

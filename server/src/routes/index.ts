@@ -151,6 +151,7 @@ export function createApiRouter(): Router {
   billsRouter.get('/counter', ops.counterDraft);
   billsRouter.get('/', ops.tableDrafts);
   billsRouter.post('/table-groups', ops.createGroup);
+  billsRouter.post('/manual-sale', ops.manualSale);
   billsRouter.get('/:id', ops.getDraft);
   billsRouter.put('/:id', ops.updateDraft);
   billsRouter.post('/:id/finalize', ops.finalizeDraft);

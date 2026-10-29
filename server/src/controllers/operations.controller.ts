@@ -6,6 +6,7 @@ import {
   expenseQuerySchema,
   expenseSchema,
   finalizeSchema,
+  manualSaleSchema,
   kitchenAdvanceSchema,
   kitchenPrioritySchema,
   mergeGroupSchema,
@@ -65,6 +66,10 @@ export const updateDraft = async (req: Request, res: Response) => {
 };
 export const finalizeDraft = async (req: Request, res: Response) => {
   const result = await bills.finalizeDraft(currentUser(req), getBranchScope(req), id(req), parse(finalizeSchema, req.body));
+  res.status(result.replayed ? 200 : 201).json({ data: result });
+};
+export const manualSale = async (req: Request, res: Response) => {
+  const result = await bills.createManualSale(currentUser(req), getBranchScope(req), parse(manualSaleSchema, req.body));
   res.status(result.replayed ? 200 : 201).json({ data: result });
 };
 export const deleteDraft = async (req: Request, res: Response) => {

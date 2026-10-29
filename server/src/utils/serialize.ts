@@ -225,6 +225,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
     tableLabel: t.tableLabel ?? '',
     type: t.type,
     orderType: t.orderType ?? (t.type === 'TABLE' ? 'DINE_IN' : 'TAKEAWAY'),
+    manual: t.manual ?? false,
     groupName: t.groupName ?? '',
     guestCount: t.guestCount ?? 0,
     customerName: t.customerName ?? '',
@@ -274,8 +275,8 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
 }
 
 /** End of the edit window for a paid bill, or null when it can no longer be edited. */
-export function editableUntil(t: Pick<Transaction, 'status' | 'finalizedAt'>, now = Date.now()): string | null {
-  if (t.status !== 'COMPLETED' || !t.finalizedAt) return null;
+export function editableUntil(t: Pick<Transaction, 'status' | 'finalizedAt' | 'manual'>, now = Date.now()): string | null {
+  if (t.status !== 'COMPLETED' || !t.finalizedAt || t.manual) return null;
   const until = new Date(t.finalizedAt).getTime() + BILL_EDIT_WINDOW_MINUTES * 60_000;
   return until > now ? new Date(until).toISOString() : null;
 }

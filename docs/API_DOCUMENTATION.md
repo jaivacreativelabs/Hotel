@@ -145,6 +145,7 @@ transactions count as revenue.
 | POST | `/bills/table-groups` | `{ tableId, guestCount, groupName? }` → new group draft named `groupName` or "Group N" (`409 SEATS_UNAVAILABLE` if it does not fit, `409 DUPLICATE` if the name is already seated at that table) |
 | GET | `/bills/:id` | draft (any status) |
 | PUT | `/bills/:id` | `{ version, items: [{ menuItemId, quantity }], customerName?, discount?, guestCount?, groupTag? }` – the server looks up names/prices, recomputes totals and returns the new version; `409 CONFLICT` on a stale version |
+| POST | `/bills/manual-sale` | `{ amount, paymentMethod, customerName?, idempotencyKey }` → `{ transaction }`. New Bill › Add Sale: a bill of just an amount (paise, ≥ ₹1) – one untaxed "Manual sale" line, `manual: true`, numbered like other bills, voidable but not editable |
 | POST | `/bills/:id/finalize` | `{ version, paymentMethod, orderType?, idempotencyKey }` → `{ transaction }`. `orderType` (`DINE_IN` / `TAKEAWAY`) is asked on New Bill; table bills are always `DINE_IN`, and a counter bill without it is `TAKEAWAY`. Repeating the call with the same key returns the same transaction |
 | DELETE | `/bills/:id?version=` | marks the draft `DELETED` (audit logged); never touches transactions |
 

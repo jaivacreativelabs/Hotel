@@ -149,6 +149,7 @@ export async function exportTransactionsCsv(user: AuthUser, q: Partial<Transacti
 export async function editTransaction(user: AuthUser, id: string, input: TransactionEditInput): Promise<TransactionDTO> {
   const tx = await getAccessible(user, id);
   if (tx.status !== 'COMPLETED') throw conflict(`Bill ${tx.billNumber} is ${tx.status.toLowerCase()} and cannot be edited`, 'INVALID_STATUS');
+  if (tx.manual) throw conflict(`Bill ${tx.billNumber} is a manual sale – void it and add the sale again`, 'MANUAL_SALE');
   if (user.role !== 'SUPER_ADMIN' && !editableUntil(tx)) {
     throw conflict(`Bills can be edited only within ${BILL_EDIT_WINDOW_MINUTES} minutes of billing. Use Void or Refund instead.`, 'EDIT_WINDOW_CLOSED');
   }

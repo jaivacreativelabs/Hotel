@@ -30,6 +30,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodImage } from '../../components/FoodImage';
+import { ManualSaleModal } from '../../components/ManualSale';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
 import { PaymentButtons, printReceipt } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
@@ -63,7 +64,8 @@ function OrderTypeButtons({ value, onChange, disabled }: { value: OrderType | nu
   );
 }
 
-function SyncStatus({ state }: { state: DraftSyncState }) {
+/** `compact`: only the icon while all is well (room for Add Sale); a problem always shows its words. */
+function SyncStatus({ state, compact }: { state: DraftSyncState; compact?: boolean }) {
   const map: Partial<Record<DraftSyncState['status'], [string, string]>> = {
     saved: ['saved', 'Saved'],
     pending: ['', 'Saving…'],
@@ -73,9 +75,9 @@ function SyncStatus({ state }: { state: DraftSyncState }) {
   const entry = map[state.status];
   if (!entry) return null;
   return (
-    <span className={cx('sync-status', entry[0])} role="status">
+    <span className={cx('sync-status', entry[0])} role="status" title={entry[1]} aria-label={entry[1]}>
       {state.status === 'saved' ? <CircleCheck /> : state.status === 'error' ? <CloudOff /> : <Spinner />}
-      {entry[1]}
+      {(!compact || state.status === 'error') && entry[1]}
     </span>
   );
 }
@@ -123,6 +125,7 @@ export function BillingView({
   const [orderType, setOrderType] = useState<OrderType | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [manualSale, setManualSale] = useState(false);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
   const [billOpen, setBillOpen] = useState(false);
   useRootClass('has-bill-bar');
@@ -263,7 +266,12 @@ export function BillingView({
           )}
           <div className="bill-title">
             Customer Name
-            <SyncStatus state={state} />
+            <SyncStatus state={state} compact={!tableDraftId} />
+            {!tableDraftId && (
+              <button type="button" className="btn btn-soft btn-sm bill-add-sale" onClick={() => setManualSale(true)} title="A sale of just an amount, without choosing dishes">
+                Add Sale
+              </button>
+            )}
             <button type="button" className="icon-btn close-red bill-close-mobile" onClick={() => setBillOpen(false)} aria-label="Close bill" title="Back to food">
               <X />
             </button>
@@ -413,6 +421,15 @@ export function BillingView({
           onConfirm={() => {
             mutate((b) => ({ ...b, items: [], discount: null }));
             setConfirmClear(false);
+          }}
+        />
+      )}
+      {manualSale && (
+        <ManualSaleModal
+          onClose={() => setManualSale(false)}
+          onDone={() => {
+            setManualSale(false);
+            void queryClient.invalidateQueries({ queryKey: ['transactions'] });
           }}
         />
       )}

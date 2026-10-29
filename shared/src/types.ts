@@ -294,6 +294,8 @@ export interface TransactionDTO {
   tableLabel: string;
   type: DraftType;
   orderType: OrderType;
+  /** entered as just an amount (Add Sale): one "Manual sale" line, cannot be edited */
+  manual: boolean;
   groupName: string;
   guestCount: number;
   customerName: string;

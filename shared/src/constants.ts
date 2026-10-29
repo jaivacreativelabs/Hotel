@@ -45,6 +45,10 @@ export type DraftType = (typeof DRAFT_TYPES)[number];
 /** How a bill's food is served. Table bills are always DINE_IN; New Bill asks. */
 export const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY'] as const;
 export type OrderType = (typeof ORDER_TYPES)[number];
+/** A sale entered as just an amount (New Bill › Add Sale): one line with this name, no tax. */
+export const MANUAL_SALE_NAME = 'Manual sale';
+/** Shared by every manual-sale line, so reports add them up as one "item". */
+export const MANUAL_SALE_ITEM_ID = '000000000000000000000000';
 export const ORDER_TYPE_LABEL: Record<OrderType, string> = { DINE_IN: 'Dine In', TAKEAWAY: 'Take Away' };
 
 export const TABLE_SHAPES = ['SQUARE', 'ROUND'] as const;

@@ -273,6 +273,14 @@ export const finalizeSchema = z.strictObject({
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
 });
 
+/** New Bill › Add Sale: a bill of just an amount, without choosing dishes. */
+export const manualSaleSchema = z.strictObject({
+  amount: z.number().int('Amount must be whole paise').min(100, 'Enter at least ₹1').max(LIMITS.maxPricePaise * 10, 'Amount is too high'),
+  paymentMethod: z.enum(PAYMENT_METHODS),
+  customerName: z.string().trim().max(80).optional(),
+  idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
+});
+
 /** Correcting a generated bill within the edit window. Prices always come from the server. */
 export const transactionEditSchema = z.strictObject({
   /** editCount the client last saw – a stale value returns 409 instead of overwriting */
@@ -363,6 +371,7 @@ export type MenuItemUpdateInput = z.infer<typeof menuItemUpdateSchema>;
 export type TableCreateInput = z.infer<typeof tableCreateSchema>;
 export type DraftUpdateInput = z.infer<typeof draftUpdateSchema>;
 export type FinalizeInput = z.infer<typeof finalizeSchema>;
+export type ManualSaleInput = z.infer<typeof manualSaleSchema>;
 export type MoveGroupInput = z.infer<typeof moveGroupSchema>;
 export type MergeGroupInput = z.infer<typeof mergeGroupSchema>;
 export type SplitGroupInput = z.infer<typeof splitGroupSchema>;

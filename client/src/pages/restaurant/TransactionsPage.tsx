@@ -115,7 +115,7 @@ function BillDetails({
       onClose={onClose}
       footer={
         <>
-          {tx.status === 'COMPLETED' && (anyTime || minutesLeft > 0) && (
+          {tx.status === 'COMPLETED' && !tx.manual && (anyTime || minutesLeft > 0) && (
             <button className="btn btn-outline-primary btn-lg btn-block" onClick={onEdit}>
               <Pencil /> {anyTime ? 'Edit bill' : `Edit bill (${minutesLeft} min left)`}
             </button>
@@ -291,7 +291,7 @@ function TxCard({
   const anyTime = user?.role === 'SUPER_ADMIN';
   const completed = tx.status === 'COMPLETED';
   const minutesLeft = useEditMinutesLeft(completed && !anyTime ? tx.editableUntil : null);
-  const canEdit = completed && (anyTime || minutesLeft > 0);
+  const canEdit = completed && !tx.manual && (anyTime || minutesLeft > 0);
   const takeaway = tx.orderType === 'TAKEAWAY';
   const TypeIcon = takeaway ? ShoppingBag : UtensilsCrossed;
   const hidden = tx.items.length - CARD_ITEMS;
@@ -307,7 +307,7 @@ function TxCard({
         <TxStatusBadge status={tx.status} />
       </header>
       <div>
-        <div className="bill-card-title">{tx.customerName || (tx.tableLabel ? `Table ${tx.tableLabel}` : ORDER_TYPE_LABEL[tx.orderType])}</div>
+        <div className="bill-card-title">{tx.customerName || (tx.tableLabel ? `Table ${tx.tableLabel}` : tx.manual ? 'Manual sale' : ORDER_TYPE_LABEL[tx.orderType])}</div>
         <div className="bill-card-sub">
           #{tx.billNumber} / {ORDER_TYPE_LABEL[tx.orderType]}
           {tx.groupName && ` · ${tx.groupName}`}

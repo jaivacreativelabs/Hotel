@@ -27,6 +27,7 @@ const transactionSchema = new Schema(
     type: { type: String, enum: DRAFT_TYPES, required: true },
     /** null on bills made before it was asked: table → dine-in, counter → takeaway */
     orderType: { type: String, enum: ORDER_TYPES, default: null },
+    manual: { type: Boolean, default: false },
     groupName: { type: String, default: '' },
     guestCount: { type: Number, default: 0 },
     customerName: { type: String, default: '' },

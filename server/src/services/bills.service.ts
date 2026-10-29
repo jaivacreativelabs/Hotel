@@ -9,8 +9,18 @@
  *  - Finalisation is idempotent: one transaction per draft (unique sourceDraftId) and per
  *    idempotency key; it runs in a MongoDB transaction when available.
  */
-import type { ClientSession, Types } from 'mongoose';
-import { calculateBill, formatBillNumber, type DraftDTO, type DraftUpdateInput, type FinalizeInput, type TransactionDTO } from '@rb/shared';
+import { Types, type ClientSession } from 'mongoose';
+import {
+  calculateBill,
+  formatBillNumber,
+  MANUAL_SALE_ITEM_ID,
+  MANUAL_SALE_NAME,
+  type DraftDTO,
+  type DraftUpdateInput,
+  type FinalizeInput,
+  type ManualSaleInput,
+  type TransactionDTO,
+} from '@rb/shared';
 import { runInTransaction } from '../config/transaction.js';
 import type { AuthUser } from '../middleware/auth.js';
 import type { BranchScope } from '../middleware/scope.js';
@@ -507,4 +517,94 @@ export async function finalizeDraft(
     }
     throw err;
   }
+}
+
+// ---------------- Manual sale ----------------
+
+/**
+ * New Bill › Add Sale: a bill of just an amount and a payment mode, without choosing dishes.
+ * It is numbered, counted and voided like any bill; it has one "Manual sale" line and no tax.
+ */
+export async function createManualSale(
+  actor: AuthUser,
+  scope: BranchScope,
+  input: ManualSaleInput,
+): Promise<{ transaction: TransactionDTO; replayed: boolean }> {
+  const byKey = await TransactionModel.findOne({ branchId: scope.branch._id, idempotencyKey: input.idempotencyKey }).lean<TransactionLean>();
+  if (byKey) {
+    if (!byKey.manual) throw conflict('Idempotency key was used for another bill', 'IDEMPOTENCY_MISMATCH');
+    return { transaction: toTransactionDTO(byKey), replayed: true };
+  }
+  const settings = restaurantSettings(scope.restaurant);
+  const prefix = scope.branch.code;
+  const seq = await nextSequence(`bill:${scope.branch._id}:${prefix}`);
+  const now = new Date();
+  const tx = await TransactionModel.create({
+    billNumber: formatBillNumber(prefix, seq),
+    restaurantId: scope.restaurant._id,
+    branchId: scope.branch._id,
+    tableId: null,
+    tableLabel: '',
+    type: 'COUNTER',
+    manual: true,
+    customerName: input.customerName ?? '',
+    restaurantSnapshot: {
+      name: scope.restaurant.name,
+      address: scope.restaurant.address ?? '',
+      phone: scope.restaurant.phone ?? '',
+      gstin: scope.restaurant.gstin ?? '',
+      receiptFooter: settings.receiptFooter,
+      logoUrl: scope.restaurant.logoUrl ?? '',
+    },
+    branchSnapshot: {
+      name: scope.branch.name,
+      code: scope.branch.code,
+      address: scope.branch.address ?? '',
+      phone: scope.branch.phone ?? '',
+    },
+    items: [
+      {
+        menuItemId: new Types.ObjectId(MANUAL_SALE_ITEM_ID),
+        name: MANUAL_SALE_NAME,
+        categoryName: MANUAL_SALE_NAME,
+        imageUrl: null,
+        unitPrice: input.amount,
+        quantity: 1,
+        taxable: false,
+        taxRateBps: null,
+        extraTaxes: [],
+        lineTotal: input.amount,
+      },
+    ],
+    subtotal: input.amount,
+    discount: null,
+    taxes: [],
+    taxTotal: 0,
+    grandTotal: input.amount,
+    pricesIncludeTax: settings.pricesIncludeTax,
+    paymentMethod: input.paymentMethod,
+    paymentStatus: 'PAID',
+    status: 'COMPLETED',
+    sourceDraftId: new Types.ObjectId(), // no open bill behind it
+    idempotencyKey: input.idempotencyKey,
+    createdBy: actor._id,
+    createdByName: actor.name,
+    finalizedAt: now,
+  }).catch(async (err: { code?: number }) => {
+    if (err.code !== 11000) throw err;
+    // The same key a moment earlier (a double tap): return that sale.
+    const existing = await TransactionModel.findOne({ branchId: scope.branch._id, idempotencyKey: input.idempotencyKey }).lean<TransactionLean>();
+    if (!existing) throw err;
+    return existing;
+  });
+  if (!('save' in tx)) return { transaction: toTransactionDTO(tx), replayed: true };
+  await audit(actor, {
+    action: 'BILL_FINALIZED',
+    entityType: 'Transaction',
+    entityId: tx._id,
+    restaurantId: scope.restaurant._id,
+    branchId: scope.branch._id,
+    summary: `Manual sale ${tx.billNumber} – ${tx.grandTotal} paise via ${tx.paymentMethod}`,
+  });
+  return { transaction: toTransactionDTO(tx.toObject() as TransactionLean), replayed: false };
 }

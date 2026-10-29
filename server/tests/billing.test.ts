@@ -300,3 +300,33 @@ describe('GST per item', () => {
     ]);
   });
 });
+
+describe('manual sale (New Bill › Add Sale)', () => {
+  it('records just an amount as a numbered bill with one untaxed line', async () => {
+    const k = key();
+    const res = await w.adminA1.post('/api/v1/bills/manual-sale', { amount: 25000, paymentMethod: 'UPI', idempotencyKey: k });
+    expect(res.status).toBe(201);
+    const tx = res.body.data.transaction as Tx & { manual: boolean; editableUntil: string | null };
+    expect(tx.billNumber).toMatch(/^A1-\d{4}$/);
+    expect(tx.manual).toBe(true);
+    expect(tx).toMatchObject({ subtotal: 25000, taxTotal: 0, grandTotal: 25000, paymentMethod: 'UPI', status: 'COMPLETED' });
+    expect(tx.items).toEqual([expect.objectContaining({ name: 'Manual sale', unitPrice: 25000, quantity: 1, lineTotal: 25000 })]);
+    expect(tx.editableUntil).toBeNull();
+
+    // The same tap again returns the same sale.
+    const again = await w.adminA1.post('/api/v1/bills/manual-sale', { amount: 25000, paymentMethod: 'UPI', idempotencyKey: k });
+    expect(again.status).toBe(200);
+    expect(again.body.data.transaction.id).toBe(tx.id);
+    expect(await TransactionModel.countDocuments({ idempotencyKey: k })).toBe(1);
+
+    // It cannot be edited into a dish bill.
+    const edit = await w.adminA1.put(`/api/v1/transactions/${tx.id}`, { editCount: 0, items: [{ menuItemId: w.items.idly, quantity: 1 }], paymentMethod: 'CASH' });
+    expect(edit.status).toBe(409);
+    expect(edit.body.error.code).toBe('MANUAL_SALE');
+  });
+
+  it('needs an amount of at least ₹1 and a payment mode', async () => {
+    expect((await w.adminA1.post('/api/v1/bills/manual-sale', { amount: 0, paymentMethod: 'CASH', idempotencyKey: key() })).status).toBe(400);
+    expect((await w.adminA1.post('/api/v1/bills/manual-sale', { amount: 5000, idempotencyKey: key() })).status).toBe(400);
+  });
+});
