@@ -169,6 +169,7 @@ Indexes: `{ branchId: 1, status: 1, createdAt: 1 }`, `{ branchId: 1, number: 1 }
 | restaurantId, branchId | ObjectId | |
 | tableId, tableLabel | ObjectId, string | null / "" for takeaway |
 | type, groupName, guestCount, customerName | | copied from the draft |
+| orderType | `DINE_IN` / `TAKEAWAY` / null | table bills `DINE_IN`; New Bill asks. null on older bills (read as dine-in for tables, takeaway for counter) |
 | restaurantSnapshot | `{ name, address, phone, gstin }` | as at billing time |
 | branchSnapshot | `{ name, code, address, phone }` | |
 | items | `{ menuItemId, name, categoryName, imageUrl, unitPrice, quantity, taxable, lineTotal }[]` | **snapshots** |

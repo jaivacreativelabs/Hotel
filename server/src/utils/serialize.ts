@@ -224,6 +224,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
     tableId: t.tableId ? String(t.tableId) : null,
     tableLabel: t.tableLabel ?? '',
     type: t.type,
+    orderType: t.orderType ?? (t.type === 'TABLE' ? 'DINE_IN' : 'TAKEAWAY'),
     groupName: t.groupName ?? '',
     guestCount: t.guestCount ?? 0,
     customerName: t.customerName ?? '',

@@ -10,6 +10,7 @@ import {
   KITCHEN_STATUSES,
   LIMITS,
   MAX_EXPENSE_PAISE,
+  ORDER_TYPES,
   PAYMENT_METHODS,
   RECORD_STATUSES,
   STAFF_ROLES,
@@ -267,6 +268,8 @@ export const splitGroupSchema = z.strictObject({
 export const finalizeSchema = z.strictObject({
   version: z.number().int().min(0),
   paymentMethod: z.enum(PAYMENT_METHODS),
+  /** New Bill only – table bills are always dine-in; left out means takeaway (older apps). */
+  orderType: z.enum(ORDER_TYPES).optional(),
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
 });
 

@@ -1,12 +1,15 @@
 import {
   calculateBill,
   kitchenPending,
+  ORDER_TYPE_LABEL,
+  ORDER_TYPES,
   parsePercentToBps,
   parseRupeesToPaise,
   type DiscountInput,
   type DraftDTO,
   type KitchenQty,
   type MenuItemDTO,
+  type OrderType,
   type PaymentMethod,
   type TransactionDTO,
 } from '@rb/shared';
@@ -19,10 +22,12 @@ import {
   FileText,
   Minus,
   Plus,
+  ShoppingBag,
   Tag,
   Trash2,
   TriangleAlert,
   UserRound,
+  UtensilsCrossed,
   X,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
@@ -41,6 +46,24 @@ import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey, taxedItemsText, taxLabel } from '../../utils/format';
 import { splitVariant } from '../../utils/menu';
+
+const ORDER_ICON: Record<OrderType, typeof ShoppingBag> = { DINE_IN: UtensilsCrossed, TAKEAWAY: ShoppingBag };
+
+function OrderTypeButtons({ value, onChange, disabled }: { value: OrderType | null; onChange: (t: OrderType) => void; disabled?: boolean }) {
+  return (
+    <div className="pay-methods order-types" role="radiogroup" aria-label="Dine in or take away">
+      {ORDER_TYPES.map((t) => {
+        const Icon = ORDER_ICON[t];
+        return (
+          <button key={t} type="button" role="radio" aria-checked={value === t} className={cx('pay-btn', value === t && 'active')} onClick={() => onChange(t)} disabled={disabled}>
+            <Icon />
+            {ORDER_TYPE_LABEL[t]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function SyncStatus({ state }: { state: DraftSyncState }) {
   const map: Partial<Record<DraftSyncState['status'], [string, string]>> = {
@@ -162,6 +185,9 @@ export function BillingView({
   const categories = useCategories(scope);
   const items = useMenuItems(scope);
   const [payment, setPayment] = useState<PaymentMethod | null>(null);
+  // New Bill asks Dine In / Take Away; a table's bill is always dine-in.
+  const askOrderType = !tableDraftId;
+  const [orderType, setOrderType] = useState<OrderType | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
@@ -203,7 +229,7 @@ export function BillingView({
 
   const finalizeBody = (current: DraftDTO) => {
     if (keyRef.current?.draftId !== current.id) keyRef.current = { draftId: current.id, key: newIdempotencyKey() };
-    return { version: current.version, paymentMethod: payment, idempotencyKey: keyRef.current.key };
+    return { version: current.version, paymentMethod: payment, ...(askOrderType && orderType && { orderType }), idempotencyKey: keyRef.current.key };
   };
   const billed = (current: DraftDTO, transaction: TransactionDTO) => {
     keyRef.current = null;
@@ -224,7 +250,7 @@ export function BillingView({
    * still being sent the tap cannot wait for it, so then it is done the usual way.
    */
   const generate = () => {
-    if (!sync || !payment) return;
+    if (!sync || !payment || (askOrderType && !orderType)) return;
     try {
       if (!sync.flushSync()) return void generateAfterSave();
       const current = sync.getState().draft!;
@@ -250,6 +276,7 @@ export function BillingView({
 
   const finishBill = (billed: DraftDTO) => {
     setPayment(null);
+    setOrderType(null);
     setBillOpen(false);
     if (billed.type === 'TABLE') {
       onBackToTables(billed.tableId);
@@ -261,6 +288,12 @@ export function BillingView({
   const hasItems = (local?.items.length ?? 0) > 0;
   const itemCount = local?.items.reduce((a, i) => a + i.quantity, 0) ?? 0;
   const hasUnavailable = local?.items.some((i) => i.unavailable) ?? false;
+  const needOrderType = askOrderType && !orderType;
+  const hint = needOrderType
+    ? payment
+      ? 'Choose Dine In or Take Away to generate the bill'
+      : 'Choose Dine In / Take Away and payment'
+    : !payment && 'Select a payment method to generate the bill';
   const showBreakdown = Boolean(totals && (totals.discountAmount > 0 || totals.taxes.length > 0));
 
   return (
@@ -382,6 +415,7 @@ export function BillingView({
         </div>
 
         <div className="bill-foot">
+          {askOrderType && <OrderTypeButtons value={orderType} onChange={setOrderType} disabled={!editable || busy} />}
           {editable && (
             <div className="row" style={{ alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
@@ -423,13 +457,13 @@ export function BillingView({
           </div>
           {activeBranch!.kitchenDisplay && editable && hasItems && <KitchenSendButton pending={toKitchen} sending={kitchen.sending} onSend={() => void sendToKitchen()} />}
           <PaymentButtons value={payment} onChange={setPayment} disabled={!editable || busy} />
-          <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || busy || hasUnavailable}>
+          <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needOrderType || busy || hasUnavailable}>
             {busy ? <Spinner /> : <FileText />} Generate Bill
           </button>
           {/* The hint's line is always kept, so Cash / UPI / Card and Generate Bill never jump when it shows or hides. */}
           {editable && (
-            <span className="field-hint" style={{ textAlign: 'center', visibility: hasItems && !payment ? 'visible' : 'hidden' }} aria-hidden={!(hasItems && !payment)}>
-              Select a payment method to generate the bill
+            <span className="field-hint" style={{ textAlign: 'center', visibility: hasItems && hint ? 'visible' : 'hidden' }} aria-hidden={!(hasItems && hint)}>
+              {hint || 'Select a payment method to generate the bill'}
             </span>
           )}
         </div>

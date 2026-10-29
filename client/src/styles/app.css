@@ -1521,6 +1521,9 @@ html:has(.app) body {
   background: var(--color-primary);
   color: var(--color-primary-contrast);
 }
+.pay-methods.order-types {
+  grid-template-columns: repeat(2, 1fr);
+}
 .discount-row {
   display: grid;
   grid-template-columns: 90px 1fr auto;

@@ -2,6 +2,7 @@ import type { Types } from 'mongoose';
 import {
   BILL_EDIT_WINDOW_MINUTES,
   calculateBill,
+  ORDER_TYPE_LABEL,
   type PageMeta,
   type TransactionDTO,
   type TransactionEditInput,
@@ -123,7 +124,7 @@ export async function exportTransactionsCsv(user: AuthUser, q: Partial<Transacti
       formatDateTime(t.finalizedAt, env.APP_TIMEZONE),
       restaurants.get(String(t.restaurantId)) ?? t.restaurantSnapshot?.name ?? '',
       branches.get(String(t.branchId)) ?? t.branchSnapshot?.name ?? '',
-      t.tableLabel ? `${t.tableLabel} ${t.groupName ?? ''}`.trim() : 'Takeaway',
+      t.tableLabel ? `${t.tableLabel} ${t.groupName ?? ''}`.trim() : ORDER_TYPE_LABEL[t.orderType ?? 'TAKEAWAY'],
       t.customerName ?? '',
       t.items.map((i) => `${i.name} x${i.quantity}`).join('; '),
       t.items.reduce((a, i) => a + i.quantity, 0),

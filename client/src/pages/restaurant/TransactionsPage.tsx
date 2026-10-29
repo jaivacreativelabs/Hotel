@@ -1,4 +1,4 @@
-import { PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
+import { ORDER_TYPE_LABEL, PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -150,7 +150,7 @@ function BillDetails({
         <div>
           <dt>Table</dt>
           <dd>
-            <TableBadge label={tx.tableLabel} />
+            <TableBadge label={tx.tableLabel} orderType={tx.orderType} />
             {tx.groupName && <span className="cell-sub">{tx.groupName}</span>}
           </dd>
         </div>
@@ -292,7 +292,7 @@ function TxCard({
   const completed = tx.status === 'COMPLETED';
   const minutesLeft = useEditMinutesLeft(completed && !anyTime ? tx.editableUntil : null);
   const canEdit = completed && (anyTime || minutesLeft > 0);
-  const takeaway = !tx.tableLabel;
+  const takeaway = tx.orderType === 'TAKEAWAY';
   const TypeIcon = takeaway ? ShoppingBag : UtensilsCrossed;
   const hidden = tx.items.length - CARD_ITEMS;
   const taxShares = itemTaxShares(tx.taxes, tx.items); // each item's amount includes its tax
@@ -307,9 +307,9 @@ function TxCard({
         <TxStatusBadge status={tx.status} />
       </header>
       <div>
-        <div className="bill-card-title">{tx.customerName || (takeaway ? 'Takeaway' : `Table ${tx.tableLabel}`)}</div>
+        <div className="bill-card-title">{tx.customerName || (tx.tableLabel ? `Table ${tx.tableLabel}` : ORDER_TYPE_LABEL[tx.orderType])}</div>
         <div className="bill-card-sub">
-          #{tx.billNumber} / {takeaway ? 'Takeaway' : 'Dine in'}
+          #{tx.billNumber} / {ORDER_TYPE_LABEL[tx.orderType]}
           {tx.groupName && ` · ${tx.groupName}`}
           {showBranch && ` · ${tx.branchSnapshot.name}`}
         </div>

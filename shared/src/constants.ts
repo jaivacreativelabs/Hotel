@@ -42,6 +42,11 @@ export const KITCHEN_NEXT: Partial<Record<KitchenStatus, KitchenStatus>> = {
 export const DRAFT_TYPES = ['TABLE', 'COUNTER'] as const;
 export type DraftType = (typeof DRAFT_TYPES)[number];
 
+/** How a bill's food is served. Table bills are always DINE_IN; New Bill asks. */
+export const ORDER_TYPES = ['DINE_IN', 'TAKEAWAY'] as const;
+export type OrderType = (typeof ORDER_TYPES)[number];
+export const ORDER_TYPE_LABEL: Record<OrderType, string> = { DINE_IN: 'Dine In', TAKEAWAY: 'Take Away' };
+
 export const TABLE_SHAPES = ['SQUARE', 'ROUND'] as const;
 export type TableShape = (typeof TABLE_SHAPES)[number];
 

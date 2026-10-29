@@ -24,7 +24,7 @@ const COLUMN: Record<BoardStatus, { title: string; action: string; tone: string 
 const boardKey = (branchId: string) => ['kitchen', branchId] as const;
 
 function where(t: KitchenTicketDTO) {
-  return t.tableLabel ? `Table ${t.tableLabel}${t.groupName ? ` · ${t.groupName}` : ''}` : 'Takeaway';
+  return t.tableLabel ? `Table ${t.tableLabel}${t.groupName ? ` · ${t.groupName}` : ''}` : 'Counter';
 }
 
 /** Re-renders every 30 s so the waiting times stay current. */

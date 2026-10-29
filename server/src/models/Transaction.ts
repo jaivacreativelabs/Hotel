@@ -1,5 +1,5 @@
 import { model, Schema, type HydratedDocument, type InferSchemaType } from 'mongoose';
-import { DRAFT_TYPES, PAYMENT_METHODS, PAYMENT_STATUSES, TRANSACTION_STATUSES } from '@rb/shared';
+import { DRAFT_TYPES, ORDER_TYPES, PAYMENT_METHODS, PAYMENT_STATUSES, TRANSACTION_STATUSES } from '@rb/shared';
 
 const itemSnapshotSchema = new Schema(
   {
@@ -25,6 +25,8 @@ const transactionSchema = new Schema(
     tableId: { type: Schema.Types.ObjectId, ref: 'Table', default: null },
     tableLabel: { type: String, default: '' },
     type: { type: String, enum: DRAFT_TYPES, required: true },
+    /** null on bills made before it was asked: table → dine-in, counter → takeaway */
+    orderType: { type: String, enum: ORDER_TYPES, default: null },
     groupName: { type: String, default: '' },
     guestCount: { type: Number, default: 0 },
     customerName: { type: String, default: '' },

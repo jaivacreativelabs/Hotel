@@ -2,7 +2,7 @@
  * A printable receipt (80 mm thermal friendly). Printing never creates a transaction – it only
  * reads the stored, immutable bill.
  */
-import type { TransactionDTO } from '@rb/shared';
+import { ORDER_TYPE_LABEL, type TransactionDTO } from '@rb/shared';
 import { formatDateTime, formatMoney, itemTaxShares, itemTaxText, PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
 export const RECEIPT_CSS = `
@@ -36,7 +36,7 @@ export function Receipt({ t, onLogoDone }: { t: TransactionDTO; onLogoDone: () =
         <tbody>
           <tr>
             <td>Bill: {t.billNumber}</td>
-            <td className="r">{t.tableLabel ? `Table ${t.tableLabel}` : 'Takeaway'}</td>
+            <td className="r">{t.tableLabel ? `Table ${t.tableLabel}` : ORDER_TYPE_LABEL[t.orderType]}</td>
           </tr>
           <tr>
             <td colSpan={2}>{formatDateTime(t.finalizedAt)}</td>

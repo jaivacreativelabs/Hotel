@@ -1,4 +1,4 @@
-import type { PaymentMethod, TransactionStatus } from '@rb/shared';
+import { ORDER_TYPE_LABEL, type OrderType, type PaymentMethod, type TransactionStatus } from '@rb/shared';
 import { Banknote, CreditCard } from 'lucide-react';
 import { PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
@@ -52,8 +52,8 @@ export function TxStatusBadge({ status }: { status: TransactionStatus }) {
   return <span className={`badge badge-sm ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>;
 }
 
-export function TableBadge({ label }: { label: string }) {
-  if (!label) return <span className="badge badge-purple">Takeaway</span>;
+export function TableBadge({ label, orderType }: { label: string; orderType: OrderType }) {
+  if (!label) return <span className="badge badge-purple">{ORDER_TYPE_LABEL[orderType]}</span>;
   return <span className="badge badge-primary">{label}</span>;
 }
 

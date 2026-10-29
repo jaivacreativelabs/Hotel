@@ -420,6 +420,7 @@ export async function finalizeDraft(
               tableId: draft.tableId ?? null,
               tableLabel,
               type: draft.type,
+              orderType: draft.type === 'TABLE' ? 'DINE_IN' : (input.orderType ?? 'TAKEAWAY'),
               groupName: draft.groupName ?? '',
               guestCount: draft.guestCount ?? 0,
               customerName: draft.customerName ?? '',

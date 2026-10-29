@@ -5,6 +5,7 @@ import type {
   ExpenseCategory,
   ItemStatus,
   KitchenStatus,
+  OrderType,
   PaymentMethod,
   PaymentStatus,
   RecordStatus,
@@ -292,6 +293,7 @@ export interface TransactionDTO {
   tableId: string | null;
   tableLabel: string;
   type: DraftType;
+  orderType: OrderType;
   groupName: string;
   guestCount: number;
   customerName: string;
