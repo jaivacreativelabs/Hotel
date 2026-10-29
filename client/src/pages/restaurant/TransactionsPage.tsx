@@ -2,7 +2,7 @@ import { ORDER_TYPE_LABEL, PAYMENT_METHODS, TRANSACTION_STATUSES, type PaymentMe
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { PaymentBadge, TableBadge, TxStatusBadge } from '../../components/badges';
+import { PaymentBadges, TableBadge, TxStatusBadge } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
 import { printReceipt } from '../../components/PaymentButtons';
 import { CancelButton, ConfirmButton, Empty, Field, Loading, Modal, PageHeader, Pagination, SidePanel, Spinner } from '../../components/ui';
@@ -157,7 +157,7 @@ function BillDetails({
         <div>
           <dt>Payment Mode</dt>
           <dd>
-            <PaymentBadge method={tx.paymentMethod} />
+            <PaymentBadges payments={tx.payments} />
           </dd>
         </div>
         <div>
@@ -346,7 +346,7 @@ function TxCard({
       <div className="bill-card-total">
         <span>Total</span>
         <span className="spacer" />
-        <PaymentBadge method={tx.paymentMethod} />
+        <PaymentBadges payments={tx.payments} />
         <strong className="num">{formatMoney(tx.grandTotal)}</strong>
       </div>
       <footer className="bill-card-actions">

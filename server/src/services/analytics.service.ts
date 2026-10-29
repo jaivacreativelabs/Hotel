@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
 import { BranchModel, RestaurantModel, TransactionModel } from '../models/index.js';
 import { addDays, dayRange } from '../utils/dates.js';
 import { badRequest } from '../utils/errors.js';
+import { unwindPayments } from '../utils/payments.js';
 import { toCsv, paiseToDecimal } from '../utils/csv.js';
 import { toObjectId } from '../utils/validate.js';
 
@@ -93,7 +94,8 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
           { $match: { status: 'COMPLETED' } },
           { $group: { _id: '$branchId', restaurantId: { $first: '$restaurantId' }, ...sumStage } },
         ],
-        byPaymentMethod: [{ $match: { status: 'COMPLETED' } }, { $group: { _id: '$paymentMethod', ...sumStage } }],
+        // Each part of a split bill counts under its own mode (a split bill counts as a bill for each).
+        byPaymentMethod: [{ $match: { status: 'COMPLETED' } }, ...unwindPayments, { $group: { _id: '$pay.method', sales: { $sum: '$pay.amount' }, bills: { $sum: 1 } } }],
         excluded: [{ $match: { status: { $ne: 'COMPLETED' } } }, { $group: { _id: '$status', ...sumStage } }],
         // Item-level ranking uses the immutable item snapshots stored on each bill.
         topItems: [

@@ -39,6 +39,7 @@ import {
 } from '../models/index.js';
 import { type AppError, badRequest, conflict, notFound } from '../utils/errors.js';
 import { effectiveCategory, effectiveItem, restaurantSettings, toDraftDTO, toTransactionDTO } from '../utils/serialize.js';
+import { resolvePayments } from '../utils/payments.js';
 import { toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 import { cancelUnstarted, sendToKitchen } from './kitchen.service.js';
@@ -397,6 +398,7 @@ export async function finalizeDraft(
       const totals = calculateBill(lines, settings, discount);
       const now = new Date();
       const tableLabel = await tableLabelOf(draft);
+      const paid = resolvePayments(input.paymentMethod, input.payments, totals.grandTotal);
 
       // Claim the draft first; a concurrent finaliser fails here (or on the unique index).
       const claimed = await DraftModel.findOneAndUpdate(
@@ -466,7 +468,7 @@ export async function finalizeDraft(
               taxTotal: totals.taxTotal,
               grandTotal: totals.grandTotal,
               pricesIncludeTax: settings.pricesIncludeTax,
-              paymentMethod: input.paymentMethod,
+              ...paid,
               paymentStatus: 'PAID',
               status: 'COMPLETED',
               sourceDraftId: draft._id,
@@ -535,6 +537,7 @@ export async function createManualSale(
     if (!byKey.manual) throw conflict('Idempotency key was used for another bill', 'IDEMPOTENCY_MISMATCH');
     return { transaction: toTransactionDTO(byKey), replayed: true };
   }
+  const paid = resolvePayments(input.paymentMethod, input.payments, input.amount);
   const settings = restaurantSettings(scope.restaurant);
   const prefix = scope.branch.code;
   const seq = await nextSequence(`bill:${scope.branch._id}:${prefix}`);
@@ -582,7 +585,7 @@ export async function createManualSale(
     taxTotal: 0,
     grandTotal: input.amount,
     pricesIncludeTax: settings.pricesIncludeTax,
-    paymentMethod: input.paymentMethod,
+    ...paid,
     paymentStatus: 'PAID',
     status: 'COMPLETED',
     sourceDraftId: new Types.ObjectId(), // no open bill behind it

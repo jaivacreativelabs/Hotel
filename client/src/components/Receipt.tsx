@@ -102,10 +102,19 @@ export function Receipt({ t, onLogoDone }: { t: TransactionDTO; onLogoDone: () =
             <td>TOTAL</td>
             <td className="r">{formatMoney(t.grandTotal)}</td>
           </tr>
-          <tr>
-            <td>Paid by</td>
-            <td className="r">{PAYMENT_LABEL[t.paymentMethod]}</td>
-          </tr>
+          {t.payments.length > 1 ? (
+            t.payments.map((p) => (
+              <tr key={p.method}>
+                <td>Paid by {PAYMENT_LABEL[p.method]}</td>
+                <td className="r">{formatMoney(p.amount)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td>Paid by</td>
+              <td className="r">{PAYMENT_LABEL[t.paymentMethod]}</td>
+            </tr>
+          )}
         </tbody>
       </table>
       <div className="rule" />

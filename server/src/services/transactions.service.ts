@@ -17,6 +17,7 @@ import { toCsv, paiseToDecimal } from '../utils/csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { editableUntil, restaurantSettings, toTransactionDTO } from '../utils/serialize.js';
 import { priceLines } from './bills.service.js';
+import { resolvePayments } from '../utils/payments.js';
 import { escapeRegex, toObjectId } from '../utils/validate.js';
 import { audit } from './audit.service.js';
 
@@ -43,7 +44,8 @@ export function transactionFilter(user: AuthUser, q: Partial<TransactionQuery>):
   }
   const { start, end } = dayRange(q.from, q.to, env.APP_TIMEZONE);
   if (start || end) filter.finalizedAt = { ...(start && { $gte: start }), ...(end && { $lt: end }) };
-  if (q.paymentMethod) filter.paymentMethod = q.paymentMethod;
+  // A split bill shows under each mode it was paid with.
+  if (q.paymentMethod) filter.$and = [{ $or: [{ paymentMethod: q.paymentMethod }, { 'payments.method': q.paymentMethod }] }];
   if (q.status) filter.status = q.status;
   if (q.q) {
     const term = q.q.replace(/^#/, '').trim();
@@ -132,7 +134,7 @@ export async function exportTransactionsCsv(user: AuthUser, q: Partial<Transacti
       paiseToDecimal(t.discount?.amount ?? 0),
       paiseToDecimal(t.taxTotal),
       paiseToDecimal(t.grandTotal),
-      t.paymentMethod,
+      t.payments?.length ? t.payments.map((p) => `${p.method} ${paiseToDecimal(p.amount)}`).join(' + ') : t.paymentMethod,
       t.paymentStatus,
       t.status,
       t.createdByName ?? '',
@@ -198,7 +200,7 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
         taxTotal: totals.taxTotal,
         grandTotal: totals.grandTotal,
         pricesIncludeTax: settings.pricesIncludeTax,
-        paymentMethod: input.paymentMethod,
+        ...resolvePayments(input.paymentMethod, input.payments, totals.grandTotal),
         ...(input.customerName !== undefined && { customerName: input.customerName }),
         editedAt: now,
         editedByName: user.name,
@@ -218,6 +220,7 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
           taxTotal: tx.taxTotal,
           grandTotal: tx.grandTotal,
           paymentMethod: tx.paymentMethod,
+          payments: tx.payments ?? [],
         },
       },
     },

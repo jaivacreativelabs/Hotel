@@ -21,6 +21,7 @@ import type { AuthUser } from '../middleware/auth.js';
 import { BranchModel, ExpenseModel, ReportSettingModel, RestaurantModel, TransactionModel, type ReportSetting } from '../models/index.js';
 import { dayRange, todayIn } from '../utils/dates.js';
 import { AppError } from '../utils/errors.js';
+import { unwindPayments } from '../utils/payments.js';
 import { audit } from './audit.service.js';
 import { longDate, renderDailyReportHtml, renderDailyReportText } from './dailyReport.template.js';
 
@@ -100,7 +101,8 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     {
       $facet: {
         summary: [paid, { $group: { _id: null, ...sum, tax: { $sum: '$taxTotal' } } }],
-        payments: [paid, { $group: { _id: { b: '$branchId', m: '$paymentMethod' }, ...sum } }],
+        // Each part of a split bill counts under its own mode.
+        payments: [paid, ...unwindPayments, { $group: { _id: { b: '$branchId', m: '$pay.method' }, sales: { $sum: '$pay.amount' }, bills: { $sum: 1 } } }],
         items: [
           paid,
           { $unwind: '$items' },

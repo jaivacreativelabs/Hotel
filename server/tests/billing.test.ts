@@ -330,3 +330,63 @@ describe('manual sale (New Bill › Add Sale)', () => {
     expect((await w.adminA1.post('/api/v1/bills/manual-sale', { amount: 5000, idempotencyKey: key() })).status).toBe(400);
   });
 });
+
+describe('split payment (part cash, part UPI)', () => {
+  const fill = async () => {
+    let d = await freshCounter();
+    d = ok<Draft>(await w.adminA1.put(`/api/v1/bills/${d.id}`, { version: d.version, items: [{ menuItemId: w.items.dosa, quantity: 5 }] }));
+    return d; // ₹250 (+ tax as configured)
+  };
+
+  it('stores each part; the main mode is the bigger part; the parts must add up to the bill', async () => {
+    const d = await fill();
+    const total = d.totals.grandTotal;
+    const wrong = await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, {
+      version: d.version,
+      paymentMethod: 'CASH',
+      payments: [{ method: 'UPI', amount: 5000 }, { method: 'CASH', amount: 100 }],
+      idempotencyKey: key(),
+    });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.code).toBe('SPLIT_MISMATCH');
+
+    const res = await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, {
+      version: d.version,
+      paymentMethod: 'UPI',
+      payments: [{ method: 'UPI', amount: 5000 }, { method: 'CASH', amount: total - 5000 }],
+      idempotencyKey: key(),
+    });
+    expect(res.status).toBe(201);
+    const tx = res.body.data.transaction as Tx & { payments: { method: string; amount: number }[] };
+    expect(tx.paymentMethod).toBe('CASH');
+    expect(tx.payments).toEqual([{ method: 'UPI', amount: 5000 }, { method: 'CASH', amount: total - 5000 }]);
+
+    // Listed under both modes.
+    for (const mode of ['UPI', 'CASH']) {
+      const list = ok<{ id: string }[]>(await w.adminA1.get(`/api/v1/transactions?paymentMethod=${mode}&limit=100`));
+      expect(list.map((t) => t.id)).toContain(tx.id);
+    }
+    const card = ok<{ id: string }[]>(await w.adminA1.get('/api/v1/transactions?paymentMethod=CARD&limit=100'));
+    expect(card.map((t) => t.id)).not.toContain(tx.id);
+  });
+
+  it('a bill paid one way reads as one part', async () => {
+    const d = await fill();
+    const tx = (await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod: 'CARD', idempotencyKey: key() })).body.data
+      .transaction as Tx & { payments: { method: string; amount: number }[] };
+    expect(tx.payments).toEqual([{ method: 'CARD', amount: tx.grandTotal }]);
+  });
+
+  it('rejects a mode used twice', async () => {
+    const d = await fill();
+    const res = await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, {
+      version: d.version,
+      paymentMethod: 'CASH',
+      payments: [{ method: 'CASH', amount: 100 }, { method: 'CASH', amount: d.totals.grandTotal - 100 }],
+      idempotencyKey: key(),
+    });
+    expect(res.status).toBe(400);
+    // leave no open bill with items behind for later tests
+    await w.adminA1.post(`/api/v1/bills/${d.id}/finalize`, { version: d.version, paymentMethod: 'CASH', idempotencyKey: key() });
+  });
+});

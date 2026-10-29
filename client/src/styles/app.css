@@ -1564,6 +1564,45 @@ html.app-open body {
 .pay-methods.order-types {
   grid-template-columns: repeat(2, 1fr);
 }
+/* Four payment choices (with Split) share the row: a little tighter */
+.pay-methods.with-split {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.pay-methods.with-split .pay-btn {
+  gap: 4px;
+  font-size: 0.875rem;
+}
+.pay-methods.with-split .pay-btn svg {
+  width: 16px;
+  height: 16px;
+}
+/* Split payment: one mode's amount; the rest goes to the other mode */
+.split-pay {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.split-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-size-sm);
+}
+.split-rest {
+  font-weight: 700;
+  color: var(--color-primary);
+  padding-left: 4px;
+}
+.split-rest.bad {
+  color: var(--color-danger);
+}
+.pay-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 /* Cash received → balance to return (calculation only) */
 .change-calc {
   display: grid;
@@ -2506,6 +2545,12 @@ html.app-open body {
 .bill-card-total strong {
   font-size: var(--font-size-xl);
   font-weight: 800;
+  white-space: nowrap;
+}
+/* a split bill's badges stack beside the total */
+.bill-card-total .pay-badges {
+  flex-direction: column;
+  align-items: flex-end;
 }
 .bill-card-actions {
   display: flex;

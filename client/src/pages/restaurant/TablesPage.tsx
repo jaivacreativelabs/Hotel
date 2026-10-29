@@ -6,6 +6,8 @@ import {
   type DraftDTO,
   type KitchenQty,
   type KitchenTicketDTO,
+  type PaymentMethod,
+  type PaymentPart,
   type TableDTO,
   type TableGroupSummaryDTO,
   type TableShape,
@@ -555,31 +557,32 @@ function TableDetail({
     }
   };
 
-  const finalize = (d: DraftDTO, paymentMethod: string) => ({ version: d.version, paymentMethod, idempotencyKey: newIdempotencyKey() });
+  type Payment = { paymentMethod: PaymentMethod; payments?: PaymentPart[] };
+  const finalize = (d: DraftDTO, payment: Payment) => ({ version: d.version, ...payment, idempotencyKey: newIdempotencyKey() });
 
   /**
    * Saves and generates the bill within this tap (synchronous requests – the screen waits a
    * moment), so it prints at once: Safari on an iPad prints only from a tap. While an edit is
    * still being sent the tap cannot wait for it, so then it is done the usual way.
    */
-  const generateNow = (draftId: string, paymentMethod: string): { transaction: TransactionDTO } | null => {
+  const generateNow = (draftId: string, payment: Payment): { transaction: TransactionDTO } | null => {
     const sync = acquireDraftSync(draftId, branchId);
     try {
       const savedHere = sync.getState().dirty;
       if (!sync.flushSync()) return null;
       // The latest version: ours if we just saved it, else the server's (another device may have changed it).
       const d = savedHere ? sync.getState().draft! : apiSync.get<DraftDTO>(`/bills/${draftId}`, { branchId });
-      return apiSync.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, finalize(d, paymentMethod));
+      return apiSync.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, finalize(d, payment));
     } finally {
       releaseDraftSync(sync);
     }
   };
 
-  const generate = async (group: TableGroupSummaryDTO, paymentMethod: string) => {
+  const generate = async (group: TableGroupSummaryDTO, payment: Payment) => {
     try {
       const res =
-        generateNow(group.draftId, paymentMethod) ??
-        (await withLatestDraft(group.draftId, (d) => api.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, finalize(d, paymentMethod))));
+        generateNow(group.draftId, payment) ??
+        (await withLatestDraft(group.draftId, (d) => api.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, finalize(d, payment))));
       setPaying(null);
       printReceipt(res.transaction); // no message: the print itself shows the bill was saved
       if (group.draftId === activeDraftId) onExitOrder();

@@ -51,6 +51,8 @@ const transactionSchema = new Schema(
     grandTotal: { type: Number, required: true },
     pricesIncludeTax: { type: Boolean, default: false },
     paymentMethod: { type: String, enum: PAYMENT_METHODS, required: true },
+    /** parts of a split payment (e.g. cash + UPI); empty when paid one way */
+    payments: { type: [{ method: { type: String, enum: PAYMENT_METHODS, required: true }, amount: { type: Number, required: true }, _id: false }], default: [] },
     paymentStatus: { type: String, enum: PAYMENT_STATUSES, default: 'PAID' },
     status: { type: String, enum: TRANSACTION_STATUSES, default: 'COMPLETED' },
     statusChange: {
@@ -87,6 +89,7 @@ const transactionSchema = new Schema(
             taxTotal: Number,
             grandTotal: Number,
             paymentMethod: String,
+            payments: { type: [{ method: String, amount: Number, _id: false }], default: undefined },
           },
           { _id: false },
         ),

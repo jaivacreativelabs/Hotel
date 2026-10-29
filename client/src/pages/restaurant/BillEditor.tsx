@@ -1,11 +1,11 @@
-import { BILL_EDIT_WINDOW_MINUTES, calculateBill, type PaymentMethod, type RestaurantDTO, type TaxSettings, type TransactionDTO } from '@rb/shared';
+import { BILL_EDIT_WINDOW_MINUTES, calculateBill, type PaymentPart, type RestaurantDTO, type TaxSettings, type TransactionDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronUp, Clock, Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { FoodGrid, addItemToBill, setBillQuantity } from '../../components/FoodGrid';
 import { FoodImage } from '../../components/FoodImage';
 import { useRootClass } from '../../hooks/useRootClass';
-import { PaymentButtons } from '../../components/PaymentButtons';
+import { PaymentButtons, paymentFields, SplitPayment, type PaymentChoice } from '../../components/PaymentButtons';
 import { CancelButton, ConfirmButton, Field, SidePanel } from '../../components/ui';
 import { ApiError, api } from '../../services/api';
 import { useAuth } from '../../store/auth';
@@ -45,7 +45,9 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
   // Restaurant Admins have BILL_EDIT_WINDOW_MINUTES; the Super Admin can correct a bill any time.
   const anyTime = user?.role === 'SUPER_ADMIN';
   const [bill, setBill] = useState(() => toLocalBill(tx));
-  const [payment, setPayment] = useState<PaymentMethod>(tx.paymentMethod);
+  const wasSplit = tx.payments.length > 1;
+  const [payment, setPayment] = useState<PaymentChoice>(wasSplit ? 'SPLIT' : tx.paymentMethod);
+  const [splitParts, setSplitParts] = useState<PaymentPart[] | null>(wasSplit ? tx.payments : null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [panelOnPhone, setPanelOnPhone] = useState(false);
@@ -71,8 +73,9 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
   const totals = useMemo(() => calculateBill(bill.items, settings, bill.discount), [bill, settings]);
   const qtyById = useMemo(() => new Map(bill.items.map((i) => [i.menuItemId, i.quantity])), [bill.items]);
   const count = bill.items.reduce((a, i) => a + i.quantity, 0);
+  const paid = payment !== 'SPLIT' || splitParts ? paymentFields(payment, splitParts) : null;
   const changed =
-    payment !== tx.paymentMethod ||
+    JSON.stringify(paid?.payments ?? [{ method: paid?.paymentMethod, amount: totals.grandTotal }]) !== JSON.stringify(tx.payments) ||
     bill.items.length !== tx.items.length ||
     bill.items.some((l, i) => l.menuItemId !== tx.items[i].menuItemId || l.quantity !== tx.items[i].quantity);
 
@@ -84,7 +87,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
         {
           editCount: tx.editCount,
           items: bill.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
-          paymentMethod: payment,
+          ...paid!,
           ...(reason.trim() && { reason: reason.trim() }),
         },
         { branchId: null },
@@ -140,7 +143,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
         footer={
           <div className="modal-actions" style={{ marginTop: 0 }}>
             <CancelButton onClick={onCancel} disabled={busy} />
-            <ConfirmButton onClick={save} busy={busy} disabled={!changed || bill.items.length === 0 || !canEdit} label="Save changes" />
+            <ConfirmButton onClick={save} busy={busy} disabled={!changed || !paid || bill.items.length === 0 || !canEdit} label="Save changes" />
           </div>
         }
       >
@@ -185,7 +188,12 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
         )}
         <div>
           <div className="section-title">Payment Mode</div>
-          <PaymentButtons value={payment} onChange={setPayment} />
+          <PaymentButtons value={payment} onChange={setPayment} allowSplit />
+          {payment === 'SPLIT' && (
+            <div style={{ marginTop: 10 }}>
+              <SplitPayment total={totals.grandTotal} initial={wasSplit ? tx.payments : undefined} onChange={setSplitParts} />
+            </div>
+          )}
         </div>
         <Field label="Reason (optional)">
           {(id) => <input id={id} className="input" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder="e.g. Added one more coffee" />}

@@ -16,6 +16,7 @@ import type {
   TransactionStatus,
 } from './constants.js';
 import type { DiscountInput, TaxLine, TaxRate } from './money.js';
+import type { PaymentPart } from './payments.js';
 
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
@@ -310,7 +311,10 @@ export interface TransactionDTO {
   taxTotal: number;
   grandTotal: number;
   pricesIncludeTax: boolean;
+  /** the main mode; see `payments` for a bill paid in more than one way */
   paymentMethod: PaymentMethod;
+  /** how the bill was paid – one part, or two or more for a split payment */
+  payments: PaymentPart[];
   paymentStatus: PaymentStatus;
   status: TransactionStatus;
   statusChange: { at: string; byName: string; reason: string } | null;

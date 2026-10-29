@@ -265,9 +265,18 @@ export const splitGroupSchema = z.strictObject({
   groupName: z.string().trim().max(40).optional(),
 });
 
+/** A bill paid in two or three ways (each mode once); the parts must add up to the bill. */
+export const paymentPartsSchema = z
+  .array(z.strictObject({ method: z.enum(PAYMENT_METHODS), amount: z.number().int().min(1, 'Each part needs an amount') }))
+  .min(2, 'A split needs two payment modes')
+  .max(PAYMENT_METHODS.length)
+  .refine((parts) => new Set(parts.map((p) => p.method)).size === parts.length, { message: 'Each payment mode only once' });
+
 export const finalizeSchema = z.strictObject({
   version: z.number().int().min(0),
   paymentMethod: z.enum(PAYMENT_METHODS),
+  /** paid in more than one way; paymentMethod is then the main one */
+  payments: paymentPartsSchema.optional(),
   /** New Bill only – table bills are always dine-in; left out means takeaway (older apps). */
   orderType: z.enum(ORDER_TYPES).optional(),
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
@@ -277,6 +286,7 @@ export const finalizeSchema = z.strictObject({
 export const manualSaleSchema = z.strictObject({
   amount: z.number().int('Amount must be whole paise').min(100, 'Enter at least ₹1').max(LIMITS.maxPricePaise * 10, 'Amount is too high'),
   paymentMethod: z.enum(PAYMENT_METHODS),
+  payments: paymentPartsSchema.optional(),
   customerName: z.string().trim().max(80).optional(),
   idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{8,100}$/, 'Invalid idempotency key'),
 });
@@ -296,6 +306,7 @@ export const transactionEditSchema = z.strictObject({
     .max(LIMITS.maxBillLines)
     .refine((items) => new Set(items.map((i) => i.menuItemId)).size === items.length, { message: 'Duplicate items' }),
   paymentMethod: z.enum(PAYMENT_METHODS),
+  payments: paymentPartsSchema.optional(),
   customerName: z.string().trim().max(80).optional(),
   discount: discountSchema.nullable().optional(),
   reason: z.string().trim().max(200).optional(),

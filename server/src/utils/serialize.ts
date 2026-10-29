@@ -260,6 +260,7 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
     grandTotal: t.grandTotal,
     pricesIncludeTax: Boolean(t.pricesIncludeTax),
     paymentMethod: t.paymentMethod,
+    payments: t.payments?.length ? t.payments.map((p) => ({ method: p.method, amount: p.amount })) : [{ method: t.paymentMethod, amount: t.grandTotal }],
     paymentStatus: t.paymentStatus,
     status: t.status,
     statusChange: t.statusChange?.at

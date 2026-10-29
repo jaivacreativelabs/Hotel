@@ -1,16 +1,18 @@
 /** New Bill › Add Sale: a bill of just an amount and a payment mode, without choosing dishes. */
-import { parseRupeesToPaise, type PaymentMethod, type TransactionDTO } from '@rb/shared';
+import { parseRupeesToPaise, type PaymentPart, type TransactionDTO } from '@rb/shared';
 import { useRef, useState } from 'react';
 import { apiSync } from '../services/api';
 import { useToast } from '../store/toast';
 import { newIdempotencyKey } from '../utils/format';
-import { PaymentButtons, printReceipt } from './PaymentButtons';
+import { PaymentButtons, paymentFields, printReceipt, SplitPayment, type PaymentChoice } from './PaymentButtons';
 import { CancelButton, ConfirmButton, Field, Modal } from './ui';
 
 export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDone: (t: TransactionDTO) => void }) {
   const toast = useToast();
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<PaymentMethod | null>(null);
+  const [method, setMethod] = useState<PaymentChoice | null>(null);
+  const [parts, setParts] = useState<PaymentPart[] | null>(null);
+  const typed = parseRupeesToPaise(amount);
   const [error, setError] = useState<string | null>(null);
   // One key for this sale: a second tap returns the same bill instead of a new one.
   const keyRef = useRef(newIdempotencyKey());
@@ -22,12 +24,12 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
   const save = () => {
     const paise = parseRupeesToPaise(amount);
     if (paise === null || paise < 100) return setError('Enter an amount like 250 or 49.50');
-    if (!method) return;
+    if (!method || (method === 'SPLIT' && !parts)) return;
     setError(null);
     try {
       const { transaction } = apiSync.post<{ transaction: TransactionDTO }>('/bills/manual-sale', {
         amount: paise,
-        paymentMethod: method,
+        ...paymentFields(method, parts),
         idempotencyKey: keyRef.current,
       });
       printReceipt(transaction); // no message: the print itself shows the sale was saved
@@ -57,11 +59,12 @@ export function ManualSaleModal({ onClose, onDone }: { onClose: () => void; onDo
         </Field>
         <div className="field">
           <span className="field-label">Payment mode</span>
-          <PaymentButtons value={method} onChange={setMethod} />
+          <PaymentButtons value={method} onChange={setMethod} allowSplit />
         </div>
+        {method === 'SPLIT' && <SplitPayment total={typed ?? 0} onChange={setParts} />}
         <div className="modal-actions">
           <CancelButton onClick={onClose} />
-          <ConfirmButton type="submit" label="Add Sale" disabled={!amount.trim() || !method} />
+          <ConfirmButton type="submit" label="Add Sale" disabled={!amount.trim() || !method || (method === 'SPLIT' && !parts)} />
         </div>
       </form>
     </Modal>

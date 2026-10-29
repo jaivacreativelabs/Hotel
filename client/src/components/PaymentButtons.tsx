@@ -1,5 +1,6 @@
-import { PAYMENT_METHODS, type PaymentMethod, type TransactionDTO } from '@rb/shared';
-import { useState } from 'react';
+import { mainPaymentMethod, parseRupeesToPaise, PAYMENT_METHODS, type PaymentMethod, type PaymentPart, type TransactionDTO } from '@rb/shared';
+import { Split } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
@@ -8,11 +9,31 @@ import { ChangeCalculator } from './ChangeCalculator';
 import { Receipt, RECEIPT_CSS } from './Receipt';
 import { CancelButton, ConfirmButton, Modal } from './ui';
 
-export function PaymentButtons({ value, onChange, disabled }: { value: PaymentMethod | null; onChange: (m: PaymentMethod) => void; disabled?: boolean }) {
+/** A payment mode, or SPLIT for a bill paid partly one way and partly another. */
+export type PaymentChoice = PaymentMethod | 'SPLIT';
+
+/** What to send when generating: the main mode, plus the parts of a split payment. */
+export function paymentFields(choice: PaymentChoice, parts: PaymentPart[] | null): { paymentMethod: PaymentMethod; payments?: PaymentPart[] } {
+  return choice === 'SPLIT' ? { paymentMethod: mainPaymentMethod(parts!), payments: parts! } : { paymentMethod: choice };
+}
+
+export function PaymentButtons<T extends PaymentChoice>({
+  value,
+  onChange,
+  disabled,
+  allowSplit,
+}: {
+  value: T | null;
+  onChange: (m: T) => void;
+  disabled?: boolean;
+  /** adds "Split" – part cash, part UPI / card */
+  allowSplit?: boolean;
+}) {
+  const choices: PaymentChoice[] = allowSplit ? [...PAYMENT_METHODS, 'SPLIT'] : [...PAYMENT_METHODS];
   return (
-    <div className="pay-methods" role="radiogroup" aria-label="Payment method">
-      {PAYMENT_METHODS.map((m) => {
-        const Icon = PAYMENT_ICON[m];
+    <div className={cx('pay-methods', allowSplit && 'with-split')} role="radiogroup" aria-label="Payment method">
+      {choices.map((m) => {
+        const Icon = m === 'SPLIT' ? Split : PAYMENT_ICON[m];
         return (
           <button
             key={m}
@@ -20,14 +41,63 @@ export function PaymentButtons({ value, onChange, disabled }: { value: PaymentMe
             role="radio"
             aria-checked={value === m}
             className={cx('pay-btn', value === m && 'active')}
-            onClick={() => onChange(m)}
+            onClick={() => onChange(m as T)}
             disabled={disabled}
+            title={m === 'SPLIT' ? 'Paid partly one way and partly another, e.g. cash + UPI' : undefined}
           >
             <Icon />
-            {PAYMENT_LABEL[m]}
+            {m === 'SPLIT' ? 'Split' : PAYMENT_LABEL[m]}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A split payment: how much was paid one way; the rest of the bill goes to the other mode.
+ * Reports the parts (or null while they do not make sense) through onChange.
+ */
+export function SplitPayment({ total, initial, onChange }: { total: number; initial?: PaymentPart[]; onChange: (parts: PaymentPart[] | null) => void }) {
+  const [first, setFirst] = useState<PaymentMethod>(initial?.[0]?.method ?? 'UPI');
+  const [rest, setRest] = useState<PaymentMethod>(initial?.[1]?.method ?? 'CASH');
+  const [amount, setAmount] = useState(initial?.[0] ? String(initial[0].amount / 100) : '');
+  const paise = amount.trim() ? parseRupeesToPaise(amount) : null;
+  const ok = paise !== null && paise > 0 && paise < total && first !== rest;
+  const restAmount = paise !== null ? total - paise : null;
+
+  useEffect(() => {
+    onChange(ok ? [{ method: first, amount: paise! }, { method: rest, amount: total - paise! }] : null);
+  }, [ok, first, rest, paise, total, onChange]);
+
+  const pickFirst = (m: PaymentMethod) => {
+    setFirst(m);
+    if (m === rest) setRest(PAYMENT_METHODS.find((x) => x !== m)!);
+  };
+  const select = (value: PaymentMethod, set: (m: PaymentMethod) => void, label: string, without?: PaymentMethod) => (
+    <select className="select select-sm" value={value} onChange={(e) => set(e.target.value as PaymentMethod)} aria-label={label}>
+      {PAYMENT_METHODS.filter((m) => m !== without).map((m) => (
+        <option key={m} value={m}>
+          {PAYMENT_LABEL[m]}
+        </option>
+      ))}
+    </select>
+  );
+  return (
+    <div className="split-pay">
+      <div className="split-row">
+        {select(first, pickFirst, 'First payment mode')}
+        <div className="input-prefix change-calc-input">
+          <span>₹</span>
+          <input className="input input-sm" inputMode="decimal" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label={`Amount paid by ${PAYMENT_LABEL[first]}`} autoFocus />
+        </div>
+      </div>
+      <div className="split-row">
+        {select(rest, setRest, 'Payment mode for the rest', first)}
+        <span className={cx('split-rest num', restAmount !== null && !ok && 'bad')}>
+          {restAmount === null ? 'Rest –' : restAmount > 0 ? `${formatMoney(restAmount)} (rest)` : `Must be under ${formatMoney(total)}`}
+        </span>
+      </div>
     </div>
   );
 }
@@ -41,10 +111,11 @@ export function PaymentModal({
 }: {
   title: string;
   amount: number;
-  onConfirm: (method: PaymentMethod) => Promise<void>;
+  onConfirm: (payment: { paymentMethod: PaymentMethod; payments?: PaymentPart[] }) => Promise<void>;
   onClose: () => void;
 }) {
-  const [method, setMethod] = useState<PaymentMethod | null>(null);
+  const [method, setMethod] = useState<PaymentChoice | null>(null);
+  const [parts, setParts] = useState<PaymentPart[] | null>(null);
   const [busy, setBusy] = useState(false);
   return (
     <Modal title={title} onClose={busy ? () => undefined : onClose}>
@@ -52,18 +123,19 @@ export function PaymentModal({
         <span>Total</span>
         <strong>{formatMoney(amount)}</strong>
       </div>
-      <PaymentButtons value={method} onChange={setMethod} disabled={busy} />
+      <PaymentButtons value={method} onChange={setMethod} disabled={busy} allowSplit />
       {method === 'CASH' && <ChangeCalculator total={amount} />}
+      {method === 'SPLIT' && <SplitPayment total={amount} onChange={setParts} />}
       <div className="modal-actions">
         <CancelButton onClick={onClose} disabled={busy} />
         <ConfirmButton
           busy={busy}
-          disabled={!method}
+          disabled={!method || (method === 'SPLIT' && !parts)}
           label="Generate Bill"
           onClick={async () => {
             setBusy(true);
             try {
-              await onConfirm(method!);
+              await onConfirm(paymentFields(method!, parts));
             } finally {
               setBusy(false);
             }

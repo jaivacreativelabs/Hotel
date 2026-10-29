@@ -1,4 +1,4 @@
-import { ORDER_TYPE_LABEL, type OrderType, type PaymentMethod, type TransactionStatus } from '@rb/shared';
+import { formatMoney, ORDER_TYPE_LABEL, type OrderType, type PaymentMethod, type PaymentPart, type TransactionStatus } from '@rb/shared';
 import { Banknote, CreditCard } from 'lucide-react';
 import { PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
@@ -36,12 +36,25 @@ export const PAYMENT_ICON: Record<PaymentMethod, React.ComponentType<React.SVGPr
 
 const PAYMENT_CLASS: Record<PaymentMethod, string> = { CASH: 'badge-green', UPI: 'badge-purple', CARD: 'badge-blue' };
 
-export function PaymentBadge({ method }: { method: PaymentMethod }) {
+export function PaymentBadge({ method, amount }: { method: PaymentMethod; amount?: number }) {
   const Icon = PAYMENT_ICON[method];
   return (
     <span className={`badge ${PAYMENT_CLASS[method]}`}>
       <Icon />
       {PAYMENT_LABEL[method]}
+      {amount !== undefined && <span className="num">{formatMoney(amount)}</span>}
+    </span>
+  );
+}
+
+/** How a bill was paid: one badge, or one per part (with its amount) for a split payment. */
+export function PaymentBadges({ payments }: { payments: PaymentPart[] }) {
+  if (payments.length === 1) return <PaymentBadge method={payments[0].method} />;
+  return (
+    <span className="pay-badges">
+      {payments.map((p) => (
+        <PaymentBadge key={p.method} method={p.method} amount={p.amount} />
+      ))}
     </span>
   );
 }
