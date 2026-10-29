@@ -274,7 +274,7 @@ export function BillingView({
             Customer Name
             <SyncStatus state={state} compact={!tableDraftId} />
             {!tableDraftId && (
-              <button type="button" className="btn btn-soft btn-sm bill-add-sale" onClick={() => setManualSale(true)} title="A sale of just an amount, without choosing dishes">
+              <button type="button" className="btn btn-primary btn-sm bill-add-sale" onClick={() => setManualSale(true)} title="A sale of just an amount, without choosing dishes">
                 Add Sale
               </button>
             )}
