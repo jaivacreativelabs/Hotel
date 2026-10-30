@@ -13,6 +13,9 @@ const reportSettingSchema = new Schema(
     lastSentFor: { type: String, default: '' }, // "YYYY-MM-DD" in APP_TIMEZONE
     lastSentAt: { type: Date, default: null },
     lastError: { type: String, default: '' },
+    // The last automatic (scheduled) check and what came of it, shown on the Daily Report page.
+    lastRunAt: { type: Date, default: null },
+    lastRunResult: { type: String, default: '' },
   },
   { timestamps: true },
 );

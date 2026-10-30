@@ -15,6 +15,21 @@ function timeLabel(hhmm: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
+/** The server's note on an automatic check, in words for the owner. */
+function runOutcome(result: string, sendTime: string) {
+  if (result.startsWith('sent to')) return `email ${result}`;
+  if (result.startsWith('send failed')) return `the email could not be sent (${result.replace(/^send failed: /, '')})`;
+  if (result.startsWith('refused')) return 'refused – CRON_SECRET is not set on the server';
+  const words: Record<string, string> = {
+    'not yet time': `it was before ${timeLabel(sendTime)}, so nothing was sent`,
+    'mail not configured': 'not sent – email is not set up on the server (SMTP_USER / SMTP_PASS)',
+    'no recipients': 'not sent – no email address added',
+    'turned off': 'not sent – the daily email is switched off',
+    'already sent': 'already sent today',
+  };
+  return words[result] ?? result;
+}
+
 function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -66,7 +81,7 @@ function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
         <div>
           <div className="card-title">Email every day</div>
           <div className="muted">
-            At {timeLabel(settings.sendTime)} with today's sales
+            {settings.scheduleNote ? `Arrives ${settings.scheduleNote}` : `At ${timeLabel(settings.sendTime)}`} with today's sales
           </div>
         </div>
         <label className="switch">
@@ -116,6 +131,13 @@ function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
         {settings.lastSentAt ? `Last sent ${formatDateTime(settings.lastSentAt)}` : 'Not sent yet'}
         {settings.sender && ` · from ${settings.sender}`}
       </div>
+      {(settings.lastRunAt || settings.scheduleNote) && (
+        <div className="muted" style={{ fontSize: '0.8125rem' }}>
+          {settings.lastRunAt
+            ? `Last automatic check ${formatDateTime(settings.lastRunAt)}: ${runOutcome(settings.lastRunResult, settings.sendTime)}`
+            : 'No automatic check has reached the server yet'}
+        </div>
+      )}
       {settings.lastError && (
         <div className="alert alert-danger">
           <TriangleAlert />
@@ -160,6 +182,15 @@ export function DailyReportPage() {
           <span>
             Email is not set up on the server yet. Add <strong>SMTP_USER</strong> (the Gmail address) and <strong>SMTP_PASS</strong> (its Google App password)
             to the server settings, then restart or redeploy.
+          </span>
+        </div>
+      )}
+      {settings.data && !settings.data.scheduleConfigured && (
+        <div className="alert alert-warning" style={{ marginBottom: 16 }}>
+          <TriangleAlert />
+          <span>
+            The daily email is not sent automatically yet: <strong>CRON_SECRET</strong> is missing. In Vercel → Settings → Environment Variables add CRON_SECRET (any
+            long random text), then redeploy.
           </span>
         </div>
       )}

@@ -151,4 +151,19 @@ describe('sending', () => {
     expect(res.body.data.status).toBe('sent');
     configureMail(false);
   });
+
+  it('tells the Daily Report page what the last automatic check did', async () => {
+    const app = createApp();
+    const settings = async () => ok<{ lastRunAt: string | null; lastRunResult: string }>(await w.sa.get('/api/v1/admin/daily-report'));
+    expect((await settings()).lastRunResult).toMatch(/^sent to /); // the run above
+    // Vercel Cron without CRON_SECRET: refused, and the page says why.
+    expect((await request(app).get('/api/v1/cron/daily-report').set('User-Agent', 'vercel-cron/1.0')).status).toBe(401);
+    expect((await settings()).lastRunResult).toBe('refused: CRON_SECRET is not set on the server');
+    // With the secret but no email set up: skipped, with the reason.
+    const sendTime = env.DAILY_REPORT_TIME;
+    Object.assign(env, { CRON_SECRET: 'cron-secret-for-tests', DAILY_REPORT_TIME: '00:00' });
+    ok(await request(app).get('/api/v1/cron/daily-report').set('Authorization', 'Bearer cron-secret-for-tests'));
+    Object.assign(env, { CRON_SECRET: '', DAILY_REPORT_TIME: sendTime });
+    expect((await settings()).lastRunResult).toBe('mail not configured');
+  });
 });

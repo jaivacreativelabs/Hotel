@@ -72,6 +72,13 @@ export interface DailyReportSettingsDTO {
   lastSentFor: string;
   lastSentAt: string | null;
   lastError: string;
+  /** false on Vercel while CRON_SECRET is missing: the scheduler is refused, nothing is sent */
+  scheduleConfigured: boolean;
+  /** when the email really goes out, e.g. "between 9:30 and 10:30 PM" (Vercel runs the schedule once in that hour) */
+  scheduleNote: string;
+  /** the last automatic check and its outcome ("sent", "not yet time", "mail not configured"…) */
+  lastRunAt: string | null;
+  lastRunResult: string;
 }
 
 export interface RestaurantSettings {

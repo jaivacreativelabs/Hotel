@@ -210,7 +210,20 @@ function toDTO(s: ReportSetting): DailyReportSettingsDTO {
     lastSentFor: s.lastSentFor,
     lastSentAt: s.lastSentAt ? new Date(s.lastSentAt).toISOString() : null,
     lastError: s.lastError,
+    scheduleConfigured: !onVercel || Boolean(env.CRON_SECRET),
+    scheduleNote: onVercel ? VERCEL_SCHEDULE_NOTE : '',
+    lastRunAt: s.lastRunAt ? new Date(s.lastRunAt).toISOString() : null,
+    lastRunResult: s.lastRunResult ?? '',
   };
+}
+
+const onVercel = Boolean(process.env.VERCEL);
+/** vercel.json crons "0 16 * * *" = 9:30 PM IST, and Vercel (Hobby) fires anywhere in that hour. */
+const VERCEL_SCHEDULE_NOTE = 'between 9:30 and 10:30 PM';
+
+/** Remembers what the last automatic check did, so the page can tell why no email came. */
+export async function recordScheduledRun(result: string): Promise<void> {
+  await ReportSettingModel.updateOne({ _id: SETTINGS_ID }, { $set: { lastRunAt: new Date(), lastRunResult: result.slice(0, 300) } }, { upsert: true });
 }
 
 export async function getDailyReportSettings(): Promise<DailyReportSettingsDTO> {

@@ -13,7 +13,7 @@ import { repeatSafe } from '../middleware/idempotency.js';
 import { apiNotFound } from '../middleware/error.js';
 import { requireBranchScope, requireMenuScope } from '../middleware/scope.js';
 import { imageUpload } from '../middleware/upload.js';
-import { runDueDailyReport } from '../services/dailyReport.service.js';
+import { recordScheduledRun, runDueDailyReport } from '../services/dailyReport.service.js';
 import { AppError } from '../utils/errors.js';
 
 /** Only the scheduler knows CRON_SECRET; without one configured the endpoint stays closed. */
@@ -112,10 +112,23 @@ export function createApiRouter(): Router {
   api.use('/admin', adminRouter);
 
   // ---- Scheduled jobs (schedulers send `Authorization: Bearer $CRON_SECRET`) ----
-  api.get('/cron/daily-report', cronAuth, async (_req, res) => {
-    // A scheduler firing on the minute may land a moment early, so allow one minute.
-    res.json({ data: await runDueDailyReport(new Date(Date.now() + 60_000)) });
-  });
+  api.get(
+    '/cron/daily-report',
+    async (req, _res, next) => {
+      // Without a secret Vercel Cron is refused every day; note it so the page can say why.
+      if (!env.CRON_SECRET && /^vercel-cron\//.test(req.get('user-agent') ?? '')) {
+        await recordScheduledRun('refused: CRON_SECRET is not set on the server');
+      }
+      next();
+    },
+    cronAuth,
+    async (_req, res) => {
+      // A scheduler firing on the minute may land a moment early, so allow one minute.
+      const result = await runDueDailyReport(new Date(Date.now() + 60_000));
+      await recordScheduledRun(result.status === 'sent' ? `sent to ${result.recipients.join(', ')}` : result.reason);
+      res.json({ data: result });
+    },
+  );
 
   // ---- Menu (both roles, scoped) ----
   const menuRouter = Router();
