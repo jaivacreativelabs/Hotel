@@ -208,8 +208,8 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   </td></tr>
 
   <tr><td style="padding:26px 24px 4px 24px;">
-    <div style="font:500 13px/18px ${FONT};color:${C.muted};">Total Sale</div>
-    <div style="font:700 34px/42px ${FONT};color:${C.primary};padding-top:2px;">${formatMoney(r.totalSales)}</div>
+    <div style="font:500 13px/18px ${FONT};color:${C.muted};">Net (sale − expenses)</div>
+    <div style="font:700 34px/42px ${FONT};color:${r.net < 0 ? C.danger : C.primary};padding-top:2px;">${formatMoney(r.net)}</div>
   </td></tr>
   <tr><td style="padding:14px 20px 4px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.surfaceMuted};border-radius:8px;"><tr><td style="padding:12px 8px;">
@@ -227,8 +227,8 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
         <div style="font:600 16px/22px ${FONT};color:${r.totalExpenses ? C.danger : C.text};padding-top:2px;">${formatMoney(r.totalExpenses)}</div>
       </td>
       <td width="50%" align="right" style="padding:12px 14px;border-left:1px solid ${C.border};">
-        <div style="font:400 12px/16px ${FONT};color:${C.muted};">Net (sale − expenses)</div>
-        <div style="font:700 16px/22px ${FONT};color:${r.net < 0 ? C.danger : C.primary};padding-top:2px;">${formatMoney(r.net)}</div>
+        <div style="font:400 12px/16px ${FONT};color:${C.muted};">Total Sale</div>
+        <div style="font:700 16px/22px ${FONT};color:${C.primary};padding-top:2px;">${formatMoney(r.totalSales)}</div>
       </td>
     </tr></table>
   </td></tr>
@@ -256,12 +256,12 @@ export function renderDailyReportText(r: DailyReport): string {
     `Tiffin House – Daily Sales Report`,
     `${longDate(r.date)} (till ${timeOf(r.asOf)})`,
     '',
-    line('Total Sale', formatMoney(r.totalSales)),
+    line('Net (sale - expenses)', formatMoney(r.net)),
     line('Bills', String(r.billCount)),
     line('Average bill', formatMoney(r.averageBill)),
     line('Tax collected', formatMoney(r.taxTotal)),
     line('Expenses', formatMoney(r.totalExpenses)),
-    line('Net (sale - expenses)', formatMoney(r.net)),
+    line('Total Sale', formatMoney(r.totalSales)),
     '',
     'Payment split',
     ...r.payments.map((p) => line(`  ${PAYMENT_NAME[p.method]}`, formatMoney(p.sales))),
