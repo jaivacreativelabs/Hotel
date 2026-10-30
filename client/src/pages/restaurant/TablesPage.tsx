@@ -3,6 +3,7 @@ import {
   LIMITS,
   TABLE_SHAPES,
   kitchenPending,
+  type DiscountInput,
   type DraftDTO,
   type KitchenQty,
   type KitchenTicketDTO,
@@ -28,7 +29,7 @@ import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, Page
 import { api, ApiError, apiSync, errorMessage } from '../../services/api';
 import { tableKeys, useTables } from '../../services/queries';
 import { useAuth } from '../../store/auth';
-import { acquireDraftSync, releaseDraftSync } from '../../store/draftSync';
+import { acquireDraftSync, releaseDraftSync, type DraftSync } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
@@ -303,12 +304,7 @@ function ActiveGroupCard({
           ))}
         </div>
       )}
-      {sync && local && lines.length > 0 && (
-        <div className="group-discount">
-          <DiscountEditor key={group.draftId} value={local.discount} onApply={(d) => sync.update((b) => ({ ...b, discount: d }))} />
-          {totals && totals.discountAmount > 0 && <span className="group-discount-amount num">Discount − {formatMoney(totals.discountAmount)}</span>}
-        </div>
-      )}
+      {sync && local && lines.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
       <div className="group-actions">
         <button className="btn btn-outline-primary" onClick={onDone}>
           <Utensils /> Add Items
@@ -357,9 +353,20 @@ function OrderingMenu({
   );
 }
 
+/** "Add discount" for a group's bill, with the amount it takes off. */
+function GroupDiscount({ draftId, sync, discount, amount }: { draftId: string; sync: DraftSync; discount: DiscountInput | null; amount: number }) {
+  return (
+    <div className="group-discount">
+      <DiscountEditor key={draftId} value={discount} onApply={(d) => sync.update((b) => ({ ...b, discount: d }))} />
+      {amount > 0 && <span className="group-discount-amount num">Discount − {formatMoney(amount)}</span>}
+    </div>
+  );
+}
+
 function GroupCard({
   group,
   index,
+  branchId,
   onAddItems,
   onGenerate,
   onDelete,
@@ -368,14 +375,21 @@ function GroupCard({
 }: {
   group: TableGroupSummaryDTO;
   index: number;
+  branchId: string;
   onAddItems: () => void;
-  onGenerate: () => void;
+  onGenerate: (liveTotal: number) => void;
   onDelete: () => void;
   onSent: () => void;
   onAction: (action: GroupAction) => void;
 }) {
   const { activeBranch } = useAuth();
   const { send, sending } = useSendToKitchen();
+  // The bill itself (only for a group with food), so a discount can be given right here.
+  const { sync, state } = useDraftSync(group.itemCount > 0 ? group.draftId : null, branchId);
+  const local = state.local;
+  const settings = activeBranch!.restaurant.settings;
+  const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
+  const total = totals?.grandTotal ?? group.grandTotal;
   const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
   const extra = group.lineCount - group.previewItems.slice(0, 2).length;
   return (
@@ -390,7 +404,7 @@ function GroupCard({
             {group.guestCount} {group.guestCount === 1 ? 'Person' : 'People'}
           </div>
         </div>
-        <div className="group-amount num">{formatMoney(group.grandTotal)}</div>
+        <div className="group-amount num">{formatMoney(total)}</div>
         <button className="icon-btn plain" onClick={onDelete} aria-label={`Delete ${group.groupName}`} title="Delete this group's bill">
           <Trash2 />
         </button>
@@ -409,11 +423,12 @@ function GroupCard({
           </>
         )}
       </div>
+      {sync && local && local.items.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
       <div className="group-actions">
         <button className="btn btn-outline-primary" onClick={onAddItems}>
           <Utensils /> Add Items
         </button>
-        <button className="btn btn-primary" onClick={onGenerate} disabled={group.itemCount === 0}>
+        <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={group.itemCount === 0}>
           <FileText /> Generate Bill
         </button>
       </div>
@@ -716,8 +731,9 @@ function TableDetail({
             key={g.draftId}
             group={g}
             index={i}
+            branchId={branchId}
             onAddItems={() => onOrder(g.draftId)}
-            onGenerate={() => setPaying(g)}
+            onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
             onDelete={() => setDeleting(g)}
             onSent={() => markSent(g.draftId)}
             onAction={(kind) => setAction({ kind, group: g })}
