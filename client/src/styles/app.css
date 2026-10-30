@@ -4115,12 +4115,15 @@ html.app-open body {
   z-index: 30;
   width: 288px;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   padding: 8px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  max-height: 300px; /* many icons: the grid scrolls */
+  overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: var(--shadow-modal);
 }
 .icon-picker-grid button {
@@ -4213,4 +4216,13 @@ html.app-open body {
 .drag-hint {
   font-size: var(--font-size-sm);
   margin: 4px 0 12px;
+}
+.cat-row .drag-grip {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--color-text-subtle, #8c948a);
+}
+.cat-row.sortable.dragging {
+  background: var(--color-surface);
 }

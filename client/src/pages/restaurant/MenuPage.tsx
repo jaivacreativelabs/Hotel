@@ -10,12 +10,11 @@ import {
 } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowDown,
-  ArrowUp,
   Camera,
   Check,
   CirclePlus,
   Info,
+  GripVertical,
   Layers,
   LayoutGrid,
   Pencil,
@@ -29,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
-import { mergeOrder, SortableItem, SortableList } from '../../components/Sortable';
+import { byOrder, mergeOrder, SortableItem, SortableList } from '../../components/Sortable';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { menuKeys, scopeQuery, useCategories, useMenuItems, type MenuScope } from '../../services/queries';
@@ -57,11 +56,29 @@ function useScopedApi(scope: MenuScope) {
 
 // ---------------- Inline category creation ----------------
 
+// Emoji 13 and older, so they show on older iPads too.
 const CATEGORY_ICONS = [
-  '🍽️', '🥞', '🍛', '🍚', '🍲', '🥘', '🍜', '🍝', '🥗', '🫓', '🥙', '🌯',
-  '🥪', '🍔', '🍕', '🌮', '🥟', '🍟', '🍳', '🥚', '🍗', '🍖', '🐟', '🍤',
-  '🧆', '🌶️', '☕', '🍵', '🥤', '🧃', '🥛', '🍹', '🍦', '🍰', '🍮', '🍩',
-  '🍪', '🍫', '🍎', '🍌', '🥥', '🍉',
+  // meals, tiffin and rice
+  '🍽️', '🥞', '🍛', '🍚', '🍙', '🍘', '🍥', '🍲', '🥘', '🍜', '🍝', '🍱',
+  '🥡', '🥣', '🥗', '🫓', '🥙', '🌯', '🥪', '🍔', '🍕', '🌮', '🥟', '🍟',
+  '🌭', '🍿', '🥨', '🥐', '🥖', '🍞', '🥯', '🧇', '🧈', '🧀', '🫕', '🥫',
+  // egg, meat and seafood
+  '🍳', '🥚', '🍗', '🍖', '🥩', '🥓', '🐟', '🍤', '🦐', '🦀', '🦑', '🐙',
+  '🍣', '🐔', '🐐', '🐑',
+  // vegetables, spices and nuts
+  '🧆', '🌶️', '🧄', '🧅', '🥔', '🥕', '🌽', '🥦', '🥬', '🥒', '🍅', '🍆',
+  '🫑', '🥑', '🍄', '🥜', '🌰', '🌿', '🍃', '🧂',
+  // fruits
+  '🍎', '🍏', '🍐', '🍊', '🍋', '🍌', '🍍', '🥭', '🍇', '🍓', '🫐', '🍒',
+  '🍑', '🥝', '🍈', '🍉', '🥥',
+  // drinks
+  '☕', '🍵', '🫖', '🧋', '🥤', '🧃', '🥛', '🍹', '🍸', '🧉', '🍶', '🧊',
+  '🍺', '🍷', '🍼',
+  // sweets and desserts
+  '🍦', '🍧', '🍨', '🍰', '🎂', '🧁', '🥧', '🍮', '🍩', '🍪', '🍫', '🍬',
+  '🍭', '🍯', '🥮', '🍡',
+  // specials
+  '⭐', '🔥', '🎉', '🥄', '🍴', '🥢',
 ];
 
 /** Picks a category's icon from a grid instead of typing an emoji. */
@@ -687,12 +704,9 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
       toast.error(err);
     }
   };
-  const move = (id: string, dir: -1 | 1) => {
-    const ids = own.map((c) => c.id);
-    const i = ids.indexOf(id);
-    const j = i + dir;
-    if (j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
+  /** Dragged into a new order: shown at once, then saved. */
+  const reorder = (ids: string[]) => {
+    queryClient.setQueryData(menuKeys.categories(scope, true), (old: CategoryDTO[] | undefined) => old && byOrder(old, ids));
     void run(() => scoped.post('/menu/categories/reorder', { ids }));
   };
 
@@ -704,10 +718,12 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
         <Loading />
       ) : (
         <div className="stack" style={{ gap: 8 }}>
+          {own.length > 1 && <div className="muted drag-hint">Press and hold a category, then drag it up or down.</div>}
+          <SortableList ids={own.map((c) => c.id)} onReorder={reorder} layout="column">
           {list.map((c) => {
-            const index = own.findIndex((o) => o.id === c.id);
+            const Row = c.editable ? SortableItem : 'div';
             return (
-              <div key={c.id} className={cx('cat-row', c.status === 'INACTIVE' && 'inactive')}>
+              <Row key={c.id} id={c.id} disabled={editing?.id === c.id} className={cx('cat-row', c.status === 'INACTIVE' && 'inactive')}>
                 {editing?.id === c.id ? (
                   <>
                     <IconPicker small value={editing.icon} onChange={(icon) => setEditing({ ...editing, icon })} />
@@ -726,6 +742,7 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                   </>
                 ) : (
                   <>
+                    {c.editable && <GripVertical className="drag-grip" aria-hidden="true" />}
                     <span className="cat-icon">{c.icon || '•'}</span>
                     <span className="cat-row-name">
                       <strong>{c.name}</strong>
@@ -738,12 +755,6 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                     </span>
                     {c.editable && (
                       <span className="cat-row-actions">
-                        <button className="icon-btn plain" onClick={() => move(c.id, -1)} disabled={index <= 0} aria-label={`Move ${c.name} up`}>
-                          <ArrowUp />
-                        </button>
-                        <button className="icon-btn plain" onClick={() => move(c.id, 1)} disabled={index === own.length - 1} aria-label={`Move ${c.name} down`}>
-                          <ArrowDown />
-                        </button>
                         <button className="icon-btn plain" onClick={() => setEditing({ id: c.id, name: c.name, icon: c.icon })} aria-label={`Rename ${c.name}`}>
                           <Pencil />
                         </button>
@@ -762,9 +773,10 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                     )}
                   </>
                 )}
-              </div>
+              </Row>
             );
           })}
+          </SortableList>
         </div>
       )}
       {deleting && (
@@ -860,10 +872,6 @@ export function MenuManager({
     } finally {
       await queryClient.invalidateQueries({ queryKey: menuKeys.all });
     }
-  };
-  const byOrder = <T extends { id: string }>(list: T[], ids: string[]) => {
-    const at = new Map(ids.map((id, i) => [id, i]));
-    return [...list].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity));
   };
   const reorderDishes = (shown: string[]) => {
     const ids = mergeOrder(
