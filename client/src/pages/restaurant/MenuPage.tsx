@@ -673,6 +673,7 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
   const toast = useToast();
   const categories = useCategories(scope, true);
   const [editing, setEditing] = useState<{ id: string; name: string; icon: string } | null>(null);
+  const [deleting, setDeleting] = useState<CategoryDTO | null>(null);
   const list = categories.data ?? [];
   const own = list.filter((c) => c.editable);
   const refresh = () => queryClient.invalidateQueries({ queryKey: menuKeys.all });
@@ -746,6 +747,9 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
                         <button className="icon-btn plain" onClick={() => setEditing({ id: c.id, name: c.name, icon: c.icon })} aria-label={`Rename ${c.name}`}>
                           <Pencil />
                         </button>
+                        <button className="icon-btn plain danger-text" onClick={() => setDeleting(c)} aria-label={`Delete ${c.name}`} title="Delete">
+                          <Trash2 />
+                        </button>
                         <label className="switch" title={c.status === 'ACTIVE' ? 'Visible' : 'Hidden'}>
                           <input
                             type="checkbox"
@@ -762,6 +766,24 @@ function CategoriesPanel({ scope, onClose }: { scope: MenuScope; onClose: () => 
             );
           })}
         </div>
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete “${deleting.name}”?`}
+          message={
+            deleting.isShared
+              ? 'It is removed from this restaurant’s menu only – other restaurants keep it. Only an empty category can be deleted.'
+              : 'Only an empty category can be deleted: move or remove its dishes first. This cannot be undone.'
+          }
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => {
+            const c = deleting;
+            setDeleting(null);
+            void run(() => scoped.del(`/menu/categories/${c.id}`), `“${c.name}” deleted`);
+          }}
+        />
       )}
     </SidePanel>
   );
@@ -801,6 +823,10 @@ export function MenuManager({
   const [archiving, setArchiving] = useState<MenuItemDTO | null>(null);
 
   const activeCategories = (categories.data ?? []).filter((c) => c.status === 'ACTIVE');
+  // The chosen tab's category was deleted or hidden: back to All.
+  useEffect(() => {
+    if (category !== 'all' && categories.data && !categories.data.some((c) => c.id === category && c.status === 'ACTIVE')) setCategory('all');
+  }, [category, categories.data]);
   // Billing only lists dishes whose category is switched on; flag the rest here.
   const activeCategoryIds = new Set(activeCategories.map((c) => c.id));
   const notInBilling = (item: MenuItemDTO) => categories.isSuccess && !activeCategoryIds.has(item.categoryId);

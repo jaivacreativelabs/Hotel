@@ -87,6 +87,7 @@ export function effectiveCategory(c: WithId<Category>, branchId: Types.ObjectId 
     icon: o?.icon ?? c.icon ?? '',
     status: (o?.status ?? c.status) as RecordStatus,
     displayOrder: o?.displayOrder ?? ownOffset + (c.displayOrder ?? 0),
+    deleted: Boolean(o?.deleted),
   };
 }
 

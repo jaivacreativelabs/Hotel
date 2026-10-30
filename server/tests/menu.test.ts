@@ -207,6 +207,34 @@ describe('menu items', () => {
   });
 });
 
+describe('deleting a category', () => {
+  const names = async (c: typeof w.adminA1) => ok<{ name: string }[]>(await c.get('/api/v1/menu/categories?includeInactive=true')).map((x) => x.name);
+
+  it('deletes a branch’s own empty category for good, and frees its name', async () => {
+    const c = ok<{ id: string }>(await w.adminA1.post('/api/v1/menu/categories', { name: 'Old Offers' }), 201);
+    ok(await w.adminA1.delete(`/api/v1/menu/categories/${c.id}`));
+    expect(await names(w.adminA1)).not.toContain('Old Offers');
+    ok(await w.adminA1.post('/api/v1/menu/categories', { name: 'Old Offers' }), 201);
+  });
+
+  it('refuses while dishes are in it', async () => {
+    const res = await w.adminA1.delete(`/api/v1/menu/categories/${w.categoryId}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CATEGORY_IN_USE');
+    expect((await w.sa.delete(`/api/v1/menu/categories/${w.categoryId}?restaurantId=${w.restaurantA}`)).status).toBe(409);
+  });
+
+  it('a shared category deleted in a branch leaves that branch only', async () => {
+    const shared = ok<{ id: string }>(await w.sa.post(`/api/v1/menu/categories?restaurantId=${w.restaurantA}`, { name: 'Sweets' }), 201);
+    ok(await w.adminA1.delete(`/api/v1/menu/categories/${shared.id}`));
+    expect(await names(w.adminA1)).not.toContain('Sweets');
+    expect(await names(w.adminA2)).toContain('Sweets');
+    // Gone for A1: it cannot be edited there, and A1 may make its own "Sweets".
+    expect((await w.adminA1.patch(`/api/v1/menu/categories/${shared.id}`, { name: 'Desserts' })).status).toBe(404);
+    ok(await w.adminA1.post('/api/v1/menu/categories', { name: 'Sweets' }), 201);
+  });
+});
+
 describe('dragging dishes into a new order', () => {
   type Dish = Item & { pinned: boolean; parentId: string | null };
   const dishIds = async (c: typeof w.adminA1, q = '') =>

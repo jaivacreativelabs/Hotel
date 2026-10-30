@@ -76,3 +76,7 @@ export const reorderItems = async (req: Request, res: Response) => {
   await menu.reorderItems(getScope(req), ids);
   res.json({ data: { ok: true } });
 };
+export const deleteCategory = async (req: Request, res: Response) => {
+  await menu.deleteCategory(currentUser(req), getScope(req), id(req));
+  res.json({ data: { ok: true } });
+};

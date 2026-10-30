@@ -9,6 +9,8 @@ const categoryOverrideSchema = new Schema(
     icon: { type: String, default: null },
     status: { type: String, enum: [...RECORD_STATUSES, null], default: null },
     displayOrder: { type: Number, default: null },
+    // A shared category this branch deleted from its own menu (other branches keep it).
+    deleted: { type: Boolean, default: null },
   },
   { _id: false },
 );

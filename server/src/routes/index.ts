@@ -138,6 +138,7 @@ export function createApiRouter(): Router {
   menuRouter.post('/categories/reorder', menu.reorderCategories);
   menuRouter.patch('/categories/:id', menu.updateCategory);
   menuRouter.patch('/categories/:id/status', menu.setCategoryStatus);
+  menuRouter.delete('/categories/:id', menu.deleteCategory);
   menuRouter.get('/items', menu.listItems);
   menuRouter.post('/items', menu.createItem);
   menuRouter.post('/items/reorder', menu.reorderItems);

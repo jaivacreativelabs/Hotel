@@ -51,6 +51,7 @@ export async function listCategories(scope: Scope, includeInactive: boolean) {
   const cats = await CategoryModel.find(visibleFilter(scope)).lean<CategoryLean[]>();
   const branchId = branchOf(scope);
   return cats
+    .filter((c) => !effectiveCategory(c, branchId).deleted) // shared ones this branch deleted
     .map((c) => toCategoryDTO(c, branchId))
     .filter((c) => includeInactive || c.status === 'ACTIVE')
     .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
@@ -58,7 +59,7 @@ export async function listCategories(scope: Scope, includeInactive: boolean) {
 
 async function getVisibleCategory(scope: Scope, id: string) {
   const cat = await CategoryModel.findOne({ _id: toObjectId(id, 'category'), ...visibleFilter(scope) });
-  if (!cat) throw notFound('Category');
+  if (!cat || effectiveCategory(cat.toObject() as CategoryLean, branchOf(scope)).deleted) throw notFound('Category');
   return cat;
 }
 
@@ -66,16 +67,50 @@ async function getVisibleCategory(scope: Scope, id: string) {
 function setCategoryOverride(
   cat: InstanceType<typeof CategoryModel>,
   branchId: Types.ObjectId,
-  patch: { name?: string; icon?: string; status?: RecordStatus; displayOrder?: number },
+  patch: { name?: string; icon?: string; status?: RecordStatus; displayOrder?: number; deleted?: boolean },
 ) {
   const existing = cat.branchOverrides.find((o) => o.branchId.equals(branchId));
   if (existing) existing.set(patch);
-  else cat.branchOverrides.push({ branchId, name: null, icon: null, status: null, displayOrder: null, ...patch });
+  else cat.branchOverrides.push({ branchId, name: null, icon: null, status: null, displayOrder: null, deleted: null, ...patch });
+}
+
+/**
+ * Deletes a category that has no dishes left. A branch's own one (or, for the Super Admin, a
+ * main-menu one) is gone for good; a shared one deleted in a branch leaves that branch's menu only.
+ */
+export async function deleteCategory(actor: AuthUser, scope: Scope, id: string) {
+  const cat = await getVisibleCategory(scope, id);
+  const own = owns(scope, cat);
+  const { name } = effectiveCategory(cat.toObject() as CategoryLean, branchOf(scope));
+  const dishes = own
+    ? // Anywhere: a branch may have moved a main-menu dish into it, or added its own dishes to it.
+      await MenuItemModel.countDocuments({ status: 'ACTIVE', parentId: null, $or: [{ categoryId: cat._id }, { 'branchOverrides.categoryId': cat._id }] })
+    : (await listItems(scope, {})).filter((i) => !i.parentId && i.categoryId === String(cat._id)).length;
+  if (dishes) {
+    throw conflict(
+      `“${name}” still has ${dishes} dish${dishes === 1 ? '' : 'es'}. Move ${dishes === 1 ? 'it' : 'them'} to another category or remove ${dishes === 1 ? 'it' : 'them'} first.`,
+      'CATEGORY_IN_USE',
+    );
+  }
+  if (own) await CategoryModel.deleteOne({ _id: cat._id });
+  else {
+    setCategoryOverride(cat, branchOf(scope)!, { deleted: true });
+    await cat.save();
+  }
+  await audit(actor, {
+    ...auditBase(scope),
+    action: 'CATEGORY_DELETED',
+    entityType: 'Category',
+    entityId: cat._id,
+    summary: own ? `Deleted category "${name}"` : `Deleted shared category "${name}" from this branch's menu`,
+  });
 }
 
 export async function createCategory(actor: AuthUser, scope: Scope, input: CategoryCreateInput) {
   const key = nameKey(input.name);
-  if (await CategoryModel.exists(nameClashFilter(scope, key))) {
+  // A shared category this branch deleted does not block the name.
+  const clashes = await CategoryModel.find(nameClashFilter(scope, key)).lean<CategoryLean[]>();
+  if (clashes.some((c) => !effectiveCategory(c, branchOf(scope)).deleted)) {
     throw conflict(`Category "${input.name}" already exists`, 'DUPLICATE');
   }
   const last = await CategoryModel.findOne({ restaurantId: scope.restaurant._id, branchId: branchOf(scope) })
