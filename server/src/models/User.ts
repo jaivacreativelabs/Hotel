@@ -13,6 +13,11 @@ const userSchema = new Schema(
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
     tokenVersion: { type: Number, default: 0 },
     lastLoginAt: { type: Date, default: null },
+    // Wrong passwords in a row (since loginFailsSince); too many lock sign-in until lockedUntil.
+    // Kept here, not in memory, so every server instance counts the same attempts.
+    loginFails: { type: Number, default: 0 },
+    loginFailsSince: { type: Date, default: null },
+    lockedUntil: { type: Date, default: null },
     // One-tap demo sign-in from the login page, switched on per account by the Super Admin.
     // No password is involved: the server issues the session itself while this is enabled.
     demo: {

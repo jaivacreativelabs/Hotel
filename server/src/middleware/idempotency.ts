@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { REQUEST_KEY_HEADER } from '@rb/shared';
+import { SESSION_COOKIE } from './auth.js';
 import { RequestLogModel } from '../models/index.js';
 import { AppError } from '../utils/errors.js';
 
@@ -19,7 +21,11 @@ export async function repeatSafe(req: Request, res: Response, next: NextFunction
   const key = req.get(REQUEST_KEY_HEADER);
   if (!key || req.method === 'GET' || req.method === 'HEAD' || req.path.startsWith('/auth/')) return next();
   if (!KEY.test(key)) throw new AppError(400, 'BAD_REQUEST_KEY', 'Invalid request key');
-  const fingerprint = `${req.method} ${req.originalUrl}`;
+  // This runs before sign-in is checked, so a stored answer is only given to the same session
+  // that made the request – never to someone who merely learnt the key.
+  const session: unknown = req.cookies?.[SESSION_COOKIE];
+  const owner = typeof session === 'string' && session ? createHash('sha256').update(session).digest('base64url').slice(0, 22) : '-';
+  const fingerprint = `${req.method} ${req.originalUrl} ${owner}`;
 
   try {
     await RequestLogModel.create({ _id: key, fingerprint });

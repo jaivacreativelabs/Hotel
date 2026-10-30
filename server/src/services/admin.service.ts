@@ -466,6 +466,7 @@ export async function resetRestaurantAdminPassword(actor: AuthUser, id: string, 
   const user = await getRestaurantAdminOr404(id);
   user.passwordHash = await hashPassword(password);
   user.tokenVersion += 1;
+  user.set({ loginFails: 0, loginFailsSince: null, lockedUntil: null }); // a new password lifts a lock
   await user.save();
   await audit(actor, {
     action: `${accountKind(user.role).action}_PASSWORD_RESET`,

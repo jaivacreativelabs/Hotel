@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { UserModel } from '../src/models/index.js';
+import { login } from '../src/services/auth.service.js';
 import { app, Client, createSuperAdmin, ok, PASSWORD, useTestDatabase } from './helpers.js';
 
 useTestDatabase();
@@ -89,6 +90,21 @@ describe('authentication', () => {
     expect((await first.get('/api/v1/auth/me')).status).toBe(200);
     expect((await second.get('/api/v1/auth/me')).status).toBe(401);
     ok(await first.post('/api/v1/auth/change-password', { currentPassword: 'NewPassw0rd', newPassword: PASSWORD }));
+  });
+
+  it('locks an account after too many wrong passwords, on every server instance', async () => {
+    // The service directly: the lock lives in MongoDB, not in one instance's per-IP limiter.
+    for (let i = 0; i < Number(process.env.LOGIN_RATE_LIMIT_MAX); i++) {
+      await expect(login('ra@test.local', `wrong-${i}a`)).rejects.toMatchObject({ status: 401 });
+    }
+    // Locked: even the right password is refused.
+    await expect(login('ra@test.local', PASSWORD)).rejects.toMatchObject({ status: 429, code: 'ACCOUNT_LOCKED' });
+    // A Super Admin resetting the password lifts the lock.
+    const sa = await new Client().login('super@test.local');
+    const ra = ok<{ id: string; email: string }[]>(await sa.get('/api/v1/admin/users')).find((u) => u.email === 'ra@test.local')!;
+    ok(await sa.post(`/api/v1/admin/users/${ra.id}/reset-password`, { password: PASSWORD }));
+    await expect(login('ra@test.local', PASSWORD)).resolves.toMatchObject({ email: 'ra@test.local' });
+    expect(await UserModel.findOne({ email: 'ra@test.local' }).lean()).toMatchObject({ loginFails: 0, lockedUntil: null });
   });
 
   it('rate-limits repeated failed logins', async () => {

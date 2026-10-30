@@ -1,8 +1,9 @@
+import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { env } from '../src/config/env.js';
 import { ExpenseModel } from '../src/models/index.js';
 import { todayIn } from '../src/utils/dates.js';
-import { buildWorld, useTestDatabase, type World } from './helpers.js';
+import { app, buildWorld, useTestDatabase, type World } from './helpers.js';
 
 useTestDatabase();
 
@@ -37,6 +38,17 @@ describe('a save sent again with the same request key', () => {
     const key = 'rq_other_request_key_01';
     expect((await w.adminA1.post('/api/v1/expenses', expense('a')).set(KEY, key)).status).toBe(201);
     expect((await w.adminA1.patch('/api/v1/menu/items/000000000000000000000000', { name: 'x' }).set(KEY, key)).status).toBe(422);
+  });
+
+  it('never hands the stored answer to another session or to no session', async () => {
+    const key = 'rq_private_answer_key_01';
+    expect((await w.adminA1.post('/api/v1/expenses', expense('mine')).set(KEY, key)).status).toBe(201);
+    const stranger = await w.adminA2.post('/api/v1/expenses', expense('mine')).set(KEY, key);
+    expect(stranger.status).toBe(422);
+    expect(stranger.headers['idempotent-replayed']).toBeUndefined();
+    const anonymous = await request(app).post('/api/v1/expenses').set('X-Requested-With', 'rb-client').set(KEY, key).send(expense('mine'));
+    expect(anonymous.status).toBe(422);
+    expect(JSON.stringify(anonymous.body)).not.toContain('mine');
   });
 
   it('different keys are different saves; no key works as before', async () => {

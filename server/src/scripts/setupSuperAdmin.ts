@@ -42,6 +42,7 @@ async function main() {
     existing.passwordHash = await hashPassword(password);
     existing.tokenVersion += 1;
     existing.status = 'ACTIVE';
+    existing.set({ loginFails: 0, loginFailsSince: null, lockedUntil: null });
     await existing.save();
     await audit(null, { action: 'SUPER_ADMIN_PASSWORD_RESET', entityType: 'User', entityId: existing._id, summary: `Password reset for ${email} via CLI` });
     console.log(`✔ Password reset for ${email}`);
