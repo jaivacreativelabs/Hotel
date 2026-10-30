@@ -207,6 +207,45 @@ describe('menu items', () => {
   });
 });
 
+describe('dragging dishes into a new order', () => {
+  type Dish = Item & { pinned: boolean; parentId: string | null };
+  const dishIds = async (c: typeof w.adminA1, q = '') =>
+    ok<Dish[]>(await c.get(`/api/v1/menu/items${q}`))
+      .filter((i) => !i.parentId && !i.pinned)
+      .map((i) => i.id);
+
+  it('a branch orders shared and its own dishes for itself only', async () => {
+    const before = await dishIds(w.adminA1);
+    const reversed = [...before].reverse();
+    ok(await w.adminA1.post('/api/v1/menu/items/reorder', { ids: reversed }));
+    expect(await dishIds(w.adminA1)).toEqual(reversed);
+    // Branch A2 keeps the main menu's order for the shared dishes.
+    const a2 = await dishIds(w.adminA2);
+    const shared = before.filter((id) => a2.includes(id));
+    expect(a2.filter((id) => shared.includes(id))).toEqual(shared);
+    // A new dish goes to the end.
+    const added = ok<Item>(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Kara Bath', price: 4000 }), 201);
+    expect((await dishIds(w.adminA1)).at(-1)).toBe(added.id);
+  });
+
+  it('refuses dishes of another branch or restaurant', async () => {
+    const bCat = ok<{ id: string }>(await w.adminB1.post('/api/v1/menu/categories', { name: 'B dishes' }), 201);
+    const bDish = ok<Item>(await w.adminB1.post('/api/v1/menu/items', { categoryId: bCat.id, name: 'B Dosa', price: 5000 }), 201);
+    const a2Dish = ok<Item>(await w.adminA2.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'A2 Special', price: 5000 }), 201);
+    expect((await w.adminA1.post('/api/v1/menu/items/reorder', { ids: [w.items.idly, bDish.id] })).status).toBe(403);
+    expect((await w.adminA1.post('/api/v1/menu/items/reorder', { ids: [w.items.idly, a2Dish.id] })).status).toBe(403);
+    expect((await w.adminA1.post('/api/v1/menu/items/reorder', { ids: [w.items.idly, w.items.idly] })).status).toBe(400);
+  });
+
+  it('the Super Admin orders the main menu', async () => {
+    const q = `?restaurantId=${w.restaurantA}`;
+    const main = await dishIds(w.sa, q);
+    const moved = [main[main.length - 1], ...main.slice(0, -1)];
+    ok(await w.sa.post(`/api/v1/menu/items/reorder${q}`, { ids: moved }));
+    expect(await dishIds(w.sa, q)).toEqual(moved);
+  });
+});
+
 describe('images', () => {
   it('accepts a real PNG and serves it', async () => {
     const item = ok<Item>(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Pic', price: 100 }), 201);

@@ -157,6 +157,8 @@ export interface MenuItemDTO {
   imageOverridden: boolean;
   /** pinned by this branch – listed first in its menu and New Bill screen */
   pinned: boolean;
+  /** position in this menu (the branch's own once it drags dishes around); lower first */
+  displayOrder: number;
   /** effective price for the requested scope */
   price: number;
   basePrice: number;

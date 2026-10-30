@@ -159,6 +159,14 @@ export const categoryCreateSchema = z.strictObject({
 });
 export const categoryUpdateSchema = categoryCreateSchema.partial();
 export const reorderSchema = z.strictObject({ ids: z.array(objectIdSchema).min(1).max(200) });
+/** Dishes in their new order (a menu can have more dishes than categories). */
+export const itemReorderSchema = z.strictObject({
+  ids: z
+    .array(objectIdSchema)
+    .min(1)
+    .max(2000)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each dish only once'),
+});
 
 export const menuItemCreateSchema = z.strictObject({
   categoryId: objectIdSchema,

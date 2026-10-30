@@ -140,6 +140,7 @@ export function createApiRouter(): Router {
   menuRouter.patch('/categories/:id/status', menu.setCategoryStatus);
   menuRouter.get('/items', menu.listItems);
   menuRouter.post('/items', menu.createItem);
+  menuRouter.post('/items/reorder', menu.reorderItems);
   menuRouter.patch('/items/:id', menu.updateItem);
   menuRouter.patch('/items/:id/availability', menu.setAvailability);
   menuRouter.patch('/items/:id/pin', menu.setPinned);

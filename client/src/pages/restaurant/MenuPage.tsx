@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FoodImage } from '../../components/FoodImage';
+import { mergeOrder, SortableItem, SortableList } from '../../components/Sortable';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { menuKeys, scopeQuery, useCategories, useMenuItems, type MenuScope } from '../../services/queries';
@@ -823,6 +824,36 @@ export function MenuManager({
     }
   };
 
+  /** Shows the new order at once, then saves it (New Bill follows the same order). */
+  const saveOrder = async (key: readonly unknown[], path: string, ids: string[], apply: (old: never[]) => unknown[]) => {
+    queryClient.setQueryData(key, (old: never[] | undefined) => old && apply(old));
+    try {
+      await scoped.post(path, { ids });
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      await queryClient.invalidateQueries({ queryKey: menuKeys.all });
+    }
+  };
+  const byOrder = <T extends { id: string }>(list: T[], ids: string[]) => {
+    const at = new Map(ids.map((id, i) => [id, i]));
+    return [...list].sort((a, b) => (at.get(a.id) ?? Infinity) - (at.get(b.id) ?? Infinity));
+  };
+  const reorderDishes = (shown: string[]) => {
+    const ids = mergeOrder(
+      dishes.map((d) => d.id),
+      shown,
+    );
+    void saveOrder(menuKeys.items(scope), '/menu/items/reorder', ids, (old: MenuItemDTO[]) => byOrder(old, ids));
+  };
+  const reorderCategories = (shown: string[]) => {
+    const ids = mergeOrder(
+      (categories.data ?? []).filter((c) => c.editable).map((c) => c.id),
+      shown,
+    );
+    void saveOrder(menuKeys.categories(scope, true), '/menu/categories/reorder', ids, (old: CategoryDTO[]) => byOrder(old, ids));
+  };
+
   return (
     <>
       <div className="page">
@@ -845,13 +876,16 @@ export function MenuManager({
           <button className={cx('chip', category === 'all' && 'active')} onClick={() => setCategory('all')}>
             <LayoutGrid /> All
           </button>
-          {activeCategories.map((c) => (
-            <button key={c.id} className={cx('chip', category === c.id && 'active')} onClick={() => setCategory(c.id)}>
-              {c.icon && <span className="chip-icon">{c.icon}</span>}
-              {c.name}
-            </button>
-          ))}
+          <SortableList ids={activeCategories.map((c) => c.id)} onReorder={reorderCategories} layout="row">
+            {activeCategories.map((c) => (
+              <SortableItem as="button" key={c.id} id={c.id} className={cx('chip', category === c.id && 'active')} onClick={() => setCategory(c.id)}>
+                {c.icon && <span className="chip-icon">{c.icon}</span>}
+                {c.name}
+              </SortableItem>
+            ))}
+          </SortableList>
         </div>
+        {visible.length > 1 && <div className="muted drag-hint">Press and hold a dish or category, then drag it to a new place.</div>}
 
         {hiddenCount > 0 && (
           <div className="alert alert-warning" style={{ marginBottom: 14, alignItems: 'center' }}>
@@ -877,57 +911,59 @@ export function MenuManager({
           </Empty>
         ) : (
           <div className="menu-grid">
-            {visible.map((item) => (
-              <div key={item.id} className={cx('menu-card', !item.isAvailable && 'unavailable')}>
-                <div className="food-media">
-                  <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
-                </div>
-                <div className="menu-card-tags">
-                  {notInBilling(item) && <span className="tag yellow">Not in billing</span>}
-                  {!item.isAvailable && <span className="tag dark">Sold out</span>}
-                </div>
-                {scope.branchId && (
-                  <button
-                    type="button"
-                    className={cx('pin-btn', item.pinned && 'pinned')}
-                    onClick={() =>
-                      void run(
-                        () => scoped.patch(`/menu/items/${item.id}/pin`, { pinned: !item.pinned }),
-                        item.pinned ? `“${item.name}” unpinned` : `“${item.name}” pinned to the top`,
-                      )
-                    }
-                    aria-pressed={item.pinned}
-                    aria-label={item.pinned ? `Unpin ${item.name}` : `Pin ${item.name} to the top`}
-                    title={item.pinned ? 'Unpin' : 'Pin to the top'}
-                  >
-                    {item.pinned ? <PinOff /> : <Pin />}
-                  </button>
-                )}
-                <div className="menu-card-body">
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="food-name" title={item.name}>
-                      {item.name}
-                    </div>
-                    <div className="food-price">{priceLabel(item, variantsOf.get(item.id))}</div>
-                    {variantsOf.get(item.id) && (
-                      <div className="menu-card-variants" title={variantsOf.get(item.id)!.map((v) => `${v.variantName} ${formatMoney(v.price)}`).join(' · ')}>
-                        {variantsOf.get(item.id)!.map((v) => v.variantName).join(' · ')}
-                      </div>
-                    )}
+            <SortableList ids={visible.map((i) => i.id)} onReorder={reorderDishes}>
+              {visible.map((item) => (
+                <SortableItem key={item.id} id={item.id} className={cx('menu-card', !item.isAvailable && 'unavailable')}>
+                  <div className="food-media">
+                    <FoodImage src={item.imageUrl} alt={item.name} emoji={categoryIcon.get(item.categoryId)} />
                   </div>
-                </div>
-                <div className="menu-card-actions">
-                  <button className="btn btn-soft btn-sm" onClick={() => setPanel({ kind: 'item', item })} aria-label={`Edit ${item.name}`}>
-                    <Pencil /> Edit
-                  </button>
-                  {item.editable && (
-                    <button className="btn btn-danger-soft btn-sm" onClick={() => setArchiving(item)} aria-label={`Remove ${item.name}`}>
-                      <Trash2 /> Remove
+                  <div className="menu-card-tags">
+                    {notInBilling(item) && <span className="tag yellow">Not in billing</span>}
+                    {!item.isAvailable && <span className="tag dark">Sold out</span>}
+                  </div>
+                  {scope.branchId && (
+                    <button
+                      type="button"
+                      className={cx('pin-btn', item.pinned && 'pinned')}
+                      onClick={() =>
+                        void run(
+                          () => scoped.patch(`/menu/items/${item.id}/pin`, { pinned: !item.pinned }),
+                          item.pinned ? `“${item.name}” unpinned` : `“${item.name}” pinned to the top`,
+                        )
+                      }
+                      aria-pressed={item.pinned}
+                      aria-label={item.pinned ? `Unpin ${item.name}` : `Pin ${item.name} to the top`}
+                      title={item.pinned ? 'Unpin' : 'Pin to the top'}
+                    >
+                      {item.pinned ? <PinOff /> : <Pin />}
                     </button>
                   )}
-                </div>
-              </div>
-            ))}
+                  <div className="menu-card-body">
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="food-name" title={item.name}>
+                        {item.name}
+                      </div>
+                      <div className="food-price">{priceLabel(item, variantsOf.get(item.id))}</div>
+                      {variantsOf.get(item.id) && (
+                        <div className="menu-card-variants" title={variantsOf.get(item.id)!.map((v) => `${v.variantName} ${formatMoney(v.price)}`).join(' · ')}>
+                          {variantsOf.get(item.id)!.map((v) => v.variantName).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="menu-card-actions">
+                    <button className="btn btn-soft btn-sm" onClick={() => setPanel({ kind: 'item', item })} aria-label={`Edit ${item.name}`}>
+                      <Pencil /> Edit
+                    </button>
+                    {item.editable && (
+                      <button className="btn btn-danger-soft btn-sm" onClick={() => setArchiving(item)} aria-label={`Remove ${item.name}`}>
+                        <Trash2 /> Remove
+                      </button>
+                    )}
+                  </div>
+                </SortableItem>
+              ))}
+            </SortableList>
           </div>
         )}
       </div>

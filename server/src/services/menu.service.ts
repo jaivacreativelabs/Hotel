@@ -180,7 +180,7 @@ export async function listItems(
   if (typeof query.q === 'string' && query.q.trim()) {
     filter.name = { $regex: escapeRegex(query.q.trim().slice(0, 50)), $options: 'i' };
   }
-  const items = await MenuItemModel.find(filter).sort({ displayOrder: 1, name: 1 }).lean<MenuItemLean[]>();
+  const items = await MenuItemModel.find(filter).lean<MenuItemLean[]>();
   // Variants are taxed like their dish, including a branch's own GST for it.
   const dishes = new Map(items.map((i) => [String(i._id), i]));
   const missing = items.filter((i) => i.parentId && !dishes.has(String(i.parentId))).map((i) => i.parentId!);
@@ -200,7 +200,38 @@ export async function listItems(
       const { taxable, taxRateBps, extraTaxes } = effectiveItem(dish, branchId);
       return { ...dto, name, categoryId: String(categoryId), taxable, taxRateBps, extraTaxes };
     })
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    // Pinned dishes first, then the menu's own order (the branch's, once it drags dishes around).
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+}
+
+/**
+ * Saves the order of the dishes (dragged into place on the Menu page). The main menu orders
+ * its own dishes; a branch orders everything it sees, for itself only, like its categories.
+ */
+export async function reorderItems(scope: Scope, ids: string[]) {
+  const objectIds = ids.map((id) => toObjectId(id, 'item'));
+  const items = await MenuItemModel.find({ _id: { $in: objectIds }, parentId: null, ...visibleFilter(scope) })
+    .select('branchId branchOverrides.branchId')
+    .lean<Pick<MenuItemLean, '_id' | 'branchId' | 'branchOverrides'>[]>();
+  if (items.length !== objectIds.length) throw forbidden('Only dishes of this menu can be reordered');
+  const byId = new Map(items.map((i) => [String(i._id), i]));
+  const branchId = branchOf(scope);
+  const ops = objectIds.map((_id, displayOrder) => {
+    const item = byId.get(String(_id))!;
+    if (owns(scope, item)) return { updateOne: { filter: { _id }, update: { $set: { displayOrder } } } };
+    // A main-menu dish: this branch's own position.
+    return item.branchOverrides?.some((o) => o.branchId.equals(branchId!))
+      ? { updateOne: { filter: { _id, 'branchOverrides.branchId': branchId }, update: { $set: { 'branchOverrides.$.displayOrder': displayOrder } } } }
+      : { updateOne: { filter: { _id }, update: { $push: { branchOverrides: { branchId, displayOrder } } } } };
+  });
+  // Mongoose casts each update to the schema (the pushed override gets its defaults).
+  await MenuItemModel.bulkWrite(ops as unknown as Parameters<typeof MenuItemModel.bulkWrite>[0]);
+}
+
+/** A new dish goes after everything this menu already shows. */
+async function nextItemOrder(scope: Scope): Promise<number> {
+  const items = await listItems(scope, {});
+  return items.reduce((max, i) => Math.max(max, i.displayOrder), -1) + 1;
 }
 
 async function getVisibleItem(scope: Scope, id: string) {
@@ -252,6 +283,7 @@ export async function createItem(actor: AuthUser, scope: Scope, input: MenuItemC
   const item = await MenuItemModel.create({
     restaurantId: scope.restaurant._id,
     branchId: branchOf(scope),
+    displayOrder: await nextItemOrder(scope),
     categoryId: toObjectId(input.categoryId),
     name: input.name,
     nameKey: nameKey(input.name),

@@ -3,6 +3,7 @@ import {
   availabilitySchema,
   categoryCreateSchema,
   categoryUpdateSchema,
+  itemReorderSchema,
   menuItemCreateSchema,
   menuItemUpdateSchema,
   pinSchema,
@@ -69,4 +70,9 @@ export const restoreItem = async (req: Request, res: Response) => {
 };
 export const setVariants = async (req: Request, res: Response) => {
   res.json({ data: await menu.setItemVariants(currentUser(req), getScope(req), id(req), parse(variantsSchema, req.body)) });
+};
+export const reorderItems = async (req: Request, res: Response) => {
+  const { ids } = parse(itemReorderSchema, req.body);
+  await menu.reorderItems(getScope(req), ids);
+  res.json({ data: { ok: true } });
 };
