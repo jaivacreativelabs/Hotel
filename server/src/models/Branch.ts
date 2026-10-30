@@ -13,6 +13,12 @@ const branchSchema = new Schema(
     status: { type: String, enum: RECORD_STATUSES, default: 'ACTIVE' },
     // Orders are sent to a Kitchen Display board for this branch (Super Admin setting)
     kitchenDisplay: { type: Boolean, default: false },
+    // Open / Close Shop: while closed nothing can be billed. Closing emails the day's report.
+    shopOpen: { type: Boolean, default: true },
+    shopStateAt: { type: Date, default: null },
+    // "YYYY-MM-DD" (APP_TIMEZONE) whose report went out for this branch – the evening backup
+    // email skips a branch that already sent it on Close Shop.
+    dailyReportSentFor: { type: String, default: '' },
   },
   { timestamps: true },
 );

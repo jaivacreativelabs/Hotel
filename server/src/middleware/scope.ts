@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { Types } from 'mongoose';
 import { BRANCH_HEADER } from '@rb/shared';
 import { BranchModel, RestaurantModel, type Branch, type Restaurant } from '../models/index.js';
-import { badRequest, forbidden, notFound } from '../utils/errors.js';
+import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
 import { toObjectId } from '../utils/validate.js';
 import { currentUser, type AuthUser } from './auth.js';
 
@@ -88,4 +88,12 @@ export function getBranchScope(req: Request): BranchScope {
   const scope = getScope(req);
   if (!scope.branch) throw badRequest('Select a restaurant first', 'BRANCH_REQUIRED');
   return scope as BranchScope;
+}
+
+/** Billing is locked while the shop is closed (Close Shop); reading open bills still works. */
+export function requireShopOpen(req: Request, _res: Response, next: NextFunction): void {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && getBranchScope(req).branch.shopOpen === false) {
+    throw conflict('The shop is closed. Tap Open Shop to start billing again.', 'SHOP_CLOSED');
+  }
+  next();
 }

@@ -197,7 +197,7 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td width="60" valign="middle">${logo}</td>
       <td valign="middle">
-        <div style="font:700 17px/22px ${FONT};color:${C.text};">Tiffin House</div>
+        <div style="font:700 17px/22px ${FONT};color:${C.text};">${esc(r.place ?? 'Tiffin House')}</div>
         <div style="font:400 13px/18px ${FONT};color:${C.muted};">Daily Sales Report</div>
       </td>
       <td align="right" valign="middle" style="padding-left:12px;">
@@ -253,7 +253,7 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
 export function renderDailyReportText(r: DailyReport): string {
   const line = (label: string, value: string) => `${label.padEnd(22)}${value}`;
   const out = [
-    `Tiffin House – Daily Sales Report`,
+    `${r.place ?? 'Tiffin House'} – Daily Sales Report`,
     `${longDate(r.date)} (till ${timeOf(r.asOf)})`,
     '',
     line('Net Sales', formatMoney(r.net)),

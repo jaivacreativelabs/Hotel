@@ -11,6 +11,7 @@ import type { Types } from 'mongoose';
 import {
   formatMoney,
   PAYMENT_METHODS,
+  placeName,
   type DailyReportSettingsDTO,
   type DailyReportSettingsInput,
   type ExpenseCategory,
@@ -58,6 +59,8 @@ export interface BranchReport {
 export interface DailyReport {
   date: string;
   asOf: Date;
+  /** the restaurant a one-branch report is for (its name heads the email); null: all of them */
+  place: string | null;
   totalSales: number;
   billCount: number;
   averageBill: number;
@@ -84,8 +87,12 @@ const byMethod = (rows: { method: string; sales: number; bills: number }[]): Pay
     return { method, sales: p?.sales ?? 0, bills: p?.bills ?? 0 };
   });
 
-/** Collects the report for `date` (YYYY-MM-DD in APP_TIMEZONE) from completed bills. */
-export async function buildDailyReport(date: string, asOf = new Date()): Promise<DailyReport> {
+/**
+ * Collects the report for `date` (YYYY-MM-DD in APP_TIMEZONE) from completed bills: every
+ * branch, or one branch's own (Close Shop, and the evening email for a branch that did not close).
+ */
+export async function buildDailyReport(date: string, asOf = new Date(), branchId?: Types.ObjectId): Promise<DailyReport> {
+  const onlyBranch = branchId ? { branchId } : {};
   const { start, end } = dayRange(date, date, env.APP_TIMEZONE);
   const sum = { sales: { $sum: '$grandTotal' }, bills: { $sum: 1 } };
   const paid = { $match: { status: 'COMPLETED' } };
@@ -97,7 +104,7 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     excluded: Bucket[];
   }>([
     // Real bills only: generated demo bills (isDemo) never reach the report.
-    { $match: { finalizedAt: { $gte: start, $lt: end }, isDemo: { $ne: true } } },
+    { $match: { finalizedAt: { $gte: start, $lt: end }, isDemo: { $ne: true }, ...onlyBranch } },
     {
       $facet: {
         summary: [paid, { $group: { _id: null, ...sum, tax: { $sum: '$taxTotal' } } }],
@@ -122,19 +129,23 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
     },
   ]);
 
-  const expenses = await ExpenseModel.find({ date, status: 'ACTIVE' })
+  const expenses = await ExpenseModel.find({ date, status: 'ACTIVE', ...onlyBranch })
     .sort({ amount: -1 })
     .select('branchId category amount note paymentMethod')
     .lean<(ExpenseLine & { branchId: Types.ObjectId })[]>();
 
   // Active branches of active restaurants are always listed, so a branch with no bills stands out.
   const activeRestaurants = await RestaurantModel.find({ status: 'ACTIVE' }).select('_id').lean<{ _id: Types.ObjectId }[]>();
-  const branchDocs = await BranchModel.find({
-    $or: [
-      { _id: { $in: [...f.branches.map((b) => b._id), ...expenses.map((e) => e.branchId)] } },
-      { status: 'ACTIVE', restaurantId: { $in: activeRestaurants.map((r) => r._id) } },
-    ],
-  })
+  const branchDocs = await BranchModel.find(
+    branchId
+      ? { _id: branchId }
+      : {
+          $or: [
+            { _id: { $in: [...f.branches.map((b) => b._id), ...expenses.map((e) => e.branchId)] } },
+            { status: 'ACTIVE', restaurantId: { $in: activeRestaurants.map((r) => r._id) } },
+          ],
+        },
+  )
     .select('name restaurantId')
     .lean<{ _id: Types.ObjectId; name: string; restaurantId: Types.ObjectId }[]>();
   const restaurants = await RestaurantModel.find({ _id: { $in: branchDocs.map((b) => b.restaurantId) } })
@@ -176,6 +187,7 @@ export async function buildDailyReport(date: string, asOf = new Date()): Promise
   return {
     date,
     asOf,
+    place: branchId && branchReports[0] ? placeName(branchReports[0].restaurantName, branchReports[0].branchName) : null,
     totalSales: s.sales,
     billCount: s.bills,
     averageBill: s.bills ? Math.round(s.sales / s.bills) : 0,
@@ -266,7 +278,7 @@ async function mailer() {
 }
 
 export function reportSubject(r: DailyReport): string {
-  return `Daily Sales Report – ${longDate(r.date)} – ${formatMoney(r.totalSales)}`;
+  return `${r.place ? `${r.place} – ` : ''}Daily Sales Report – ${longDate(r.date)} – ${formatMoney(r.totalSales)}`;
 }
 
 /** HTML for the in-app preview; the logo is inlined there instead of attached. */
@@ -347,13 +359,70 @@ function clockIn(timeZone: string, now: Date): string {
   return new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(now);
 }
 
+type BranchSend = { status: 'sent'; recipients: string[] } | { status: 'skipped'; reason: string };
+
 /**
- * Sends today's report if it is due – never before DAILY_REPORT_TIME, whoever calls (the
- * in-process timer, an external scheduler, or Vercel Cron, which on Hobby fires anywhere in its hour).
+ * One restaurant's report for today. On Close Shop (`onClose`) it always goes; the evening
+ * backup claims the day first, so a restaurant that closed (or was already emailed) gets no
+ * second email, and one with no bills or expenses today gets none at all.
+ */
+export async function sendBranchReport(branchId: Types.ObjectId, opts: { onClose?: boolean; now?: Date } = {}): Promise<BranchSend> {
+  if (!env.mailConfigured) return { status: 'skipped', reason: 'mail not configured' };
+  const settings = await loadSettings();
+  if (!settings.enabled) return { status: 'skipped', reason: 'turned off' };
+  if (!settings.recipients.length) return { status: 'skipped', reason: 'no recipients' };
+  const date = todayIn(env.APP_TIMEZONE, opts.now);
+
+  let previous: string | null = null;
+  if (!opts.onClose) {
+    const before = await BranchModel.findOneAndUpdate({ _id: branchId, dailyReportSentFor: { $ne: date } }, { $set: { dailyReportSentFor: date } })
+      .select('dailyReportSentFor')
+      .lean<{ dailyReportSentFor?: string }>();
+    if (!before) return { status: 'skipped', reason: 'already sent' };
+    previous = before.dailyReportSentFor ?? '';
+  }
+  const report = await buildDailyReport(date, opts.now, branchId);
+  if (!opts.onClose && report.billCount === 0 && report.totalExpenses === 0) return { status: 'skipped', reason: 'no sales today' };
+
+  try {
+    await deliver(report, settings.recipients);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await ReportSettingModel.updateOne({ _id: SETTINGS_ID }, { $set: { lastError: message.slice(0, 300) } });
+    if (previous !== null) await BranchModel.updateOne({ _id: branchId }, { $set: { dailyReportSentFor: previous } }); // try again later
+    console.error('[daily-report] send failed:', message);
+    return { status: 'skipped', reason: `send failed: ${message}` };
+  }
+  if (opts.onClose) await BranchModel.updateOne({ _id: branchId }, { $set: { dailyReportSentFor: date } });
+  await ReportSettingModel.updateOne({ _id: SETTINGS_ID }, { $set: { lastSentAt: new Date(), lastError: '' } });
+  return { status: 'sent', recipients: settings.recipients };
+}
+
+/**
+ * The evening backup – never before DAILY_REPORT_TIME, whoever calls (the in-process timer, an
+ * external scheduler, or Vercel Cron, which on Hobby fires anywhere in its hour): each active
+ * restaurant that has not closed its shop (and emailed its report) today gets its own email.
  */
 export async function runDueDailyReport(now = new Date()): Promise<SendResult> {
   if (clockIn(env.APP_TIMEZONE, now) < env.DAILY_REPORT_TIME) return { status: 'skipped', reason: 'not yet time' };
-  return sendDailyReport({ date: todayIn(env.APP_TIMEZONE, now) });
+  if (!env.mailConfigured) return { status: 'skipped', reason: 'mail not configured' };
+  const settings = await loadSettings();
+  if (!settings.enabled) return { status: 'skipped', reason: 'turned off' };
+  if (!settings.recipients.length) return { status: 'skipped', reason: 'no recipients' };
+
+  const restaurants = await RestaurantModel.find({ status: 'ACTIVE' }).select('_id').lean<{ _id: Types.ObjectId }[]>();
+  const branches = await BranchModel.find({ status: 'ACTIVE', restaurantId: { $in: restaurants.map((r) => r._id) } })
+    .select('_id')
+    .lean<{ _id: Types.ObjectId }[]>();
+  const results = [];
+  for (const b of branches) results.push(await sendBranchReport(b._id, { now }));
+  const sent = results.filter((r) => r.status === 'sent');
+  if (sent.length) return { status: 'sent', date: todayIn(env.APP_TIMEZONE, now), recipients: settings.recipients };
+  const reasons = results.map((r) => (r.status === 'skipped' ? r.reason : ''));
+  return {
+    status: 'skipped',
+    reason: reasons.find((r) => r.startsWith('send failed')) ?? (reasons.includes('already sent') ? 'already sent' : 'no sales today'),
+  };
 }
 
 /** Long-running servers: check once a minute. Not used on Vercel (no process stays alive). */

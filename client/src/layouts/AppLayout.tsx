@@ -26,6 +26,7 @@ import {
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
+import { ShopClosedNotice, ShopToggle } from '../components/ShopToggle';
 import { Loading, LogoMark } from '../components/ui';
 import { useRootClass } from '../hooks/useRootClass';
 import { ChangePasswordModal } from '../pages/auth/ChangePasswordModal';
@@ -240,12 +241,14 @@ export function AppLayout() {
             <span>{label}</span>
           </NavLink>
         ))}
+        {user?.role === 'RESTAURANT_ADMIN' && activeBranch && <ShopToggle />}
         <div className="sidebar-footer">© 2026 JAIVA Creative Labs</div>
       </nav>
       {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <main className="content">
         <Suspense fallback={<Loading />}>
-          <Outlet />
+          {/* Billing is locked after Close Shop (the server refuses it too). */}
+          {activeBranch?.shopOpen === false && /^\/(billing|tables)(\/|$)/.test(location.pathname) ? <ShopClosedNotice /> : <Outlet />}
         </Suspense>
       </main>
       {bottomNav && (

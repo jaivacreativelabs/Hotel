@@ -25,7 +25,8 @@ function runOutcome(result: string, sendTime: string) {
     'mail not configured': 'not sent – email is not set up on the server (SMTP_USER / SMTP_PASS)',
     'no recipients': 'not sent – no email address added',
     'turned off': 'not sent – the daily email is switched off',
-    'already sent': 'already sent today',
+    'already sent': 'already sent today (or sent when the shop closed)',
+    'no sales today': 'nothing to send – no bills or expenses today',
   };
   return words[result] ?? result;
 }
@@ -81,7 +82,8 @@ function SettingsCard({ settings }: { settings: DailyReportSettingsDTO }) {
         <div>
           <div className="card-title">Email every day</div>
           <div className="muted">
-            {settings.scheduleNote ? `Arrives ${settings.scheduleNote}` : `At ${timeLabel(settings.sendTime)}`} with today's sales
+            Each restaurant's report goes out when it taps Close Shop; one that did not close gets it{' '}
+            {settings.scheduleNote || `at ${timeLabel(settings.sendTime)}`}
           </div>
         </div>
         <label className="switch">

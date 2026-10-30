@@ -86,6 +86,7 @@ export async function accessibleBranches(user: AuthUser): Promise<BranchContextD
         name: b.name,
         code: b.code,
         kitchenDisplay: b.kitchenDisplay ?? false,
+        shopOpen: b.shopOpen ?? true,
         restaurant: { id: String(r._id), name: r.name, logoUrl: r.logoUrl ?? null, settings: restaurantSettings(r) },
       };
     });

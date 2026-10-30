@@ -11,7 +11,7 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { repeatSafe } from '../middleware/idempotency.js';
 import { apiNotFound } from '../middleware/error.js';
-import { requireBranchScope, requireMenuScope } from '../middleware/scope.js';
+import { requireBranchScope, requireMenuScope, requireShopOpen } from '../middleware/scope.js';
 import { imageUpload } from '../middleware/upload.js';
 import { recordScheduledRun, runDueDailyReport } from '../services/dailyReport.service.js';
 import { AppError } from '../utils/errors.js';
@@ -162,8 +162,15 @@ export function createApiRouter(): Router {
   tablesRouter.delete('/:id', ops.deleteTable);
   api.use('/tables', tablesRouter);
 
+  // ---- Open / Close Shop (closing emails the day's report and locks billing) ----
+  const shopRouter = Router();
+  shopRouter.use(authenticate, requireRole('RESTAURANT_ADMIN', 'SUPER_ADMIN'), requireBranchScope);
+  shopRouter.post('/open', ops.openShop);
+  shopRouter.post('/close', ops.closeShop);
+  api.use('/shop', shopRouter);
+
   const billsRouter = Router();
-  billsRouter.use(authenticate, requireBranchScope);
+  billsRouter.use(authenticate, requireBranchScope, requireShopOpen);
   billsRouter.get('/counter', ops.counterDraft);
   billsRouter.get('/', ops.tableDrafts);
   billsRouter.post('/table-groups', ops.createGroup);

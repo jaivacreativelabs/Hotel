@@ -4226,3 +4226,52 @@ html.app-open body {
 .cat-row.sortable.dragging {
   background: var(--color-surface);
 }
+
+/* Open / Close Shop (bottom of the sidebar) */
+.shop-toggle {
+  margin-top: auto; /* sits just above the footer */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-muted);
+}
+.shop-toggle + .sidebar-footer {
+  margin-top: 0;
+}
+.shop-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.shop-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.shop-toggle.closed .shop-dot {
+  background: var(--color-danger);
+  box-shadow: 0 0 0 3px var(--color-danger-soft, #fdecec);
+}
+.shop-closed {
+  max-width: 460px;
+  margin: 48px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  color: var(--color-text);
+}
+.shop-closed > svg {
+  color: var(--color-danger);
+}
+.shop-closed h2 {
+  margin: 4px 0 0;
+}

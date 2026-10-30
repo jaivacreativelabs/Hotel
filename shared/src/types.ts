@@ -122,7 +122,16 @@ export interface BranchContextDTO {
   code: string;
   /** The branch uses the Kitchen Display (orders are sent to the kitchen board). */
   kitchenDisplay: boolean;
+  /** false after Close Shop: billing is locked until Open Shop */
+  shopOpen: boolean;
   restaurant: { id: string; name: string; logoUrl: string | null; settings: RestaurantSettings };
+}
+
+/** Open Shop / Close Shop; closing also emails the restaurant's report for today. */
+export interface ShopStateDTO {
+  shopOpen: boolean;
+  /** what came of the report email on Close Shop ("sent to …", "email is not set up", …) */
+  report?: { sent: boolean; message: string };
 }
 
 export interface MeDTO {

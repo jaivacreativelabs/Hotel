@@ -24,6 +24,7 @@ import { getBranchScope } from '../middleware/scope.js';
 import * as bills from '../services/bills.service.js';
 import * as expenses from '../services/expenses.service.js';
 import * as kitchen from '../services/kitchen.service.js';
+import * as shop from '../services/shop.service.js';
 import * as groups from '../services/tableGroups.service.js';
 import * as tables from '../services/tables.service.js';
 import * as transactions from '../services/transactions.service.js';
@@ -155,4 +156,10 @@ export const updateExpense = async (req: Request, res: Response) => {
 export const deleteExpense = async (req: Request, res: Response) => {
   await expenses.deleteExpense(currentUser(req), id(req));
   res.status(204).end();
+};
+export const openShop = async (req: Request, res: Response) => {
+  res.json({ data: await shop.setShopOpen(currentUser(req), getBranchScope(req), true) });
+};
+export const closeShop = async (req: Request, res: Response) => {
+  res.json({ data: await shop.setShopOpen(currentUser(req), getBranchScope(req), false) });
 };
