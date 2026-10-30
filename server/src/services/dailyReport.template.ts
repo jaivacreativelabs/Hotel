@@ -208,7 +208,7 @@ export function renderDailyReportHtml(r: DailyReport, opts: { logoSrc: string | 
   </td></tr>
 
   <tr><td style="padding:26px 24px 4px 24px;">
-    <div style="font:500 13px/18px ${FONT};color:${C.muted};">Net (sale − expenses)</div>
+    <div style="font:500 13px/18px ${FONT};color:${C.muted};">Net Sales</div>
     <div style="font:700 34px/42px ${FONT};color:${r.net < 0 ? C.danger : C.primary};padding-top:2px;">${formatMoney(r.net)}</div>
   </td></tr>
   <tr><td style="padding:14px 20px 4px 20px;">
@@ -256,7 +256,7 @@ export function renderDailyReportText(r: DailyReport): string {
     `Tiffin House – Daily Sales Report`,
     `${longDate(r.date)} (till ${timeOf(r.asOf)})`,
     '',
-    line('Net (sale - expenses)', formatMoney(r.net)),
+    line('Net Sales', formatMoney(r.net)),
     line('Bills', String(r.billCount)),
     line('Average bill', formatMoney(r.averageBill)),
     line('Tax collected', formatMoney(r.taxTotal)),
