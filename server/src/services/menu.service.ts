@@ -219,12 +219,25 @@ async function assertCategoryUsable(scope: Scope, categoryId: string) {
   return cat;
 }
 
+/** Removed dishes and variants keep a unique key, so they never block a live name. */
+const removedKey = (item: { name: string; _id: Types.ObjectId }) => `${nameKey(item.name)}#${String(item._id)}`;
+
 async function assertItemNameFree(scope: Scope, name: string, exceptId?: Types.ObjectId) {
-  const clash = await MenuItemModel.exists({
+  const branchId = branchOf(scope);
+  const clashes = await MenuItemModel.find({
     ...nameClashFilter(scope, nameKey(name)),
     ...(exceptId && { _id: { $ne: exceptId } }),
-  });
-  if (clash) throw conflict(`An item named "${name}" already exists`, 'DUPLICATE');
+  }).lean<MenuItemLean[]>();
+  for (const c of clashes) {
+    if (c.status !== 'ACTIVE') {
+      // Removed before removing freed the name: give it up now.
+      await MenuItemModel.updateOne({ _id: c._id }, { $set: { nameKey: removedKey(c) } });
+      if (!c.parentId) await syncVariantsWithDish(c);
+      continue;
+    }
+    if (branchId && !owns(scope, c) && effectiveItem(c, branchId).hidden) continue; // removed from this branch's menu
+    throw conflict(`An item named "${name}" already exists`, 'DUPLICATE');
+  }
 }
 
 /** A main-menu dish renamed in a branch: no other dish this branch sees may have that name. */
@@ -436,10 +449,19 @@ export async function removeItemImage(actor: AuthUser, scope: Scope, id: string)
 
 export async function setItemArchived(actor: AuthUser, scope: Scope, id: string, archived: boolean) {
   const item = await getVisibleItem(scope, id);
+  const own = owns(scope, item);
   // A main-menu item removed in a branch leaves that branch's menu only.
-  if (owns(scope, item)) item.status = archived ? 'ARCHIVED' : 'ACTIVE';
-  else setOverride(item, branchOf(scope)!, { hidden: archived });
+  if (own) {
+    if (!archived && item.status !== 'ACTIVE') await assertItemNameFree(scope, item.name, item._id);
+    item.status = archived ? 'ARCHIVED' : 'ACTIVE';
+    // A removed dish gives its name up, so a new dish can be added under it.
+    item.nameKey = archived ? removedKey(item) : nameKey(item.name);
+  } else {
+    if (!archived) await assertBranchNameFree(scope, effectiveItem(item.toObject() as MenuItemLean, branchOf(scope)).name, item._id);
+    setOverride(item, branchOf(scope)!, { hidden: archived });
+  }
   await item.save();
+  if (own && !item.parentId) await syncVariantsWithDish(item.toObject() as MenuItemLean);
   await audit(actor, {
     ...auditBase(scope),
     action: archived ? 'MENU_ITEM_ARCHIVED' : 'MENU_ITEM_RESTORED',
@@ -463,7 +485,7 @@ async function syncVariantsWithDish(dish: MenuItemLean) {
       variants.map((v) => {
         const name = variantFullName(dish.name, v.variantName, v.variantQty);
         // Removed variants keep a unique key so they never block a live name.
-        const key = v.status === 'ACTIVE' ? nameKey(name) : `${nameKey(name)}#${String(v._id)}`;
+        const key = v.status === 'ACTIVE' && dish.status === 'ACTIVE' ? nameKey(name) : `${nameKey(name)}#${String(v._id)}`;
         return {
           updateOne: {
             filter: { _id: v._id },

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { MenuItemModel } from '../src/models/index.js';
 import { buildWorld, ok, useTestDatabase, type World } from './helpers.js';
 
 useTestDatabase();
@@ -168,6 +169,28 @@ describe('menu items', () => {
     expect(list.map((i) => i.id)).not.toContain(item.id);
     const all = ok<Item[]>(await w.adminA1.get('/api/v1/menu/items?includeArchived=true'));
     expect(all.map((i) => i.id)).toContain(item.id);
+  });
+
+  it('a removed dish (and its variants) does not block adding it again', async () => {
+    const q = `?restaurantId=${w.restaurantA}`;
+    const old = ok<Item>(await w.sa.post(`/api/v1/menu/items${q}`, { categoryId: w.categoryId, name: 'Pongal', price: 5000 }), 201);
+    ok(await w.sa.put(`/api/v1/menu/items/${old.id}/variants${q}`, { variants: [{ name: 'Half', price: 3000 }, { name: 'Full', price: 5000 }] }));
+    ok(await w.sa.post(`/api/v1/menu/items/${old.id}/archive${q}`));
+    // The main menu adds a new Pongal with the same variants.
+    const again = ok<Item>(await w.sa.post(`/api/v1/menu/items${q}`, { categoryId: w.categoryId, name: 'pongal', price: 5000 }), 201);
+    ok(await w.sa.put(`/api/v1/menu/items/${again.id}/variants${q}`, { variants: [{ name: 'Half', price: 3000 }, { name: 'Full', price: 5000 }] }));
+    // The old one cannot come back while the name is taken.
+    expect((await w.sa.post(`/api/v1/menu/items/${old.id}/restore${q}`)).status).toBe(409);
+    // A branch's own dish, removed and added again.
+    const own = ok<Item>(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Rava Dosa', price: 6000 }), 201);
+    ok(await w.adminA1.post(`/api/v1/menu/items/${own.id}/archive`));
+    ok(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Rava Dosa', price: 6500 }), 201);
+  });
+
+  it('frees the name of a dish removed before names were freed on removal', async () => {
+    const old = ok<Item>(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Upma', price: 4000 }), 201);
+    await MenuItemModel.updateOne({ _id: old.id }, { $set: { status: 'ARCHIVED' } }); // the name key stays "upma"
+    ok(await w.adminA1.post('/api/v1/menu/items', { categoryId: w.categoryId, name: 'Upma', price: 4500 }), 201);
   });
 
   it('Super Admin manages the shared menu, visible in every branch', async () => {
