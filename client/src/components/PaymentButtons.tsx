@@ -26,7 +26,7 @@ export function PaymentButtons<T extends PaymentChoice>({
   value: T | null;
   onChange: (m: T) => void;
   disabled?: boolean;
-  /** adds "Split" – part cash, part UPI / card */
+  /** adds "Partial" – part cash, part UPI / card */
   allowSplit?: boolean;
 }) {
   const choices: PaymentChoice[] = allowSplit ? [...PAYMENT_METHODS, 'SPLIT'] : [...PAYMENT_METHODS];
@@ -46,7 +46,7 @@ export function PaymentButtons<T extends PaymentChoice>({
             title={m === 'SPLIT' ? 'Paid partly one way and partly another, e.g. cash + UPI' : undefined}
           >
             <Icon />
-            {m === 'SPLIT' ? 'Split' : PAYMENT_LABEL[m]}
+            {m === 'SPLIT' ? 'Partial' : PAYMENT_LABEL[m]}
           </button>
         );
       })}
