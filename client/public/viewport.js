@@ -17,79 +17,65 @@
   });
   document.addEventListener('visibilitychange', setHeight);
 
-  // Tablets get the laptop layout: lay the page out 1280px wide and let the
-  // browser scale it to the screen, with no pinch / double-tap zoom (a zoomed
-  // billing screen gets in the way at the counter). Phones (short side < 600px)
-  // keep their own layout and zoom; desktop browsers ignore the viewport meta tag.
+  // Tablets get the laptop layout: lay the page out 1280px wide and scale it to the screen,
+  // with no zoom at all (a zoomed billing screen gets in the way at the counter). Phones
+  // (short side < 600px) keep their own layout and zoom; desktop browsers ignore the viewport meta tag.
   if (Math.min(screen.width, screen.height) < 600) return;
   var FIT = 'width=1280, user-scalable=no';
   var meta = document.querySelector('meta[name="viewport"]');
   if (meta) meta.setAttribute('content', FIT);
   setHeight(); // the page is now laid out 1280px wide, so its height in page pixels changed
 
-  /** Fixes the scale at the laptop layout's (screen width / 1280); false when it cannot tell. */
-  var lockScale = function () {
-    if (!meta) return false;
+  // The scale stays fixed at the laptop layout's (screen width / 1280), as both the smallest and
+  // the largest allowed. Left free even for a moment, iPad Safari zooms in on its own and stays
+  // there: coming back from another app it puts the focus back in the last text box (search,
+  // amount…), whose text is under 16px on screen, and zooms in to it; printing zooms too.
+  var scale = 0;
+  var nudge = 0;
+  /** force: apply it again even when the scale has not changed, which zooms Safari back out. */
+  var lockScale = function (force) {
+    if (!meta) return;
     var landscape = window.matchMedia('(orientation: landscape)').matches;
     var width = landscape
       ? Math.max(screen.width, screen.height)
       : Math.min(screen.width, screen.height);
-    var scale = Math.round((width / 1280) * 10000) / 10000;
-    if (!(scale > 0.3 && scale < 3)) return false;
+    var next = Math.round((width / 1280) * 10000) / 10000;
+    if (!(next > 0.3 && next < 3)) return;
+    if (next === scale && !force) return;
+    scale = next;
+    // Safari ignores the same text set again, so a forced lock differs by a hair (0.01%).
+    nudge = force && !nudge ? 0.0001 : 0;
+    var s = (scale + nudge).toFixed(4);
     meta.setAttribute(
       'content',
-      FIT + ', initial-scale=' + scale + ', minimum-scale=' + scale + ', maximum-scale=' + scale,
+      FIT + ', initial-scale=' + s + ', minimum-scale=' + s + ', maximum-scale=' + s
     );
-    return true;
-  };
-
-  // Printing lays the page out at the paper's width, and Safari then zooms the screen behind
-  // the print window in to fit that narrow page. While a bill prints, the scale is held at the
-  // laptop layout's and let go at the next touch.
-  var held = false;
-  var hold = function () {
-    held = lockScale() || held;
-  };
-  var release = function () {
-    if (!held) return;
-    held = false;
-    meta.setAttribute('content', FIT);
     setHeight();
   };
-  var print = window.print;
-  window.print = function () {
-    hold();
-    return print.apply(window, arguments);
-  };
-  window.addEventListener('beforeprint', hold);
-  window.addEventListener('afterprint', function () {
-    setHeight();
-    document.addEventListener('pointerdown', release, { once: true, passive: true });
-  });
+  lockScale();
 
-  // Coming back from another app (or rotating) Safari sometimes stays zoomed in. Snapping the
-  // scale to the laptop layout's for a moment brings the whole screen back.
-  var snapTimer = 0;
-  var snapToFit = function () {
-    if (held || document.visibilityState === 'hidden') return;
-    clearTimeout(snapTimer);
-    if (!lockScale()) return;
-    snapTimer = setTimeout(function () {
-      if (!held) meta.setAttribute('content', FIT);
-      setHeight();
-    }, 300);
-  };
+  // Rotating (or a resize) changes the screen's width: the scale follows it.
   var resizeTimer = 0;
-  window.addEventListener('resize', function () {
+  var refit = function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(snapToFit, 250);
+    resizeTimer = setTimeout(function () {
+      lockScale();
+    }, 250);
+  };
+  window.addEventListener('resize', refit);
+  window.addEventListener('orientationchange', refit);
+
+  // Back from another app, or after a bill printed: zoom back out if Safari zoomed in anyway.
+  var reset = function () {
+    if (document.visibilityState !== 'hidden') lockScale(true);
+  };
+  window.addEventListener('pageshow', reset);
+  document.addEventListener('visibilitychange', reset);
+  window.addEventListener('afterprint', function () {
+    reset();
+    // Safari does not always tell the page when its print window closes: the next touch does.
+    document.addEventListener('pointerdown', reset, { once: true, passive: true });
   });
-  window.addEventListener('orientationchange', function () {
-    release();
-    snapToFit();
-  });
-  window.addEventListener('pageshow', snapToFit);
-  document.addEventListener('visibilitychange', snapToFit);
 
   // Only scrolling gestures (app.css); Android tablets also follow user-scalable=no.
   root.classList.add('no-zoom');
