@@ -1891,26 +1891,6 @@ html.app-open body {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
-.group-adding {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-}
-.group-sync {
-  margin-left: auto;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-}
-.group-sync.error {
-  color: var(--color-danger);
-}
 .group-lines {
   display: flex;
   flex-direction: column;

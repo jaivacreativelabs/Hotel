@@ -5,6 +5,7 @@ import {
   kitchenPending,
   type DiscountInput,
   type DraftDTO,
+  type DraftItemDTO,
   type KitchenQty,
   type KitchenTicketDTO,
   type PaymentMethod,
@@ -204,6 +205,57 @@ function TableForm({
 
 // ---------------- Table detail (groups) ----------------
 
+/** A group's dishes with − qty + and remove – on the card and while adding food. */
+function GroupLines({ lines, onQty }: { lines: DraftItemDTO[]; onQty: (id: string, quantity: number) => void }) {
+  if (lines.length === 0) return <span className="muted">No items yet</span>;
+  return (
+    <div className="group-lines">
+      {lines.map((l) => (
+        <div key={l.menuItemId} className={cx('group-line', l.unavailable && 'unavailable')}>
+          <div className="thumb thumb-xs">
+            <FoodImage src={l.imageUrl} alt={l.name} />
+          </div>
+          <span className="group-line-name" title={l.name}>
+            {splitVariant(l.name).dish}
+            {splitVariant(l.name).variant && <small className="line-variant">{splitVariant(l.name).variant}</small>}
+            <small>{formatMoney(l.unitPrice * l.quantity)}</small>
+          </span>
+          <div className="qty">
+            <button onClick={() => onQty(l.menuItemId, l.quantity - 1)} aria-label={`Decrease ${l.name}`}>
+              <Minus size={15} />
+            </button>
+            <output>{l.quantity}</output>
+            <button onClick={() => onQty(l.menuItemId, l.quantity + 1)} disabled={l.unavailable} aria-label={`Increase ${l.name}`}>
+              <Plus size={15} />
+            </button>
+          </div>
+          <button className="icon-btn plain danger-text" onClick={() => onQty(l.menuItemId, 0)} aria-label={`Remove ${l.name}`}>
+            <Trash2 />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What of a group's live bill the kitchen still needs, and sending it (unsaved edits are flushed first). */
+function useGroupKitchen(draftId: string, sync: DraftSync | null, lines: DraftItemDTO[], draft: DraftDTO | null, onSent: () => void) {
+  const { send, sending } = useSendToKitchen();
+  // What the kitchen already has; updated here after sending (the draft itself is not reloaded).
+  const [sentNow, setSentNow] = useState<KitchenQty[] | null>(null);
+  const sent = sentNow ?? draft?.kitchenSent ?? [];
+  const pending = kitchenPending(lines, sent);
+  const sendToKitchen = async () => {
+    const most = new Map(sent.map((s) => [s.menuItemId, s.quantity]));
+    for (const l of lines) most.set(l.menuItemId, Math.max(most.get(l.menuItemId) ?? 0, l.quantity));
+    if (await send(draftId, sync)) {
+      setSentNow([...most].map(([menuItemId, quantity]) => ({ menuItemId, quantity })));
+      onSent();
+    }
+  };
+  return { pending, sending, sendToKitchen };
+}
+
 /**
  * The group being served while the menu is open on the left: same card, with its dishes,
  * quantities and live total (shares the draft's sync engine with the menu).
@@ -236,19 +288,7 @@ function ActiveGroupCard({
   const total = totals?.grandTotal ?? group.grandTotal;
   const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
   const setQty = (id: string, quantity: number) => sync?.update((b) => setBillQuantity(b, id, quantity));
-  const { send, sending } = useSendToKitchen();
-  // What the kitchen already has; updated here after sending (the draft itself is not reloaded).
-  const [sentNow, setSentNow] = useState<KitchenQty[] | null>(null);
-  const sent = sentNow ?? state.draft?.kitchenSent ?? [];
-  const pending = kitchenPending(lines, sent);
-  const sendToKitchen = async () => {
-    const most = new Map(sent.map((s) => [s.menuItemId, s.quantity]));
-    for (const l of lines) most.set(l.menuItemId, Math.max(most.get(l.menuItemId) ?? 0, l.quantity));
-    if (await send(group.draftId, sync)) {
-      setSentNow([...most].map(([menuItemId, quantity]) => ({ menuItemId, quantity })));
-      onSent();
-    }
-  };
+  const { pending, sending, sendToKitchen } = useGroupKitchen(group.draftId, sync, lines, state.draft, onSent);
 
   return (
     <div className="group-card active" aria-label={`Adding food to ${group.groupName}`}>
@@ -267,43 +307,9 @@ function ActiveGroupCard({
           <Trash2 />
         </button>
       </div>
-      <div className="group-adding">
-        <Utensils size={14} /> Adding food – tap dishes on the left
-        <span className={cx('group-sync', state.status === 'error' && 'error')}>
-          {state.status === 'saved' ? 'Saved' : state.status === 'error' ? 'Not saved – retrying' : state.status === 'loading' ? '' : 'Saving…'}
-        </span>
-      </div>
+      {state.status === 'error' && <div className="alert alert-warning">Not saved – retrying</div>}
       {state.message && (state.status === 'conflict' || state.status === 'rejected') && <div className="alert alert-warning">{state.message}</div>}
-      {lines.length === 0 ? (
-        <span className="muted">No items yet</span>
-      ) : (
-        <div className="group-lines">
-          {lines.map((l) => (
-            <div key={l.menuItemId} className={cx('group-line', l.unavailable && 'unavailable')}>
-              <div className="thumb thumb-xs">
-                <FoodImage src={l.imageUrl} alt={l.name} />
-              </div>
-              <span className="group-line-name" title={l.name}>
-                {splitVariant(l.name).dish}
-                {splitVariant(l.name).variant && <small className="line-variant">{splitVariant(l.name).variant}</small>}
-                <small>{formatMoney(l.unitPrice * l.quantity)}</small>
-              </span>
-              <div className="qty">
-                <button onClick={() => setQty(l.menuItemId, l.quantity - 1)} aria-label={`Decrease ${l.name}`}>
-                  <Minus size={15} />
-                </button>
-                <output>{l.quantity}</output>
-                <button onClick={() => setQty(l.menuItemId, l.quantity + 1)} disabled={l.unavailable} aria-label={`Increase ${l.name}`}>
-                  <Plus size={15} />
-                </button>
-              </div>
-              <button className="icon-btn plain danger-text" onClick={() => setQty(l.menuItemId, 0)} aria-label={`Remove ${l.name}`}>
-                <Trash2 />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <GroupLines lines={lines} onQty={setQty} />
       {sync && local && lines.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
       <div className="group-actions">
         <button className="btn btn-outline-primary" onClick={onDone}>
@@ -383,14 +389,17 @@ function GroupCard({
   onAction: (action: GroupAction) => void;
 }) {
   const { activeBranch } = useAuth();
-  const { send, sending } = useSendToKitchen();
-  // The bill itself (only for a group with food), so a discount can be given right here.
+  // The bill itself (only for a group with food), so its dishes, quantities and discount can be changed right here.
   const { sync, state } = useDraftSync(group.itemCount > 0 ? group.draftId : null, branchId);
   const local = state.local;
   const settings = activeBranch!.restaurant.settings;
   const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
   const total = totals?.grandTotal ?? group.grandTotal;
   const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
+  const lines = local?.items ?? [];
+  const itemCount = local ? lines.reduce((a, l) => a + l.quantity, 0) : group.itemCount;
+  const setQty = (id: string, quantity: number) => sync?.update((b) => setBillQuantity(b, id, quantity));
+  const kitchen = useGroupKitchen(group.draftId, sync, lines, state.draft, onSent);
   const extra = group.lineCount - group.previewItems.slice(0, 2).length;
   return (
     <div className="group-card">
@@ -409,33 +418,38 @@ function GroupCard({
           <Trash2 />
         </button>
       </div>
-      <div className="group-items">
-        {group.previewItems.length === 0 ? (
-          <span className="muted">No items yet</span>
-        ) : (
-          <>
-            {group.previewItems.slice(0, 2).map((p, i) => (
-              <div className="thumb" key={i} style={{ width: 48, height: 48 }} title={p.name}>
-                <FoodImage src={p.imageUrl} alt={p.name} />
-              </div>
-            ))}
-            {extra > 0 && <span className="group-more">+{extra}</span>}
-          </>
-        )}
-      </div>
+      {local ? (
+        <GroupLines lines={lines} onQty={setQty} />
+      ) : (
+        // Until the bill has loaded: a glimpse of its dishes.
+        <div className="group-items">
+          {group.previewItems.length === 0 ? (
+            <span className="muted">No items yet</span>
+          ) : (
+            <>
+              {group.previewItems.slice(0, 2).map((p, i) => (
+                <div className="thumb" key={i} style={{ width: 48, height: 48 }} title={p.name}>
+                  <FoodImage src={p.imageUrl} alt={p.name} />
+                </div>
+              ))}
+              {extra > 0 && <span className="group-more">+{extra}</span>}
+            </>
+          )}
+        </div>
+      )}
       {sync && local && local.items.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
       <div className="group-actions">
         <button className="btn btn-outline-primary" onClick={onAddItems}>
           <Utensils /> Add Items
         </button>
-        <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={group.itemCount === 0}>
+        <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={itemCount === 0}>
           <FileText /> Generate Bill
         </button>
       </div>
-      {activeBranch!.kitchenDisplay && group.itemCount > 0 && (
-        <KitchenSendButton pending={group.kitchenPending} sending={sending} onSend={() => void send(group.draftId).then((ok) => ok && onSent())} />
+      {activeBranch!.kitchenDisplay && itemCount > 0 && (
+        <KitchenSendButton pending={local ? kitchen.pending : group.kitchenPending} sending={kitchen.sending} onSend={() => void kitchen.sendToKitchen()} />
       )}
-      <GroupMoreActions itemCount={group.itemCount} guestCount={group.guestCount} onAction={onAction} />
+      <GroupMoreActions itemCount={itemCount} guestCount={group.guestCount} onAction={onAction} />
     </div>
   );
 }

@@ -32,7 +32,7 @@ export function setBillQuantity(bill: LocalBill, menuItemId: string, quantity: n
   };
 }
 
-/** One tap picks the size / type of a dish and adds it to the bill. */
+/** Each tap on a size / type adds one more of it to the bill; the picker stays open until Done. */
 function VariantPicker({
   dish,
   variants,
@@ -62,6 +62,11 @@ function VariantPicker({
             </button>
           );
         })}
+      </div>
+      <div className="modal-actions">
+        <button type="button" className="btn btn-primary" onClick={onClose}>
+          Done
+        </button>
       </div>
     </Modal>
   );
@@ -168,6 +173,8 @@ export function FoodGrid({
     addRef.current = add;
   });
   const press = useCallback((item: MenuItemDTO) => addRef.current(item), []);
+  // Stable, so the open picker keeps its focus while the bill updates behind it.
+  const closePicker = useCallback(() => setPicking(null), []);
 
   return (
     <>
@@ -214,11 +221,10 @@ export function FoodGrid({
           dish={picking}
           variants={variantsFor(picking) ?? []}
           qtyById={qtyById}
-          onClose={() => setPicking(null)}
+          onClose={closePicker}
           onPick={(v) => {
             // A variant without its own photo shows the dish's photo on the bill.
             onAdd({ ...v, imageUrl: v.imageUrl ?? picking.imageUrl });
-            setPicking(null);
           }}
         />
       )}
