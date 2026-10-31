@@ -2,11 +2,35 @@
  * Drag things into a new order, like app icons on a phone: press and hold (touch) or click and
  * drag (mouse). A quick tap or click still works as usual, and a page can still be scrolled.
  */
-import { closestCenter, DndContext, MouseSensor, TouchSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { closestCenter, DndContext, MouseSensor, TouchSensor, useSensor, useSensors, type DragEndEvent, type Modifier } from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, rectSortingStrategy, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useEffect, useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import { cx } from '../utils/format';
+
+/**
+ * The dragged thing stays on screen: inside the area that scrolls around it (the menu page, the
+ * chips row, the Categories panel), never over the header or off the edge. A chip only slides
+ * along its row and a list row only up and down.
+ */
+const keepInView =
+  (layout: 'grid' | 'row' | 'column'): Modifier =>
+  ({ transform, draggingNodeRect: rect, scrollableAncestors }) => {
+    if (!rect) return transform;
+    // Its visible inside, without the scrollbars: a card reaching under one widened the page,
+    // which then scrolled sideways.
+    const area = scrollableAncestors[0];
+    const outer = area && area !== document.scrollingElement ? area.getBoundingClientRect() : { left: 0, top: 0 };
+    const box = area
+      ? { left: outer.left + area.clientLeft, top: outer.top + area.clientTop, width: area.clientWidth, height: area.clientHeight }
+      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
+    return {
+      ...transform,
+      x: layout === 'column' ? 0 : clamp(transform.x, box.left - rect.left, box.left + box.width - rect.right),
+      y: layout === 'row' ? 0 : clamp(transform.y, box.top - rect.top, box.top + box.height - rect.bottom),
+    };
+  };
 
 export function SortableList({
   ids,
@@ -30,8 +54,9 @@ export function SortableList({
     if (!over || active.id === over.id) return;
     onReorder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
   };
+  const modifiers = useMemo(() => [keepInView(layout)], [layout]);
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={modifiers} onDragEnd={onDragEnd}>
       <SortableContext
         items={ids}
         strategy={layout === 'row' ? horizontalListSortingStrategy : layout === 'column' ? verticalListSortingStrategy : rectSortingStrategy}
