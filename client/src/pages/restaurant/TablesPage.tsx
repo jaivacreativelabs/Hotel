@@ -256,75 +256,6 @@ function useGroupKitchen(draftId: string, sync: DraftSync | null, lines: DraftIt
   return { pending, sending, sendToKitchen };
 }
 
-/**
- * The group being served while the menu is open on the left: same card, with its dishes,
- * quantities and live total (shares the draft's sync engine with the menu).
- */
-function ActiveGroupCard({
-  group,
-  index,
-  branchId,
-  onDone,
-  onGenerate,
-  onDelete,
-  onSent,
-  onAction,
-}: {
-  group: TableGroupSummaryDTO;
-  index: number;
-  branchId: string;
-  onSent: () => void;
-  onDone: () => void;
-  onGenerate: (liveTotal: number) => void;
-  onDelete: () => void;
-  onAction: (action: GroupAction) => void;
-}) {
-  const { activeBranch } = useAuth();
-  const settings = activeBranch!.restaurant.settings;
-  const { sync, state } = useDraftSync(group.draftId, branchId);
-  const local = state.local;
-  const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
-  const lines = local?.items ?? [];
-  const total = totals?.grandTotal ?? group.grandTotal;
-  const [bg, fg] = GROUP_COLORS[index % GROUP_COLORS.length];
-  const setQty = (id: string, quantity: number) => sync?.update((b) => setBillQuantity(b, id, quantity));
-  const { pending, sending, sendToKitchen } = useGroupKitchen(group.draftId, sync, lines, state.draft, onSent);
-
-  return (
-    <div className="group-card active" aria-label={`Adding food to ${group.groupName}`}>
-      <div className="group-head">
-        <div className="group-icon" style={{ background: bg, color: fg }}>
-          <Users />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div className="group-name">{group.groupName}</div>
-          <div className="muted">
-            {group.guestCount} {group.guestCount === 1 ? 'Person' : 'People'}
-          </div>
-        </div>
-        <div className="group-amount num">{formatMoney(total)}</div>
-        <button className="icon-btn plain" onClick={onDelete} aria-label={`Delete ${group.groupName}`} title="Delete this group's bill">
-          <Trash2 />
-        </button>
-      </div>
-      {state.status === 'error' && <div className="alert alert-warning">Not saved – retrying</div>}
-      {state.message && (state.status === 'conflict' || state.status === 'rejected') && <div className="alert alert-warning">{state.message}</div>}
-      <GroupLines lines={lines} onQty={setQty} />
-      {sync && local && lines.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
-      <div className="group-actions">
-        <button className="btn btn-outline-primary" onClick={onDone}>
-          <Utensils /> Add Items
-        </button>
-        <button className="btn btn-primary" onClick={() => onGenerate(total)} disabled={lines.length === 0}>
-          <FileText /> Generate Bill
-        </button>
-      </div>
-      {activeBranch!.kitchenDisplay && lines.length > 0 && <KitchenSendButton pending={pending} sending={sending} onSend={() => void sendToKitchen()} />}
-      <GroupMoreActions itemCount={lines.reduce((a, l) => a + l.quantity, 0)} guestCount={group.guestCount} onAction={onAction} />
-    </div>
-  );
-}
-
 /** Left side while ordering: the branch menu; tapping a dish adds it to the active group. */
 function OrderingMenu({
   draftId,
@@ -369,10 +300,15 @@ function GroupDiscount({ draftId, sync, discount, amount }: { draftId: string; s
   );
 }
 
+/**
+ * A group at the table with its dishes, quantities and live total. The same card stays on screen while
+ * its menu is open on the left (`active`), sharing the draft's sync engine – so nothing reloads or flickers.
+ */
 function GroupCard({
   group,
   index,
   branchId,
+  active,
   onAddItems,
   onGenerate,
   onDelete,
@@ -382,6 +318,7 @@ function GroupCard({
   group: TableGroupSummaryDTO;
   index: number;
   branchId: string;
+  active: boolean;
   onAddItems: () => void;
   onGenerate: (liveTotal: number) => void;
   onDelete: () => void;
@@ -389,8 +326,8 @@ function GroupCard({
   onAction: (action: GroupAction) => void;
 }) {
   const { activeBranch } = useAuth();
-  // The bill itself (only for a group with food), so its dishes, quantities and discount can be changed right here.
-  const { sync, state } = useDraftSync(group.itemCount > 0 ? group.draftId : null, branchId);
+  // The bill itself, so its dishes, quantities and discount can be changed right here.
+  const { sync, state } = useDraftSync(group.draftId, branchId);
   const local = state.local;
   const settings = activeBranch!.restaurant.settings;
   const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
@@ -402,7 +339,7 @@ function GroupCard({
   const kitchen = useGroupKitchen(group.draftId, sync, lines, state.draft, onSent);
   const extra = group.lineCount - group.previewItems.slice(0, 2).length;
   return (
-    <div className="group-card">
+    <div className={cx('group-card', active && 'active')} aria-label={active ? `Adding food to ${group.groupName}` : undefined}>
       <div className="group-head">
         <div className="group-icon" style={{ background: bg, color: fg }}>
           <Users />
@@ -418,6 +355,8 @@ function GroupCard({
           <Trash2 />
         </button>
       </div>
+      {state.status === 'error' && <div className="alert alert-warning">Not saved – retrying</div>}
+      {state.message && (state.status === 'conflict' || state.status === 'rejected') && <div className="alert alert-warning">{state.message}</div>}
       {local ? (
         <GroupLines lines={lines} onQty={setQty} />
       ) : (
@@ -727,33 +666,23 @@ function TableDetail({
         </div>
       )}
 
-      {table.groups.map((g, i) =>
-        g.draftId === activeDraftId ? (
-          <ActiveGroupCard
-            key={g.draftId}
-            group={g}
-            index={i}
-            branchId={branchId}
-            onDone={onExitOrder}
-            onSent={() => void refresh()}
-            onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
-            onDelete={() => setDeleting(g)}
-            onAction={(kind) => setAction({ kind, group: g })}
-          />
-        ) : (
+      {table.groups.map((g, i) => {
+        const active = g.draftId === activeDraftId;
+        return (
           <GroupCard
             key={g.draftId}
             group={g}
             index={i}
             branchId={branchId}
-            onAddItems={() => onOrder(g.draftId)}
+            active={active}
+            onAddItems={() => (active ? onExitOrder() : onOrder(g.draftId))}
             onGenerate={(liveTotal) => setPaying({ ...g, grandTotal: liveTotal })}
             onDelete={() => setDeleting(g)}
-            onSent={() => markSent(g.draftId)}
+            onSent={() => (active ? void refresh() : markSent(g.draftId))}
             onAction={(kind) => setAction({ kind, group: g })}
           />
-        ),
-      )}
+        );
+      })}
 
       {adding ? (
         <NewGroupForm free={free} busy={busy} nextName={nextGroupName(table.groups.map((g) => g.groupName))} onCreate={createGroup} onCancel={() => setAdding(false)} />
