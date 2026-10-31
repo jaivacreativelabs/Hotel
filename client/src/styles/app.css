@@ -13,6 +13,9 @@ body,
    tap in case it is a double-tap zoom. This turns that wait off; pinch-zoom still works. */
 html {
   touch-action: manipulation;
+  /* Phone browsers (Safari, Samsung) otherwise enlarge the text when the phone is turned sideways. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 /* Tablets (viewport.js): scrolling only, no pinch or double-tap zoom. */
 html.no-zoom {
@@ -25,6 +28,7 @@ body {
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale; /* Firefox on Mac: the same weight as Safari and Chrome */
   line-height: 1.4;
 }
 h1,
@@ -1266,6 +1270,38 @@ html.app-open body {
   max-width: 54px;
   max-height: 54px;
   opacity: 0.55;
+}
+/* Browsers without aspect-ratio (Safari before 15, Firefox before 89) gave photo boxes no height at
+   all. The same shapes come from top padding, which is measured from the width, with the photo
+   laid over it. */
+@supports not (aspect-ratio: 1 / 1) {
+  .food-card .food-media,
+  .menu-card .food-media,
+  .photo-box {
+    position: relative;
+    height: 0;
+    padding-top: 62.5%; /* 16 / 10 */
+  }
+  .food-card .food-media {
+    padding-top: calc((100% - 16px) * 0.625); /* the card's width less the 8px side margins */
+  }
+  .menu-card .food-media {
+    padding-top: 56.25%; /* 16 / 9 */
+  }
+  .photo-box {
+    padding-top: calc(62.5% - 4px); /* less its 2px top and bottom borders */
+  }
+  .food-media > .food-img,
+  .food-media > .food-placeholder,
+  .photo-box > .food-img,
+  .photo-box > .food-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  .variant-btn {
+    min-height: 124px; /* square at the grid's narrowest column */
+  }
 }
 .thumb {
   width: 50px;

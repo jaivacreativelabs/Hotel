@@ -21,6 +21,9 @@ const queryClient = new QueryClient({
   },
 });
 
+// This browser could load and run the app's code: public/browser-check.js stays quiet.
+document.documentElement.setAttribute('data-app-started', '');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

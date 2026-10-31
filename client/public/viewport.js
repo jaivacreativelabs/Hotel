@@ -1,4 +1,4 @@
-/* global screen, document, window */
+/* global screen, document, window, setTimeout, clearTimeout */
 (function () {
   var root = document.documentElement;
   // The app is exactly as tall as the visible screen (app.css uses --app-height). Safari's

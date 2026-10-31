@@ -5,10 +5,13 @@
     <link rel="icon" type="image/jpeg" href="/logo.jpeg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="/viewport.js"></script>
+    <!-- Before the app's own script, so it also sees that script fail to load. -->
+    <script src="/browser-check.js"></script>
     <meta name="theme-color" content="#1E7B34" />
     <title>Tiffin House POS</title>
   </head>
   <body>
+    <noscript>Tiffin House POS needs JavaScript. Please turn it on in your browser's settings.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
