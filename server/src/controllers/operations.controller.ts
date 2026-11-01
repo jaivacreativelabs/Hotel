@@ -9,7 +9,6 @@ import {
   manualSaleSchema,
   kitchenAdvanceSchema,
   kitchenPrioritySchema,
-  kitchenSendSchema,
   mergeGroupSchema,
   moveGroupSchema,
   splitGroupSchema,
@@ -94,8 +93,7 @@ export const splitGroup = async (req: Request, res: Response) => {
 
 // Kitchen Display
 export const sendToKitchen = async (req: Request, res: Response) => {
-  const { orderType } = parse(kitchenSendSchema, req.body ?? {});
-  res.json({ data: await kitchen.sendToKitchen(currentUser(req), getBranchScope(req), id(req), orderType) });
+  res.json({ data: await kitchen.sendToKitchen(currentUser(req), getBranchScope(req), id(req)) });
 };
 export const kitchenBoard = async (req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -113,13 +111,6 @@ export const waiterBoard = async (req: Request, res: Response) => {
 };
 export const serveTicket = async (req: Request, res: Response) => {
   res.json({ data: await kitchen.serveTicket(currentUser(req), getBranchScope(req), id(req)) });
-};
-export const readyParcels = async (req: Request, res: Response) => {
-  res.setHeader('Cache-Control', 'no-store');
-  res.json({ data: await kitchen.listReadyParcels(currentUser(req), getBranchScope(req)) });
-};
-export const handOverParcel = async (req: Request, res: Response) => {
-  res.json({ data: await kitchen.handOverParcel(currentUser(req), getBranchScope(req), id(req)) });
 };
 export const kitchenTicketPriority = async (req: Request, res: Response) => {
   res.json({ data: await kitchen.setTicketPriority(getBranchScope(req), id(req), parse(kitchenPrioritySchema, req.body).priority) });
