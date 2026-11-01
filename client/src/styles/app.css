@@ -1972,6 +1972,9 @@ html.app-open body {
 .danger-text {
   color: var(--color-danger);
 }
+.success-text {
+  color: var(--color-primary);
+}
 .ordering-head {
   display: flex;
   flex-direction: column;
@@ -2668,6 +2671,9 @@ html.app-open body {
   gap: 16px;
   margin-bottom: 20px;
 }
+.stat-grid.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .stat {
   padding: 18px 20px;
 }
@@ -3222,7 +3228,8 @@ html.app-open body {
   .form-grid {
     grid-template-columns: 1fr;
   }
-  .stat-grid {
+  .stat-grid,
+  .stat-grid.cols-3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }

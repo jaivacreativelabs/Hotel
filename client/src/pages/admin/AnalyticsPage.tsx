@@ -1,6 +1,6 @@
-import { placeName, type AnalyticsOverviewDTO } from '@rb/shared';
+import { EXPENSE_CATEGORY_LABEL, placeName, type AnalyticsOverviewDTO } from '@rb/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { Ban, IndianRupee, Receipt, ReceiptText, TrendingUp, Undo2 } from 'lucide-react';
+import { Ban, IndianRupee, Receipt, ReceiptText, Scale, TrendingUp, Undo2, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { BarChart, HBarList, TrendChart } from '../../components/charts';
 import { Empty, Loading, PageHeader } from '../../components/ui';
@@ -38,19 +38,35 @@ export function AnalyticsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Analytics" subtitle="Business-wide sales from completed bills" />
+      <PageHeader title="Analytics" subtitle="Business-wide sales from completed bills, expenses and net sales" />
       {filters}
       {overview.isLoading || !o ? (
         overview.isError ? <Empty title="Could not load analytics">{errorMessage(overview.error)}</Empty> : <Loading />
       ) : (
         <>
-          <div className="stat-grid">
+          <div className="stat-grid cols-3">
             <div className="card stat">
               <div className="stat-label">
                 <IndianRupee /> Total Sales
               </div>
               <div className="stat-value">{formatMoney(o.summary.totalSales)}</div>
               <div className="stat-foot">incl. {formatMoney(o.summary.taxTotal)} tax</div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">
+                <Wallet /> Expenses
+              </div>
+              <div className="stat-value danger-text">{formatMoney(o.summary.expenses)}</div>
+              <div className="stat-foot">
+                {o.expenses.count.toLocaleString('en-IN')} entr{o.expenses.count === 1 ? 'y' : 'ies'}
+              </div>
+            </div>
+            <div className="card stat">
+              <div className="stat-label">
+                <Scale /> Net Sales
+              </div>
+              <div className={`stat-value ${o.summary.netSales < 0 ? 'danger-text' : 'success-text'}`}>{formatMoney(o.summary.netSales)}</div>
+              <div className="stat-foot">sales − expenses</div>
             </div>
             <div className="card stat">
               <div className="stat-label">
@@ -102,16 +118,23 @@ export function AnalyticsPage() {
                         <th>Date</th>
                         <th className="right">Bills</th>
                         <th className="right">Sales</th>
+                        <th className="right">Expenses</th>
+                        <th className="right">Net</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {o.daily.map((d) => (
-                        <tr key={d.key}>
-                          <td>{formatDay(d.key)}</td>
-                          <td data-label="Bills" className="right num">{d.bills}</td>
-                          <td data-label="Sales" className="right num">{formatMoney(d.sales)}</td>
-                        </tr>
-                      ))}
+                      {o.daily.map((d, i) => {
+                        const spent = o.expenses.daily[i]?.amount ?? 0;
+                        return (
+                          <tr key={d.key}>
+                            <td>{formatDay(d.key)}</td>
+                            <td data-label="Bills" className="right num">{d.bills}</td>
+                            <td data-label="Sales" className="right num">{formatMoney(d.sales)}</td>
+                            <td data-label="Expenses" className="right num">{formatMoney(spent)}</td>
+                            <td data-label="Net" className={`right num${d.sales - spent < 0 ? ' danger-text' : ''}`}>{formatMoney(d.sales - spent)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -174,6 +197,16 @@ export function AnalyticsPage() {
                 <HBarList rows={o.byBranch.slice(0, 12).map((b) => ({ key: b.key, label: placeName(b.restaurantName, b.name), value: b.sales, sub: `${b.bills} bills` }))} />
               </div>
             )}
+            <div className="card chart-card">
+              <div className="chart-head">
+                <span className="card-title">Expenses by category</span>
+              </div>
+              <HBarList
+                total={o.summary.expenses}
+                emptyText="No expenses in this period."
+                rows={o.expenses.byCategory.map((c) => ({ key: c.category, label: EXPENSE_CATEGORY_LABEL[c.category], value: c.amount }))}
+              />
+            </div>
           </div>
         </>
       )}

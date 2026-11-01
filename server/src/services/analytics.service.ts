@@ -1,11 +1,11 @@
 /**
  * Super Admin analytics. Everything is aggregated in MongoDB; only COMPLETED transactions
- * count as revenue. Voided and refunded bills are reported separately.
+ * count as revenue. Voided and refunded bills are reported separately. Net sales = sales − active expenses.
  */
 import type { Types } from 'mongoose';
-import type { AnalyticsOverviewDTO, AnalyticsPoint, AnalyticsQuery, PaymentMethod } from '@rb/shared';
+import type { AnalyticsOverviewDTO, AnalyticsPoint, AnalyticsQuery, ExpenseCategory, PaymentMethod } from '@rb/shared';
 import { env } from '../config/env.js';
-import { BranchModel, RestaurantModel, TransactionModel } from '../models/index.js';
+import { BranchModel, ExpenseModel, RestaurantModel, TransactionModel } from '../models/index.js';
 import { addDays, dayRange } from '../utils/dates.js';
 import { badRequest } from '../utils/errors.js';
 import { unwindPayments } from '../utils/payments.js';
@@ -20,6 +20,14 @@ function baseMatch(q: AnalyticsQuery) {
   if (days > MAX_RANGE_DAYS) throw badRequest('Choose a range of at most two years');
   const { start, end } = dayRange(q.from, q.to, env.APP_TIMEZONE);
   const match: Record<string, unknown> = { finalizedAt: { $gte: start, $lt: end } };
+  if (q.restaurantId) match.restaurantId = toObjectId(q.restaurantId, 'restaurant');
+  if (q.branchId) match.branchId = toObjectId(q.branchId, 'branch');
+  return match;
+}
+
+/** Expenses carry a plain YYYY-MM-DD day (restaurant time zone), so the range is matched on that. */
+function expenseMatch(q: AnalyticsQuery) {
+  const match: Record<string, unknown> = { status: 'ACTIVE', date: { $gte: q.from, $lte: q.to } };
   if (q.restaurantId) match.restaurantId = toObjectId(q.restaurantId, 'restaurant');
   if (q.branchId) match.branchId = toObjectId(q.branchId, 'branch');
   return match;
@@ -62,7 +70,80 @@ function fillMonths(from: string, to: string, points: AnalyticsPoint[]): Analyti
 export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOverviewDTO> {
   const match = baseMatch(q);
   const tz = env.APP_TIMEZONE;
-  const [facets] = await TransactionModel.aggregate<{
+  const [[facets], [spent]] = await Promise.all([
+    salesFacets(match, tz),
+    ExpenseModel.aggregate<{
+      byCategory: { _id: ExpenseCategory; amount: number; count: number }[];
+      daily: { _id: string; amount: number }[];
+    }>([
+      { $match: expenseMatch(q) },
+      {
+        $facet: {
+          byCategory: [{ $group: { _id: '$category', amount: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { amount: -1 } }],
+          daily: [{ $group: { _id: '$date', amount: { $sum: '$amount' } } }],
+        },
+      },
+    ]),
+  ]);
+
+  const restaurants = await RestaurantModel.find({
+    _id: { $in: [...facets.byRestaurant.map((b) => b._id), ...facets.byBranch.map((b) => b.restaurantId)] },
+  })
+    .select('name')
+    .lean<{ _id: Types.ObjectId; name: string }[]>();
+  const branches = await BranchModel.find({ _id: { $in: facets.byBranch.map((b) => b._id) } })
+    .select('name')
+    .lean<{ _id: Types.ObjectId; name: string }[]>();
+  const rName = new Map(restaurants.map((r) => [String(r._id), r.name]));
+  const bName = new Map(branches.map((b) => [String(b._id), b.name]));
+  const s = facets.summary[0] ?? { sales: 0, bills: 0, tax: 0 };
+  const excluded = (status: string) => facets.excluded.find((e) => e._id === status) ?? { sales: 0, bills: 0 };
+  const bySales = (a: AnalyticsPoint, b: AnalyticsPoint) => b.sales - a.sales;
+  const expenseTotal = spent.byCategory.reduce((a, c) => a + c.amount, 0);
+  const spentOn = new Map(spent.daily.map((d) => [d._id, d.amount]));
+
+  return {
+    range: { from: q.from, to: q.to, timezone: tz },
+    summary: {
+      totalSales: s.sales,
+      billCount: s.bills,
+      averageBill: s.bills ? Math.round(s.sales / s.bills) : 0,
+      taxTotal: s.tax,
+      expenses: expenseTotal,
+      netSales: s.sales - expenseTotal,
+    },
+    excluded: {
+      voidedCount: excluded('VOIDED').bills,
+      voidedAmount: excluded('VOIDED').sales,
+      refundedCount: excluded('REFUNDED').bills,
+      refundedAmount: excluded('REFUNDED').sales,
+    },
+    expenses: {
+      count: spent.byCategory.reduce((a, c) => a + c.count, 0),
+      byCategory: spent.byCategory.map((c) => ({ category: c._id, amount: c.amount, count: c.count })),
+      daily: fillDays(q.from, q.to, []).map((d) => ({ key: d.key, amount: spentOn.get(d.key) ?? 0 })),
+    },
+    daily: fillDays(q.from, q.to, facets.daily.map(point)),
+    monthly: fillMonths(q.from, q.to, facets.monthly.map(point)),
+    byRestaurant: facets.byRestaurant.map((b) => ({ ...point(b), name: rName.get(String(b._id)) ?? 'Unknown' })).sort(bySales),
+    byBranch: facets.byBranch
+      .map((b) => ({
+        ...point(b),
+        name: bName.get(String(b._id)) ?? 'Unknown',
+        restaurantName: rName.get(String(b.restaurantId)) ?? 'Unknown',
+      }))
+      .sort(bySales),
+    byPaymentMethod: facets.byPaymentMethod
+      .map((b) => ({ ...point(b), key: String(b._id) as PaymentMethod }))
+      .sort(bySales),
+    topItems: facets.topItems.map((i) => ({ key: String(i._id), name: i.name, quantity: i.quantity, sales: i.sales })),
+    topCategories: facets.topCategories.map((c) => ({ key: c._id, name: c._id, quantity: c.quantity, sales: c.sales })),
+    hourly: fillHours(facets.hourly.map(point)),
+  };
+}
+
+function salesFacets(match: Record<string, unknown>, tz: string) {
+  return TransactionModel.aggregate<{
     summary: { sales: number; bills: number; tax: number }[];
     daily: Bucket[];
     monthly: Bucket[];
@@ -132,52 +213,6 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
       },
     },
   ]);
-
-  const restaurants = await RestaurantModel.find({
-    _id: { $in: [...facets.byRestaurant.map((b) => b._id), ...facets.byBranch.map((b) => b.restaurantId)] },
-  })
-    .select('name')
-    .lean<{ _id: Types.ObjectId; name: string }[]>();
-  const branches = await BranchModel.find({ _id: { $in: facets.byBranch.map((b) => b._id) } })
-    .select('name')
-    .lean<{ _id: Types.ObjectId; name: string }[]>();
-  const rName = new Map(restaurants.map((r) => [String(r._id), r.name]));
-  const bName = new Map(branches.map((b) => [String(b._id), b.name]));
-  const s = facets.summary[0] ?? { sales: 0, bills: 0, tax: 0 };
-  const excluded = (status: string) => facets.excluded.find((e) => e._id === status) ?? { sales: 0, bills: 0 };
-  const bySales = (a: AnalyticsPoint, b: AnalyticsPoint) => b.sales - a.sales;
-
-  return {
-    range: { from: q.from, to: q.to, timezone: tz },
-    summary: {
-      totalSales: s.sales,
-      billCount: s.bills,
-      averageBill: s.bills ? Math.round(s.sales / s.bills) : 0,
-      taxTotal: s.tax,
-    },
-    excluded: {
-      voidedCount: excluded('VOIDED').bills,
-      voidedAmount: excluded('VOIDED').sales,
-      refundedCount: excluded('REFUNDED').bills,
-      refundedAmount: excluded('REFUNDED').sales,
-    },
-    daily: fillDays(q.from, q.to, facets.daily.map(point)),
-    monthly: fillMonths(q.from, q.to, facets.monthly.map(point)),
-    byRestaurant: facets.byRestaurant.map((b) => ({ ...point(b), name: rName.get(String(b._id)) ?? 'Unknown' })).sort(bySales),
-    byBranch: facets.byBranch
-      .map((b) => ({
-        ...point(b),
-        name: bName.get(String(b._id)) ?? 'Unknown',
-        restaurantName: rName.get(String(b.restaurantId)) ?? 'Unknown',
-      }))
-      .sort(bySales),
-    byPaymentMethod: facets.byPaymentMethod
-      .map((b) => ({ ...point(b), key: String(b._id) as PaymentMethod }))
-      .sort(bySales),
-    topItems: facets.topItems.map((i) => ({ key: String(i._id), name: i.name, quantity: i.quantity, sales: i.sales })),
-    topCategories: facets.topCategories.map((c) => ({ key: c._id, name: c._id, quantity: c.quantity, sales: c.sales })),
-    hourly: fillHours(facets.hourly.map(point)),
-  };
 }
 
 function fillHours(points: AnalyticsPoint[]): AnalyticsPoint[] {

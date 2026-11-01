@@ -384,8 +384,15 @@ export interface AnalyticsPoint {
 
 export interface AnalyticsOverviewDTO {
   range: { from: string; to: string; timezone: string };
-  summary: { totalSales: number; billCount: number; averageBill: number; taxTotal: number };
+  /** netSales = totalSales − expenses (same as the daily report's Net Sales). */
+  summary: { totalSales: number; billCount: number; averageBill: number; taxTotal: number; expenses: number; netSales: number };
   excluded: { voidedCount: number; voidedAmount: number; refundedCount: number; refundedAmount: number };
+  /** Active expenses in the range, by the day the money was spent. `daily` has one entry per day, like `daily` sales. */
+  expenses: {
+    count: number;
+    byCategory: { category: ExpenseCategory; amount: number; count: number }[];
+    daily: { key: string; amount: number }[];
+  };
   daily: AnalyticsPoint[];
   monthly: AnalyticsPoint[];
   byRestaurant: (AnalyticsPoint & { name: string })[];

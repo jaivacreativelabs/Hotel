@@ -29,12 +29,26 @@ beforeAll(async () => {
   // An open draft must never count as revenue.
   const open = ok<{ id: string; version: number }>(await w.adminA2.get('/api/v1/bills/counter'));
   ok(await w.adminA2.put(`/api/v1/bills/${open.id}`, { version: open.version, items: [{ menuItemId: w.items.idly, quantity: 9 }] }));
+
+  ok(await w.adminA1.post('/api/v1/expenses', { date: today, category: 'GAS', amount: 4000, paymentMethod: 'CASH' }), 201);
+  ok(await w.adminB1.post('/api/v1/expenses', { date: today, category: 'MILK', amount: 1500, paymentMethod: 'UPI' }), 201);
+  // A deleted expense never counts.
+  const gone = ok<{ id: string }>(await w.adminA1.post('/api/v1/expenses', { date: today, category: 'RENT', amount: 90000, paymentMethod: 'UPI' }), 201);
+  expect((await w.adminA1.delete(`/api/v1/expenses/${gone.id}`)).status).toBe(204);
 });
 
 describe('Super Admin analytics', () => {
   it('aggregates completed bills only', async () => {
     const o = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}`));
-    expect(o.summary).toEqual({ totalSales: 31000, billCount: 4, averageBill: 7750, taxTotal: 0 });
+    expect(o.summary).toEqual({ totalSales: 31000, billCount: 4, averageBill: 7750, taxTotal: 0, expenses: 5500, netSales: 25500 });
+    expect(o.expenses).toEqual({
+      count: 2,
+      byCategory: [
+        { category: 'GAS', amount: 4000, count: 1 },
+        { category: 'MILK', amount: 1500, count: 1 },
+      ],
+      daily: [{ key: today, amount: 5500 }],
+    });
     expect(o.excluded).toMatchObject({ voidedCount: 1, voidedAmount: 10000 });
     expect(o.daily).toEqual([{ key: today, sales: 31000, bills: 4 }]);
     expect(o.byRestaurant.map((r) => [r.name, r.sales])).toEqual([
@@ -65,14 +79,15 @@ describe('Super Admin analytics', () => {
 
   it('filters by restaurant and branch', async () => {
     const a = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}&restaurantId=${w.restaurantA}`));
-    expect(a.summary.totalSales).toBe(19000);
+    expect(a.summary).toMatchObject({ totalSales: 19000, expenses: 4000, netSales: 15000 });
     const a2 = ok<AnalyticsOverviewDTO>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}&branchId=${w.branchA2}`));
-    expect(a2.summary).toMatchObject({ totalSales: 8000, billCount: 1 });
+    expect(a2.summary).toMatchObject({ totalSales: 8000, billCount: 1, expenses: 0, netSales: 8000 });
   });
 
   it('fills empty days and months in the range', async () => {
     const o = ok<AnalyticsOverviewDTO>(await w.sa.get('/api/v1/admin/analytics/overview?from=2020-01-30&to=2020-03-02'));
     expect(o.daily).toHaveLength(33);
+    expect(o.expenses.daily).toHaveLength(33);
     expect(o.monthly.map((m) => m.key)).toEqual(['2020-01', '2020-02', '2020-03']);
     expect(o.summary.billCount).toBe(0);
   });

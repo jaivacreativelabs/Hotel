@@ -229,15 +229,17 @@ export function HBarList({
   rows,
   total,
   initialCount,
+  emptyText = 'No sales in this period.',
 }: {
   rows: { key: string; label: string; value: number; sub?: string }[];
   total?: number;
   /** Show only this many rows with a "See more" button for the rest. */
   initialCount?: number;
+  emptyText?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const max = Math.max(1, ...rows.map((r) => r.value));
-  if (rows.length === 0) return <p className="muted">No sales in this period.</p>;
+  if (rows.length === 0) return <p className="muted">{emptyText}</p>;
   const hidden = initialCount && !expanded ? Math.max(0, rows.length - initialCount) : 0;
   const shown = hidden ? rows.slice(0, initialCount) : rows;
   return (
