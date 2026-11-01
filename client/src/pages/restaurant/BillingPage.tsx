@@ -45,6 +45,7 @@ import type { DraftSyncState, LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey, taxedItemsText, taxLabel } from '../../utils/format';
+import { tapProps } from '../../utils/tap';
 import { splitVariant } from '../../utils/menu';
 
 const ORDER_ICON: Record<OrderType, typeof ShoppingBag> = { DINE_IN: UtensilsCrossed, TAKEAWAY: ShoppingBag };
@@ -346,11 +347,11 @@ export function BillingView({
                   )}
                 </div>
                 <div className="qty">
-                  <button onClick={() => setQty(line.menuItemId, line.quantity - 1)} disabled={!editable} aria-label={`Decrease ${line.name}`}>
+                  <button {...tapProps(() => setQty(line.menuItemId, line.quantity - 1))} disabled={!editable} aria-label={`Decrease ${line.name}`}>
                     <Minus size={18} />
                   </button>
                   <output>{line.quantity}</output>
-                  <button onClick={() => setQty(line.menuItemId, line.quantity + 1)} disabled={!editable || line.unavailable} aria-label={`Increase ${line.name}`}>
+                  <button {...tapProps(() => setQty(line.menuItemId, line.quantity + 1))} disabled={!editable || line.unavailable} aria-label={`Increase ${line.name}`}>
                     <Plus size={18} />
                   </button>
                 </div>

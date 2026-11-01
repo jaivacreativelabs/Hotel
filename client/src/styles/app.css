@@ -1386,6 +1386,7 @@ html.app-open body {
   margin-top: 2px;
 }
 .food-card .btn {
+  pointer-events: none; /* the card takes the tap, so a quick second tap is not lost on the button */
   margin-left: auto;
   height: 34px;
   padding: 0 16px;

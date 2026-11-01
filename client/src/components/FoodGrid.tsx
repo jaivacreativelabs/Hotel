@@ -6,6 +6,7 @@ import { useCategories, useMenuItems } from '../services/queries';
 import type { LocalBill } from '../store/draftSync';
 import { cx, formatMoney } from '../utils/format';
 import { groupVariants, priceLabel } from '../utils/menu';
+import { tapProps } from '../utils/tap';
 import { FoodImage } from './FoodImage';
 import { Empty, Loading, Modal } from './ui';
 
@@ -52,7 +53,7 @@ function VariantPicker({
         {variants.map((v) => {
           const qty = qtyById.get(v.id);
           return (
-            <button key={v.id} type="button" className="variant-btn" disabled={!v.isAvailable} onClick={() => onPick(v)} aria-label={`Add ${v.name}`}>
+            <button key={v.id} type="button" className="variant-btn" disabled={!v.isAvailable} {...tapProps(() => onPick(v))} aria-label={`Add ${v.name}`}>
               <span className="variant-name">
                 {v.variantName}
                 {v.variantQty && <small className="variant-qty">{v.variantQty}</small>}
@@ -92,7 +93,7 @@ const FoodCard = memo(function FoodCard({
   return (
     <div
       className={cx('food-card', !available && 'disabled')}
-      onClick={() => onPress(item)}
+      {...tapProps(() => onPress(item))}
       role="button"
       tabIndex={available ? 0 : -1}
       aria-disabled={!available}
@@ -114,15 +115,8 @@ const FoodCard = memo(function FoodCard({
           <div className="food-name">{item.name}</div>
           <div className="food-price">{priceLabel(item, variants)}</div>
         </div>
-        <button
-          className="btn btn-primary"
-          tabIndex={-1}
-          disabled={!available || !editable}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPress(item);
-          }}
-        >
+        {/* Only a label: the whole card takes the tap (app.css). */}
+        <button className="btn btn-primary" tabIndex={-1} disabled={!available || !editable}>
           {variants ? 'Choose' : 'Add'}
         </button>
       </div>

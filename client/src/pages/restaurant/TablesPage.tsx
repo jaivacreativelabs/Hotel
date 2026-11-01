@@ -34,6 +34,7 @@ import { acquireDraftSync, releaseDraftSync, type DraftSync } from '../../store/
 import { useToast } from '../../store/toast';
 import { usePageSearch } from '../../store/topbar';
 import { cx, formatMoney, newIdempotencyKey } from '../../utils/format';
+import { tapProps } from '../../utils/tap';
 import { splitVariant } from '../../utils/menu';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
@@ -221,11 +222,11 @@ function GroupLines({ lines, onQty }: { lines: DraftItemDTO[]; onQty: (id: strin
             <small>{formatMoney(l.unitPrice * l.quantity)}</small>
           </span>
           <div className="qty">
-            <button onClick={() => onQty(l.menuItemId, l.quantity - 1)} aria-label={`Decrease ${l.name}`}>
+            <button {...tapProps(() => onQty(l.menuItemId, l.quantity - 1))} aria-label={`Decrease ${l.name}`}>
               <Minus size={15} />
             </button>
             <output>{l.quantity}</output>
-            <button onClick={() => onQty(l.menuItemId, l.quantity + 1)} disabled={l.unavailable} aria-label={`Increase ${l.name}`}>
+            <button {...tapProps(() => onQty(l.menuItemId, l.quantity + 1))} disabled={l.unavailable} aria-label={`Increase ${l.name}`}>
               <Plus size={15} />
             </button>
           </div>

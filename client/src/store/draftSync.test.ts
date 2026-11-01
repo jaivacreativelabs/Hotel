@@ -185,6 +185,21 @@ describe('DraftSync', () => {
     expect(sync.getState().local?.items).toHaveLength(1);
   });
 
+  it('does not let a slow reload bring back the bill from before an edit that is already saved', async () => {
+    const server = fakeServer();
+    const sync = new DraftSync('d1', 'b', server.transport, 5);
+    await sync.load();
+    let answer!: (d: DraftDTO) => void;
+    const before = structuredClone(server.stored);
+    server.transport.load = () => new Promise((resolve) => (answer = resolve));
+    const reload = sync.load(); // e.g. the iPad regaining focus on a slow network
+    sync.update(add('idly'));
+    await vi.advanceTimersByTimeAsync(5); // saved
+    answer(before);
+    await reload;
+    expect(sync.getState().local?.items.map((i) => i.menuItemId)).toEqual(['idly']);
+  });
+
   it('keeps edits made while a save is in flight', async () => {
     const server = fakeServer();
     const sync = new DraftSync('d1', 'b', server.transport, 5);

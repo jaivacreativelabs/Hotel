@@ -13,6 +13,7 @@ import type { LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
 import { adminKeys } from '../admin/adminShared';
 import { formatDateTime, formatMoney } from '../../utils/format';
+import { tapProps } from '../../utils/tap';
 import { splitVariant } from '../../utils/menu';
 
 /** Minutes left to edit a bill (rounded up), ticking while the screen is open; 0 once closed. */
@@ -162,11 +163,11 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
                   <small>{formatMoney(l.unitPrice * l.quantity)}</small>
                 </span>
                 <div className="qty">
-                  <button onClick={() => setBill((b) => setBillQuantity(b, l.menuItemId, l.quantity - 1))} aria-label={`Decrease ${l.name}`}>
+                  <button {...tapProps(() => setBill((b) => setBillQuantity(b, l.menuItemId, l.quantity - 1)))} aria-label={`Decrease ${l.name}`}>
                     <Minus size={15} />
                   </button>
                   <output>{l.quantity}</output>
-                  <button onClick={() => setBill((b) => setBillQuantity(b, l.menuItemId, l.quantity + 1))} aria-label={`Increase ${l.name}`}>
+                  <button {...tapProps(() => setBill((b) => setBillQuantity(b, l.menuItemId, l.quantity + 1)))} aria-label={`Increase ${l.name}`}>
                     <Plus size={15} />
                   </button>
                 </div>

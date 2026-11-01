@@ -117,9 +117,12 @@ export class DraftSync {
 
   async load(): Promise<void> {
     if (this.busy) return; // never clobber unsaved edits
+    const revision = this.revision;
     try {
       const d = await this.transport.load(this.id, this.branchId);
       if (this.busy) return;
+      // Edited (and maybe already saved) while it loaded: it was read before those edits.
+      if (this.revision !== revision || (this.state.draft && d.version < this.state.draft.version)) return;
       this.set({
         draft: d,
         local: toLocal(d),
