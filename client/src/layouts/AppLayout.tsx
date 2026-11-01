@@ -18,7 +18,6 @@ import {
   Search,
   Store,
   UserRound,
-  Users,
   Utensils,
   Wallet,
   X,
@@ -60,7 +59,6 @@ const WAITER_NAV: NavItem = { to: '/waiter', label: 'Ready to Serve', icon: Conc
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin/restaurants', label: 'Restaurants', icon: Store },
-  { to: '/admin/users', label: 'Admins', icon: Users },
   { to: '/admin/menu', label: 'Menu', icon: Utensils },
   { to: '/admin/transactions', label: 'Transactions', icon: FileText },
   { to: '/admin/expenses', label: 'Expenses', icon: Wallet },

@@ -1,14 +1,13 @@
 import { passwordSchema, placeName, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChefHat, CirclePlus, ConciergeBell, KeyRound, Pencil, Power, Store, Trash2, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActiveBadge } from '../../components/badges';
-import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, Modal, PageHeader, SidePanel, Spinner } from '../../components/ui';
+import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Modal, SidePanel, Spinner } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
 import { useToast } from '../../store/toast';
-import { usePageSearch } from '../../store/topbar';
 import { cx, formatDateTime } from '../../utils/format';
-import { adminKeys, useAllBranches, useRestaurants } from './adminShared';
+import { useAllBranches, useRestaurants } from './adminShared';
 
 /**
  * Branch picker grouped by restaurant. Branches are fully isolated, so a Restaurant Admin
@@ -286,35 +285,6 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
           onConfirm={() => remove(deleting)}
         />
       )}
-    </>
-  );
-}
-
-export function AdminsPage() {
-  const search = usePageSearch('Search admins by name or email...');
-  const users = useQuery({ queryKey: adminKeys.users, queryFn: () => api.get<UserDTO[]>('/admin/users', { branchId: null }) });
-  const branches = useAllBranches();
-  const [adding, setAdding] = useState(false);
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return (users.data ?? []).filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.includes(q));
-  }, [users.data, search]);
-
-  return (
-    <>
-      <div className="page">
-        <PageHeader
-          title="Admins &amp; Kitchen Logins"
-          subtitle="Restaurant Admins run billing; Kitchen and Waiter logins only see their own screen"
-          actions={
-            <button className="btn btn-primary btn-lg" onClick={() => setAdding(true)}>
-              <CirclePlus /> Add Account
-            </button>
-          }
-        />
-        <div className="card">{users.isLoading ? <Loading /> : <AdminsTable users={visible} branches={branches.data ?? []} />}</div>
-      </div>
-      {adding && <AdminForm onClose={() => setAdding(false)} />}
     </>
   );
 }

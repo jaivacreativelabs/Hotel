@@ -21,7 +21,6 @@ const named = <K extends string>(load: () => Promise<Record<K, React.ComponentTy
   lazy(() => load().then((m) => ({ default: m[name] })));
 const RestaurantsPage = named(() => import('./pages/admin/RestaurantsPage'), 'RestaurantsPage');
 const RestaurantDetailPage = named(() => import('./pages/admin/RestaurantDetailPage'), 'RestaurantDetailPage');
-const AdminsPage = named(() => import('./pages/admin/AdminsPage'), 'AdminsPage');
 const AdminMenuPage = named(() => import('./pages/admin/AdminMenuPage'), 'AdminMenuPage');
 const AdminTransactionsPage = named(() => import('./pages/admin/AdminTransactionsPage'), 'AdminTransactionsPage');
 const AdminExpensesPage = named(() => import('./pages/admin/AdminExpensesPage'), 'AdminExpensesPage');
@@ -109,7 +108,6 @@ export function App() {
         <Route index element={<Navigate to="restaurants" replace />} />
         <Route path="restaurants" element={<RestaurantsPage />} />
         <Route path="restaurants/:id" element={<RestaurantDetailPage />} />
-        <Route path="users" element={<AdminsPage />} />
         <Route path="menu" element={<AdminMenuPage />} />
         <Route path="transactions" element={<AdminTransactionsPage />} />
         <Route path="expenses" element={<AdminExpensesPage />} />
