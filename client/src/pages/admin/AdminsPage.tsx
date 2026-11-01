@@ -1,6 +1,6 @@
 import { passwordSchema, placeName, type BranchDTO, type StaffRole, type UserDTO } from '@rb/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChefHat, CirclePlus, ConciergeBell, KeyRound, Pencil, Power, Store, Users } from 'lucide-react';
+import { ChefHat, CirclePlus, ConciergeBell, KeyRound, Pencil, Power, Store, Trash2, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ActiveBadge } from '../../components/badges';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, Modal, PageHeader, SidePanel, Spinner } from '../../components/ui';
@@ -171,7 +171,20 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
   const [editing, setEditing] = useState<UserDTO | null>(null);
   const [resetting, setResetting] = useState<UserDTO | null>(null);
   const [toggling, setToggling] = useState<UserDTO | null>(null);
+  const [deleting, setDeleting] = useState<UserDTO | null>(null);
   const branchName = new Map(branches.map((b) => [b.id, b]));
+
+  const remove = async (u: UserDTO) => {
+    try {
+      await api.delete(`/admin/users/${u.id}`, { branchId: null });
+      await queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success(`${u.name} deleted`);
+    } catch (err) {
+      toast.error(err);
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const toggle = async (u: UserDTO) => {
     try {
@@ -242,6 +255,9 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
                   <button className="icon-btn plain" onClick={() => setToggling(u)} title={u.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} aria-label={`Toggle ${u.name}`}>
                     <Power />
                   </button>
+                  <button className="icon-btn plain danger-text" onClick={() => setDeleting(u)} title="Delete" aria-label={`Delete ${u.name}`}>
+                    <Trash2 />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -258,6 +274,16 @@ export function AdminsTable({ users, branches }: { users: UserDTO[]; branches: B
           danger={toggling.status === 'ACTIVE'}
           onCancel={() => setToggling(null)}
           onConfirm={() => toggle(toggling)}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete ${deleting.name}?`}
+          message={`${deleting.email} is signed out now and can never sign in again. Bills, expenses and kitchen tickets keep their name. This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => remove(deleting)}
         />
       )}
     </>

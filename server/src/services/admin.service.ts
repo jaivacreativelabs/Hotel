@@ -462,6 +462,25 @@ export async function setRestaurantAdminStatus(actor: AuthUser, id: string, stat
   return toUserDTO(user.toObject() as unknown as AuthUser);
 }
 
+/**
+ * Deletes a staff login for good: it is signed out at once and can never sign in again. Bills,
+ * expenses and kitchen tickets keep the name they were saved with; only the login's unfinished
+ * New Bill (never billed) goes with it.
+ */
+export async function deleteRestaurantAdmin(actor: AuthUser, id: string) {
+  const user = await getRestaurantAdminOr404(id);
+  await DraftModel.deleteMany({ ownerUserId: user._id, type: 'COUNTER', status: 'ACTIVE' });
+  await UserModel.deleteOne({ _id: user._id });
+  await audit(actor, {
+    action: `${accountKind(user.role).action}_DELETED`,
+    entityType: 'User',
+    entityId: user._id,
+    restaurantId: user.restaurantIds[0] ?? null,
+    summary: `Deleted ${accountKind(user.role).label} ${user.name} (${user.email})`,
+  });
+  return { id: String(user._id) };
+}
+
 export async function resetRestaurantAdminPassword(actor: AuthUser, id: string, password: string) {
   const user = await getRestaurantAdminOr404(id);
   user.passwordHash = await hashPassword(password);
