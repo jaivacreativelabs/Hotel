@@ -26,6 +26,7 @@ import {
 import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type ComponentType } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
+import { BillingWarmUp } from '../components/BillingWarmUp';
 import { ShopClosedNotice, ShopToggle } from '../components/ShopToggle';
 import { Loading, LogoMark } from '../components/ui';
 import { useRootClass } from '../hooks/useRootClass';
@@ -242,6 +243,7 @@ export function AppLayout() {
           </NavLink>
         ))}
         {user?.role === 'RESTAURANT_ADMIN' && activeBranch && <ShopToggle />}
+        {user?.role === 'RESTAURANT_ADMIN' && activeBranch?.shopOpen !== false && activeBranch && <BillingWarmUp branchId={activeBranch.id} />}
         <div className="sidebar-footer">© 2026 JAIVA Creative Labs</div>
       </nav>
       {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} aria-hidden="true" />}

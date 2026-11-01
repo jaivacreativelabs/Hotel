@@ -39,7 +39,7 @@ import { useDraftSync } from '../../hooks/useDraftSync';
 import { useRootClass } from '../../hooks/useRootClass';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { api, ApiError, apiSync, errorMessage } from '../../services/api';
-import { useCategories, useMenuItems } from '../../services/queries';
+import { counterDraftQuery, useCategories, useMenuItems } from '../../services/queries';
 import { useAuth } from '../../store/auth';
 import type { DraftSyncState, LocalBill } from '../../store/draftSync';
 import { useToast } from '../../store/toast';
@@ -109,12 +109,7 @@ export function BillingView({
   const queryClient = useQueryClient();
   const search = usePageSearch('Search food items...');
 
-  const counter = useQuery({
-    queryKey: ['counter-draft', branchId],
-    queryFn: () => api.get<DraftDTO>('/bills/counter'),
-    enabled: !tableDraftId,
-    staleTime: Infinity,
-  });
+  const counter = useQuery({ ...counterDraftQuery(branchId), enabled: !tableDraftId });
   const draftId = tableDraftId ?? counter.data?.id ?? null;
   const { sync, state } = useDraftSync(draftId, branchId);
 

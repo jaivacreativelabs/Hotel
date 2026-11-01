@@ -88,6 +88,8 @@ export class DraftSync {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private retryDelay = 0;
   private waiters: { resolve: () => void; reject: (e: Error) => void }[] = [];
+  private loading: Promise<void> | null = null;
+  private loadedAt = 0;
   refCount = 0;
 
   constructor(
@@ -115,11 +117,23 @@ export class DraftSync {
     notifyGlobal();
   }
 
-  async load(): Promise<void> {
+  /** Reloads from the server; several screens asking at once share one request. */
+  load(): Promise<void> {
+    if (!this.loading) this.loading = this.read().finally(() => (this.loading = null));
+    return this.loading;
+  }
+
+  /** Reloads unless it did a moment ago (opening a table binds its bills on several screens). */
+  refresh(): void {
+    if (Date.now() - this.loadedAt > 2000) void this.load();
+  }
+
+  private async read(): Promise<void> {
     if (this.busy) return; // never clobber unsaved edits
     const revision = this.revision;
     try {
       const d = await this.transport.load(this.id, this.branchId);
+      this.loadedAt = Date.now();
       if (this.busy) return;
       // Edited (and maybe already saved) while it loaded: it was read before those edits.
       if (this.revision !== revision || (this.state.draft && d.version < this.state.draft.version)) return;
@@ -258,32 +272,75 @@ export class DraftSync {
 
 // ---------------- Registry ----------------
 
+// Engines stay after their screens close (the most recent KEPT ones), so a table opened again
+// shows its bill at once and only refreshes it in the background.
 const registry = new Map<string, DraftSync>();
+const KEPT = 60;
+
+function engine(id: string, branchId: string, transport?: DraftTransport): DraftSync {
+  const sync = registry.get(id) ?? new DraftSync(id, branchId, transport);
+  registry.delete(id);
+  registry.set(id, sync); // most recently used last
+  return sync;
+}
+
+function trim() {
+  for (const s of registry.values()) {
+    if (registry.size <= KEPT) return;
+    if (s.refCount <= 0 && !s.busy) registry.delete(s.id);
+  }
+}
 
 export function acquireDraftSync(id: string, branchId: string, transport?: DraftTransport): DraftSync {
-  let sync = registry.get(id);
-  if (!sync) {
-    sync = new DraftSync(id, branchId, transport);
-    registry.set(id, sync);
-    const s = sync;
-    // Drop the engine once nobody uses it and nothing is left to save.
-    s.subscribe(() => {
-      if (s.refCount <= 0 && !s.busy) registry.delete(s.id);
-    });
-  }
+  const sync = engine(id, branchId, transport);
   sync.refCount += 1;
-  void sync.load();
+  sync.refresh();
   return sync;
 }
 
 export function releaseDraftSync(sync: DraftSync) {
   sync.refCount -= 1;
   if (sync.refCount > 0) return;
-  if (sync.busy) {
-    sync.flushNow().catch(() => undefined); // keeps retrying in the background
-  } else {
-    registry.delete(sync.id);
+  if (sync.busy) sync.flushNow().catch(() => undefined); // keeps retrying in the background
+  trim();
+}
+
+/** The engine of a bill that is already loaded, if any (lets a screen show it from its first frame). */
+export const peekDraftSync = (id: string): DraftSync | null => registry.get(id) ?? null;
+
+const queued = new Set<DraftSync>();
+let loadingAhead = 0;
+
+/**
+ * Loads bills before anyone opens them (every group seated at the tables, the counter bill), and
+ * reloads one whose version moved on – changed on another device. A few at a time.
+ */
+export function prefetchDrafts(drafts: { id: string; version: number }[], branchId: string) {
+  for (const d of drafts) {
+    const known = registry.get(d.id);
+    const sync = known ?? engine(d.id, branchId);
+    const version = sync.getState().draft?.version;
+    if (!known || (version !== undefined && version < d.version)) queued.add(sync);
   }
+  const next = () => {
+    const sync = queued.values().next().value;
+    if (!sync || loadingAhead >= 3) return;
+    queued.delete(sync);
+    loadingAhead += 1;
+    void sync.load().finally(() => {
+      loadingAhead -= 1;
+      next();
+    });
+    next();
+  };
+  next();
+  trim();
+}
+
+/** Forgets every bill nobody is editing (sign-out). */
+export function forgetDraftSyncs() {
+  queued.clear();
+  for (const s of registry.values()) if (s.refCount <= 0 && !s.busy) registry.delete(s.id);
 }
 
 export function syncSummary(): { pending: number; failing: number } {

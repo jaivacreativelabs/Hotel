@@ -200,6 +200,19 @@ describe('DraftSync', () => {
     expect(sync.getState().local?.items.map((i) => i.menuItemId)).toEqual(['idly']);
   });
 
+  it('shares one request when several screens reload the same bill, and refresh skips a fresh one', async () => {
+    const server = fakeServer();
+    const load = vi.spyOn(server.transport, 'load');
+    const sync = new DraftSync('d1', 'b', server.transport, 5);
+    await Promise.all([sync.load(), sync.load(), sync.load()]);
+    expect(load).toHaveBeenCalledTimes(1);
+    sync.refresh();
+    expect(load).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2500);
+    sync.refresh();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps edits made while a save is in flight', async () => {
     const server = fakeServer();
     const sync = new DraftSync('d1', 'b', server.transport, 5);

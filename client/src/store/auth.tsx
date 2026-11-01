@@ -2,6 +2,8 @@ import type { BranchContextDTO, MeDTO, UserDTO } from '@rb/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiError, setApiBranch, setUnauthorizedHandler } from '../services/api';
+import { clearSavedQueries } from '../services/savedQueries';
+import { forgetDraftSyncs } from './draftSync';
 
 interface AuthState {
   user: UserDTO | null;
@@ -27,21 +29,56 @@ function readStoredBranch(userId: string): string | null {
   }
 }
 
+const pickBranch = (data: MeDTO) => {
+  const stored = readStoredBranch(data.user.id);
+  return data.branches.find((b) => b.id === stored)?.id ?? data.branches[0]?.id ?? null;
+};
+
+/**
+ * The signed-in account, kept on the device so the app opens at once after Safari reloads it;
+ * /auth/me still checks it in the background and an ended session goes to the login page.
+ */
+const ME_KEY = 'rb.me';
+function readSavedMe(): MeDTO | null {
+  try {
+    const raw = localStorage.getItem(ME_KEY);
+    return raw ? (JSON.parse(raw) as MeDTO) : null;
+  } catch {
+    return null;
+  }
+}
+function saveMe(data: MeDTO | null) {
+  try {
+    if (data) localStorage.setItem(ME_KEY, JSON.stringify(data));
+    else localStorage.removeItem(ME_KEY);
+  } catch {
+    /* storage unavailable – the app waits for /auth/me instead */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [me, setMe] = useState<MeDTO | null>(null);
-  const [branchId, setBranchId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [saved] = useState(readSavedMe);
+  const [me, setMe] = useState<MeDTO | null>(saved);
+  const [branchId, setBranchId] = useState<string | null>(() => {
+    const chosen = saved ? pickBranch(saved) : null;
+    setApiBranch(chosen);
+    return chosen;
+  });
+  const [loading, setLoading] = useState(!saved);
 
   const apply = useCallback((data: MeDTO | null) => {
     setMe(data);
+    saveMe(data);
     if (!data) {
+      // Nobody signed in: nothing of the last account stays on the device.
+      clearSavedQueries();
+      forgetDraftSyncs();
       setBranchId(null);
       setApiBranch(null);
       return;
     }
-    const stored = readStoredBranch(data.user.id);
-    const chosen = data.branches.find((b) => b.id === stored)?.id ?? data.branches[0]?.id ?? null;
+    const chosen = pickBranch(data);
     setBranchId(chosen);
     setApiBranch(chosen);
   }, []);
@@ -61,9 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.clear();
     });
     refresh()
-      .catch(() => apply(null))
+      // Server out of reach: a remembered account carries on (its requests retry), otherwise sign in.
+      .catch(() => !saved && apply(null))
       .finally(() => setLoading(false));
-  }, [apply, refresh, queryClient]);
+  }, [apply, refresh, queryClient, saved]);
 
   const value = useMemo<AuthState>(() => {
     const activeBranch = me?.branches.find((b) => b.id === branchId) ?? null;
@@ -74,10 +112,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login: async (email, password) => {
         queryClient.clear();
+        clearSavedQueries();
         apply(await api.post<MeDTO>('/auth/login', { email, password }));
       },
       demoLogin: async (userId) => {
         queryClient.clear();
+        clearSavedQueries();
         apply(await api.post<MeDTO>('/auth/demo-login', { userId }));
       },
       logout: async () => {

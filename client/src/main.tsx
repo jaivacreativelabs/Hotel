@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ApiError } from './services/api';
+import { keepSavedQueries } from './services/savedQueries';
 import { AuthProvider } from './store/auth';
 import { ToastProvider } from './store/toast';
 import { TopbarProvider } from './store/topbar';
@@ -20,6 +21,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+keepSavedQueries(queryClient);
 
 // This browser could load and run the app's code: public/browser-check.js stays quiet.
 document.documentElement.setAttribute('data-app-started', '');
