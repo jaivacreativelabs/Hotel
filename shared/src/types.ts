@@ -391,6 +391,8 @@ export interface AnalyticsOverviewDTO {
   expenses: {
     count: number;
     byCategory: { category: ExpenseCategory; amount: number; count: number }[];
+    /** How the expenses were paid (Cash / UPI / Card), to set against the sales taken that way. */
+    byPaymentMethod: { method: PaymentMethod; amount: number; count: number }[];
     daily: { key: string; amount: number }[];
   };
   daily: AnalyticsPoint[];

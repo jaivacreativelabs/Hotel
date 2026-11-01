@@ -1,11 +1,11 @@
-import { EXPENSE_CATEGORY_LABEL, placeName, type AnalyticsOverviewDTO } from '@rb/shared';
+import { EXPENSE_CATEGORY_LABEL, PAYMENT_METHODS, placeName, type AnalyticsOverviewDTO } from '@rb/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Ban, IndianRupee, Receipt, ReceiptText, Scale, TrendingUp, Undo2, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { BarChart, HBarList, TrendChart } from '../../components/charts';
 import { Empty, Loading, PageHeader } from '../../components/ui';
 import { api, errorMessage } from '../../services/api';
-import { formatDay, formatMoney, PAYMENT_LABEL } from '../../utils/format';
+import { cx, formatDay, formatMoney, PAYMENT_LABEL } from '../../utils/format';
 import { useAnalyticsFilters } from './useAnalyticsFilters';
 
 const monthFmt = new Intl.DateTimeFormat('en-IN', { month: 'short', year: '2-digit' });
@@ -23,6 +23,47 @@ function trimHours<T extends { key: string; bills: number }>(hours: T[]): T[] {
   const first = Math.min(6, ...busy);
   const last = Math.max(22, ...busy);
   return hours.filter((h) => Number(h.key) >= first && Number(h.key) <= last);
+}
+
+/** Per payment method: sales taken, expenses paid that way, and what is left (Cash in the drawer, UPI / Card in the bank). */
+function PaymentBalance({ o }: { o: AnalyticsOverviewDTO }) {
+  const rows = PAYMENT_METHODS.map((m) => {
+    const sales = o.byPaymentMethod.find((p) => p.key === m)?.sales ?? 0;
+    const spent = o.expenses.byPaymentMethod.find((e) => e.method === m)?.amount ?? 0;
+    return { m, sales, spent, left: sales - spent };
+  }).filter((r) => r.sales || r.spent);
+  if (rows.length === 0) return null;
+  const left = (v: number) => <td className={cx('num', v < 0 && 'danger-text')}>{v < 0 ? `− ${formatMoney(-v)}` : formatMoney(v)}</td>;
+  return (
+    <table className="pay-balance">
+      <thead>
+        <tr>
+          <th />
+          <th>Sales</th>
+          <th>Expenses</th>
+          <th>Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.m}>
+            <th scope="row">{PAYMENT_LABEL[r.m]}</th>
+            <td className="num">{formatMoney(r.sales)}</td>
+            <td className="num muted">{r.spent ? `− ${formatMoney(r.spent)}` : '—'}</td>
+            {left(r.left)}
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row">Total</th>
+          <td className="num">{formatMoney(o.summary.totalSales)}</td>
+          <td className="num muted">{o.summary.expenses ? `− ${formatMoney(o.summary.expenses)}` : '—'}</td>
+          {left(o.summary.netSales)}
+        </tr>
+      </tfoot>
+    </table>
+  );
 }
 
 export function AnalyticsPage() {
@@ -181,6 +222,7 @@ export function AnalyticsPage() {
                 total={o.summary.totalSales}
                 rows={o.byPaymentMethod.map((p) => ({ key: p.key, label: PAYMENT_LABEL[p.key], value: p.sales }))}
               />
+              <PaymentBalance o={o} />
             </div>
             <div className="card chart-card">
               <div className="chart-head">

@@ -47,8 +47,11 @@ describe('Super Admin analytics', () => {
         { category: 'GAS', amount: 4000, count: 1 },
         { category: 'MILK', amount: 1500, count: 1 },
       ],
+      byPaymentMethod: expect.any(Array),
       daily: [{ key: today, amount: 5500 }],
     });
+    // How the expenses were paid (the deleted UPI rent does not count), set against the sales.
+    expect(Object.fromEntries(o.expenses.byPaymentMethod.map((m) => [m.method, m.amount]))).toEqual({ CASH: 4000, UPI: 1500 });
     expect(o.excluded).toMatchObject({ voidedCount: 1, voidedAmount: 10000 });
     expect(o.daily).toEqual([{ key: today, sales: 31000, bills: 4 }]);
     expect(o.byRestaurant.map((r) => [r.name, r.sales])).toEqual([

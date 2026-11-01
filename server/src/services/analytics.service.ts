@@ -74,12 +74,14 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
     salesFacets(match, tz),
     ExpenseModel.aggregate<{
       byCategory: { _id: ExpenseCategory; amount: number; count: number }[];
+      byPaymentMethod: { _id: PaymentMethod; amount: number; count: number }[];
       daily: { _id: string; amount: number }[];
     }>([
       { $match: expenseMatch(q) },
       {
         $facet: {
           byCategory: [{ $group: { _id: '$category', amount: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { amount: -1 } }],
+          byPaymentMethod: [{ $group: { _id: '$paymentMethod', amount: { $sum: '$amount' }, count: { $sum: 1 } } }],
           daily: [{ $group: { _id: '$date', amount: { $sum: '$amount' } } }],
         },
       },
@@ -121,6 +123,7 @@ export async function analyticsOverview(q: AnalyticsQuery): Promise<AnalyticsOve
     expenses: {
       count: spent.byCategory.reduce((a, c) => a + c.count, 0),
       byCategory: spent.byCategory.map((c) => ({ category: c._id, amount: c.amount, count: c.count })),
+      byPaymentMethod: spent.byPaymentMethod.map((m) => ({ method: m._id, amount: m.amount, count: m.count })),
       daily: fillDays(q.from, q.to, []).map((d) => ({ key: d.key, amount: spentOn.get(d.key) ?? 0 })),
     },
     daily: fillDays(q.from, q.to, facets.daily.map(point)),

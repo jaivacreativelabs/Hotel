@@ -2820,6 +2820,37 @@ html.app-open body {
   text-align: right;
   min-width: 90px;
 }
+/* Analytics › Payment methods: sales − expenses paid the same way = what is left. */
+.pay-balance {
+  width: 100%;
+  margin-top: 22px;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.pay-balance th,
+.pay-balance td {
+  padding: 8px 0 8px 12px;
+  text-align: right;
+  border-top: 1px solid var(--color-border);
+}
+.pay-balance th:first-child {
+  padding-left: 0;
+  text-align: left;
+}
+.pay-balance thead th {
+  border-top: 0;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+.pay-balance tbody th,
+.pay-balance td:last-child {
+  font-weight: 700;
+}
+.pay-balance tfoot th,
+.pay-balance tfoot td {
+  border-top: 2px solid var(--color-border);
+  font-weight: 800;
+}
 .report-card {
   display: flex;
   flex-direction: column;
