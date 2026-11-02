@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
 import { ChangeCalculator } from './ChangeCalculator';
-import { Receipt, RECEIPT_CSS } from './Receipt';
+import { Receipt, RECEIPT_CSS, receiptPageCss } from './Receipt';
 import { CancelButton, ConfirmButton, Modal } from './ui';
 
 /** A payment mode, or SPLIT for a bill paid partly one way and partly another. */
@@ -151,7 +151,6 @@ const PRINT_ROOT_ID = 'receipt-print-root';
 const IN_PAGE_CSS = `
 #${PRINT_ROOT_ID} { display: none; }
 @media print {
-  @page { size: 80mm auto; margin: 4mm; }
   html, body { height: auto !important; background: #fff !important; }
   body > *:not(#${PRINT_ROOT_ID}) { display: none !important; }
   #${PRINT_ROOT_ID} { display: block; }
@@ -181,14 +180,21 @@ export function printReceipt(t: TransactionDTO) {
   el.id = PRINT_ROOT_ID;
   document.body.appendChild(el);
   const root = createRoot(el);
-  flushSync(() =>
-    root.render(
-      <>
-        <style>{IN_PAGE_CSS}</style>
-        <Receipt t={t} onLogoDone={() => undefined} />
-      </>,
-    ),
-  );
+  const render = (pageCss: string) =>
+    flushSync(() =>
+      root.render(
+        <>
+          <style>{IN_PAGE_CSS + pageCss}</style>
+          <Receipt t={t} onLogoDone={() => undefined} />
+        </>,
+      ),
+    );
+  render('');
+  // The paper is cut to the receipt's height: measure it laid out (unseen) on the screen.
+  el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0;visibility:hidden';
+  const height = el.offsetHeight;
+  el.style.cssText = '';
+  render(receiptPageCss(height));
   const current: NonNullable<typeof printing> = { root, el };
   printing = current;
   window.addEventListener(

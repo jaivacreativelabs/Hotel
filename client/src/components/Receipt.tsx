@@ -1,22 +1,35 @@
 /**
- * A printable receipt (80 mm thermal friendly). Printing never creates a transaction – it only
- * reads the stored, immutable bill.
+ * A printable receipt for thermal roll printers (58 mm and 80 mm). Printing never creates a
+ * transaction – it only reads the stored, immutable bill.
  */
 import { ORDER_TYPE_LABEL, ownBranchName, type TransactionDTO } from '@rb/shared';
 import { formatDateTime, formatMoney, itemTaxShares, itemTaxText, PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
+/** A 58 mm roll prints 48 mm wide, so a 48 mm receipt fits on both roll sizes. */
+export const RECEIPT_WIDTH_MM = 48;
+
+// Bold black sans-serif: thin grey Courier strokes can vanish on a thermal printer. On paper the
+// receipt sits at the page's left edge: a roll printer that gets a wide page prints only its left
+// side, so a receipt centred on it came out as blank paper.
 export const RECEIPT_CSS = `
-.receipt { width: 72mm; margin: 0 auto; padding: 8px 0; font-family: 'Courier New', ui-monospace, monospace; font-size: 12px; color: #000; line-height: 1.35; }
-.receipt .logo { display: block; width: 22mm; height: 22mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
-.receipt h1 { font-size: 16px; text-align: center; margin: 0; font-family: inherit; }
+.receipt { box-sizing: border-box; width: ${RECEIPT_WIDTH_MM}mm; margin: 0 auto; padding: 2mm 1mm; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #000; line-height: 1.3; }
+.receipt .logo { display: block; width: 18mm; height: 18mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
+.receipt h1 { font-size: 15px; text-align: center; margin: 0; font-family: inherit; }
 .receipt .c { text-align: center; }
-.receipt .rule { border-top: 1px dashed #000; margin: 6px 0; }
+.receipt .rule { border-top: 1px dashed #000; margin: 5px 0; }
 .receipt table { width: 100%; border-collapse: collapse; }
 .receipt td { padding: 1px 0; vertical-align: top; }
-.receipt .r { text-align: right; white-space: nowrap; }
-.receipt .total td { font-weight: bold; font-size: 14px; padding-top: 4px; }
-.receipt .stamp { border: 2px solid #000; text-align: center; font-weight: bold; padding: 2px; margin: 6px 0; }
+.receipt .r { text-align: right; white-space: nowrap; padding-left: 4px; }
+.receipt .total td { font-size: 14px; padding-top: 4px; }
+.receipt .stamp { border: 2px solid #000; text-align: center; padding: 2px; margin: 6px 0; }
+@media print { .receipt { margin: 0; } }
 `;
+
+/** The paper page for a receipt `heightPx` tall: just the receipt, no margins, no empty roll. */
+export function receiptPageCss(heightPx: number) {
+  const heightMm = Math.ceil((heightPx * 25.4) / 96) + 4;
+  return `@page { size: ${RECEIPT_WIDTH_MM}mm ${heightMm}mm; margin: 0; }`;
+}
 
 /** `onLogoDone` fires once the logo has loaded or failed, so printing never misses it. */
 export function Receipt({ t, onLogoDone }: { t: TransactionDTO; onLogoDone: () => void }) {

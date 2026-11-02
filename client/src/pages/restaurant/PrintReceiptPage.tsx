@@ -7,7 +7,7 @@ import { Receipt, RECEIPT_CSS } from '../../components/Receipt';
 import { api, errorMessage } from '../../services/api';
 
 const css = `
-@page { size: 80mm auto; margin: 4mm; }
+@page { margin: 0; }
 body { background: #fff !important; }
 ${RECEIPT_CSS}
 .print-actions { text-align: center; margin: 16px; font-family: var(--font-family); }
