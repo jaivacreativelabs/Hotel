@@ -26,6 +26,7 @@ import { Suspense, useEffect, useRef, useState, useSyncExternalStore, type Compo
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { TableIcon } from '../components/badges';
 import { BillingWarmUp } from '../components/BillingWarmUp';
+import { PrinterButton } from '../components/PrinterButton';
 import { ShopClosedNotice, ShopToggle } from '../components/ShopToggle';
 import { Loading, LogoMark } from '../components/ui';
 import { useRootClass } from '../hooks/useRootClass';
@@ -230,6 +231,7 @@ export function AppLayout() {
           <div className="spacer" />
         )}
         {extra && <div className="topbar-extra">{extra}</div>}
+        {user?.role === 'RESTAURANT_ADMIN' && <PrinterButton />}
         <SyncIndicator />
         <UserMenu />
       </header>

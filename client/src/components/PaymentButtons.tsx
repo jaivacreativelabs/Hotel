@@ -3,6 +3,7 @@ import { Split } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
+import { hasPrinter, printBill } from '../services/btPrinter';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
 import { ChangeCalculator } from './ChangeCalculator';
@@ -168,13 +169,23 @@ function clearPrint() {
 }
 
 /**
- * Prints a bill: the receipt is put into this page and printed at once, and on paper the page
- * shows only the receipt. Call it straight from the tap (Safari on an iPad prints only from a
- * tap – see apiSync); the logo is normally ready because the sidebar already shows it.
- * The receipt stays (hidden on screen) a minute after printing, as Safari may still be reading
- * the page for its print preview.
+ * Prints a bill. With a Bluetooth printer connected (Chrome, see services/btPrinter.ts) it goes
+ * straight to the printer with no popup; otherwise – or when that printer cannot be reached –
+ * the browser's print popup opens. Call it straight from the tap (Safari on an iPad prints only
+ * from a tap – see apiSync).
  */
 export function printReceipt(t: TransactionDTO) {
+  if (hasPrinter()) printBill(t).catch(() => printInPage(t));
+  else printInPage(t);
+}
+
+/**
+ * The receipt is put into this page and printed at once, and on paper the page shows only the
+ * receipt; the logo is normally ready because the sidebar already shows it. The receipt stays
+ * (hidden on screen) a minute after printing, as Safari may still be reading the page for its
+ * print preview.
+ */
+function printInPage(t: TransactionDTO) {
   clearPrint();
   const el = document.createElement('div');
   el.id = PRINT_ROOT_ID;

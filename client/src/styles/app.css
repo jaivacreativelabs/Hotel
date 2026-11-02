@@ -298,6 +298,47 @@ html.app-open body {
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
+/* Bluetooth bill printer (Chrome): green when bills print with no popup */
+.printer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.printer-pill.connected {
+  border-color: transparent;
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.printer-pill.disconnected {
+  border-color: transparent;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.printer-status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+.printer-status > svg {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.printer-status.connected > svg {
+  color: var(--color-success);
+}
 .user-menu {
   position: relative;
   margin-left: auto;
@@ -3117,6 +3158,7 @@ html.app-open body {
     height: 16px;
   }
   .topbar-extra,
+  .printer-pill .printer-text,
   .sync-pill span.sync-text {
     display: none;
   }
