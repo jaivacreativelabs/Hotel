@@ -24,21 +24,31 @@ const STATUS_TEXT = { none: 'Connect printer', connecting: 'Connecting…', conn
 
 export function PrinterButton() {
   const state = useSyncExternalStore(subscribePrinter, getPrinterState);
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   useEffect(() => {
     void reconnectSavedPrinter();
   }, []);
   if (!bluetoothSupported()) return null;
+  // After a reload Chrome may hand the printer back only from a tap: then the button itself is
+  // that tap, and Chrome's list shows just this printer.
+  const needsTap = state.status === 'disconnected' && !state.known;
   return (
     <>
       <button
         type="button"
         className={cx('printer-pill', state.status)}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (!needsTap) return setOpen(true);
+          connectAgain(state.paper).then(
+            () => toast.success('Printer connected'),
+            (err: unknown) => (err instanceof Error && err.name === 'NotFoundError' ? setOpen(true) : toast.error(err)),
+          );
+        }}
         title={state.status === 'connected' ? `Bills print on ${state.name}` : 'Bluetooth bill printer'}
       >
         <Printer size={16} />
-        <span className="printer-text">{STATUS_TEXT[state.status]}</span>
+        <span className="printer-text">{needsTap ? 'Tap to connect printer' : STATUS_TEXT[state.status]}</span>
       </button>
       {open && <PrinterModal onClose={() => setOpen(false)} />}
     </>
@@ -76,7 +86,9 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
                 : state.status === 'connecting'
                   ? 'Connecting…'
                   : state.status === 'disconnected'
-                    ? 'Not connected – bills open the print popup until it connects.'
+                    ? state.known
+                      ? 'Not connected – it connects by itself when the printer is on and near. Until then bills open the print popup.'
+                      : 'Not connected – tap Connect. Until then bills open the print popup.'
                     : 'Bills open the print popup.'}
             </div>
             {state.error && state.status !== 'connected' && <div className="field-error">{state.error}</div>}
@@ -102,8 +114,8 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
             </button>
           ) : (
             state.status === 'disconnected' && (
-              <button type="button" className="btn btn-outline" disabled={working} onClick={() => void run(connectAgain)}>
-                Connect again
+              <button type="button" className="btn btn-outline" disabled={working} onClick={() => void run(() => connectAgain(state.paper), 'Printer connected')}>
+                Connect
               </button>
             )
           )}

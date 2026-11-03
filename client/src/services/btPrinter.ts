@@ -31,7 +31,7 @@ interface BtDevice extends EventTarget {
   forget?: () => Promise<void>;
 }
 interface Bluetooth {
-  requestDevice(options: { acceptAllDevices: boolean; optionalServices: string[] }): Promise<BtDevice>;
+  requestDevice(options: { acceptAllDevices?: boolean; filters?: { name: string }[]; optionalServices: string[] }): Promise<BtDevice>;
   getDevices?: () => Promise<BtDevice[]>;
 }
 const bluetooth = (): Bluetooth | undefined => (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
@@ -62,6 +62,11 @@ export interface PrinterState {
   name: string;
   paper: PaperWidth;
   error: string;
+  /**
+   * The page still holds the printer, so it reconnects on its own. False after a reload where
+   * Chrome cannot hand the printer back (no getDevices): one tap on the printer button then.
+   */
+  known: boolean;
 }
 
 interface Saved {
@@ -87,7 +92,7 @@ function writeSaved(s: Saved | null) {
 }
 
 const saved = readSaved();
-let state: PrinterState = { status: saved ? 'disconnected' : 'none', name: saved?.name ?? '', paper: saved?.paper ?? 58, error: '' };
+let state: PrinterState = { status: saved ? 'disconnected' : 'none', name: saved?.name ?? '', paper: saved?.paper ?? 58, error: '', known: false };
 const listeners = new Set<() => void>();
 function setState(patch: Partial<PrinterState>) {
   state = { ...state, ...patch };
@@ -103,9 +108,47 @@ let device: BtDevice | null = null;
 let channel: BtCharacteristic | null = null;
 let connecting: Promise<BtCharacteristic> | null = null;
 
+const isConnected = () => !!(channel && device?.gatt?.connected);
+
+// While the printer is away (switched off, asleep, out of range) the page keeps trying to
+// reconnect, quietly and less often as time goes on, so the next bill prints with no popup.
+const RETRY_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+let retries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+function keepConnected() {
+  clearTimeout(retryTimer);
+  if (!device || isConnected()) {
+    retries = 0;
+    return;
+  }
+  // Tablets pause hidden pages: tried again as soon as the app is back on screen.
+  if (document.visibilityState === 'hidden') return;
+  retryTimer = setTimeout(() => {
+    if (!device) return;
+    open(device, true).then(
+      () => (retries = 0),
+      () => {
+        retries++;
+        keepConnected();
+      },
+    );
+  }, RETRY_MS[Math.min(retries, RETRY_MS.length - 1)]);
+}
+function reconnectNow() {
+  retries = 0;
+  if (device && !isConnected()) open(device, true).catch(keepConnected);
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reconnectNow());
+  window.addEventListener('online', reconnectNow);
+}
+
 const onDisconnected = () => {
   channel = null;
-  if (device) setState({ status: 'disconnected' });
+  if (!device) return;
+  setState({ status: 'disconnected' });
+  retries = 0;
+  keepConnected();
 };
 
 function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
@@ -118,15 +161,18 @@ function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> 
   });
 }
 
-/** Connects to `device` and finds where print data is written. */
-function open(d: BtDevice): Promise<BtCharacteristic> {
+/**
+ * Connects to `device` and finds where print data is written. `quiet`: a background retry – the
+ * button keeps saying "Printer off" instead of flickering "Connecting…" and errors.
+ */
+function open(d: BtDevice, quiet = false, timeoutMs = 15_000): Promise<BtCharacteristic> {
   if (channel && d.gatt?.connected) return Promise.resolve(channel);
   if (connecting) return connecting;
   const attempt = (async () => {
-    setState({ status: 'connecting', error: '' });
+    if (!quiet) setState({ status: 'connecting', error: '' });
     try {
       if (!d.gatt) throw new Error('This device is not a Bluetooth printer.');
-      const server = await withTimeout(d.gatt.connect(), 10_000, 'The printer did not answer. Is it switched on and near this tablet?');
+      const server = await withTimeout(d.gatt.connect(), timeoutMs,'The printer did not answer. Is it switched on and near this tablet?');
       for (const service of await server.getPrimaryServices().catch(() => [] as BtService[])) {
         const found = (await service.getCharacteristics()).find((c) => c.properties.writeWithoutResponse || c.properties.write);
         if (found) {
@@ -138,7 +184,8 @@ function open(d: BtDevice): Promise<BtCharacteristic> {
       server.disconnect();
       throw new Error('This printer cannot be used from the browser (it has no Bluetooth LE print service).');
     } catch (err) {
-      setState({ status: 'disconnected', error: err instanceof Error ? err.message : String(err) });
+      if (quiet) setState({ status: 'disconnected' });
+      else setState({ status: 'disconnected', error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
   })();
@@ -154,20 +201,30 @@ function adopt(d: BtDevice) {
   device?.removeEventListener('gattserverdisconnected', onDisconnected);
   device = d;
   d.addEventListener('gattserverdisconnected', onDisconnected);
+  setState({ known: true });
 }
 
-/** Opens Chrome's Bluetooth list to choose the printer. Call it from a tap. */
-export async function choosePrinter(paper: PaperWidth): Promise<void> {
+/**
+ * Opens Chrome's Bluetooth list to choose the printer. Call it from a tap. `onlySaved`: the list
+ * shows just the printer chosen before (one tap to get it back after a reload).
+ */
+export async function choosePrinter(paper: PaperWidth, onlySaved = false): Promise<void> {
   const bt = bluetooth();
   if (!bt) throw new Error('This browser cannot use Bluetooth printers. Use Chrome.');
-  const d = await bt.requestDevice({ acceptAllDevices: true, optionalServices: PRINTER_SERVICES });
+  const savedName = onlySaved ? readSaved()?.name : undefined;
+  const d = await bt.requestDevice(
+    savedName ? { filters: [{ name: savedName }], optionalServices: PRINTER_SERVICES } : { acceptAllDevices: true, optionalServices: PRINTER_SERVICES },
+  );
   if (device && device !== d) device.gatt?.disconnect();
   channel = null;
   adopt(d);
   const name = d.name || 'Bluetooth printer';
   writeSaved({ id: d.id, name, paper });
   setState({ name, paper });
-  await open(d);
+  await open(d).catch((err: unknown) => {
+    keepConnected();
+    throw err;
+  });
 }
 
 export function setPaper(paper: PaperWidth) {
@@ -181,8 +238,9 @@ export async function forgetPrinter() {
   const d = device;
   device = null;
   channel = null;
+  clearTimeout(retryTimer);
   writeSaved(null);
-  setState({ status: 'none', name: '', error: '' });
+  setState({ status: 'none', name: '', error: '', known: false });
   if (d) {
     d.removeEventListener('gattserverdisconnected', onDisconnected);
     d.gatt?.disconnect();
@@ -196,16 +254,21 @@ export async function reconnectSavedPrinter() {
   const bt = bluetooth();
   if (!s || !bt?.getDevices || device) return;
   const d = (await bt.getDevices().catch(() => [])).find((x) => x.id === s.id);
-  if (!d) return; // Chrome forgot the permission: the Printer button asks to choose it again
+  if (!d) return; // Chrome cannot hand it back: one tap on the printer button gets it again
   adopt(d);
-  await open(d).catch(() => undefined);
+  // The printer may be off right now: keep trying until it is on and in range.
+  await open(d, true).catch(keepConnected);
 }
 
-/** "Connect again": the printer chosen before, now switched on or back in range. */
-export async function connectAgain() {
+/** "Connect": the printer chosen before, now switched on or back in range. Call it from a tap. */
+export async function connectAgain(paper: PaperWidth) {
   if (!device) await reconnectSavedPrinter();
-  if (!device) throw new Error('Tap Change printer and choose the printer again.');
-  await open(device);
+  if (!device) return choosePrinter(paper, true);
+  retries = 0;
+  await open(device).catch((err: unknown) => {
+    keepConnected();
+    throw err;
+  });
 }
 
 /** True when bills should go to the Bluetooth printer instead of the print popup. */
@@ -253,10 +316,12 @@ function send(bytes: Uint8Array): Promise<void> {
     if (!device) throw new Error('No printer chosen.');
     // One retry: the printer may have slept or been switched off and on since the last bill.
     // Never once part of the bill went out – that would print half a bill and then a whole one.
+    // A printer that is not connected gets one short try, so the popup is not kept waiting.
+    const wasConnected = isConnected();
     for (let attempt = 0; ; attempt++) {
       let sent = 0;
       try {
-        const c = await open(device);
+        const c = await open(device, false, 8_000);
         const fast = c.properties.writeWithoutResponse;
         for (; sent < bytes.length; sent += CHUNK) {
           const part = bytes.slice(sent, sent + CHUNK);
@@ -265,8 +330,9 @@ function send(bytes: Uint8Array): Promise<void> {
         return;
       } catch (err) {
         channel = null;
-        if (attempt > 0 || sent > 0) {
+        if (attempt > 0 || sent > 0 || !wasConnected) {
           setState({ status: device?.gatt?.connected ? 'connected' : 'disconnected', error: err instanceof Error ? err.message : String(err) });
+          keepConnected();
           throw err;
         }
       }
