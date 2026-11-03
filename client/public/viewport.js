@@ -65,9 +65,50 @@
   window.addEventListener('resize', refit);
   window.addEventListener('orientationchange', refit);
 
-  // Back from another app, or after a bill printed: zoom back out if Safari zoomed in anyway.
+  // Leaving for another app: take the cursor out of the text box. Coming back, Safari puts the
+  // focus back in it and zooms in to it a moment later (after any "page is back" event), so
+  // with nothing focused there is nothing to zoom to.
+  var dropFocus = function () {
+    var el = document.activeElement;
+    if (el && el !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && el.blur) el.blur();
+  };
+  window.addEventListener('pagehide', dropFocus);
+  window.addEventListener('blur', dropFocus);
+
+  // Zoomed in = the visible part of the page is narrower than the page. Safari can zoom after
+  // every event it sends us, so watch for it and zoom back out (a few tries at most, so a
+  // Safari that refuses can never cause a loop).
+  var vv = window.visualViewport;
+  var zoomedIn = function () {
+    return !!vv && vv.width > 0 && vv.width < root.clientWidth * 0.97;
+  };
+  var tries = 0;
+  var triesTimer = 0;
+  var unzoom = function () {
+    if (document.visibilityState === 'hidden' || !zoomedIn() || tries >= 4) return;
+    tries += 1;
+    clearTimeout(triesTimer);
+    triesTimer = setTimeout(function () {
+      tries = 0;
+    }, 3000);
+    lockScale(true);
+  };
+  var zoomTimer = 0;
+  if (vv) {
+    vv.addEventListener('resize', function () {
+      clearTimeout(zoomTimer);
+      zoomTimer = setTimeout(unzoom, 150);
+    });
+  }
+
+  // Back from another app, or after a bill printed: zoom back out if Safari zoomed in anyway,
+  // and check again over the next moments, as Safari may zoom only after this.
   var reset = function () {
-    if (document.visibilityState !== 'hidden') lockScale(true);
+    if (document.visibilityState === 'hidden') return dropFocus();
+    lockScale(true);
+    [300, 800, 1600].forEach(function (ms) {
+      setTimeout(unzoom, ms);
+    });
   };
   window.addEventListener('pageshow', reset);
   document.addEventListener('visibilitychange', reset);
