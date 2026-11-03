@@ -29,6 +29,7 @@ interface BtDevice extends EventTarget {
   name?: string;
   gatt?: BtServer;
   forget?: () => Promise<void>;
+  watchAdvertisements?: (options?: { signal?: AbortSignal }) => Promise<void>;
 }
 interface Bluetooth {
   requestDevice(options: { acceptAllDevices?: boolean; filters?: { name: string }[]; optionalServices: string[] }): Promise<BtDevice>;
@@ -117,7 +118,8 @@ let retries = 0;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 function keepConnected() {
   clearTimeout(retryTimer);
-  if (!device || isConnected()) {
+  // Not known: only a tap can bring this printer back (see open), so trying is pointless.
+  if (!device || isConnected() || !state.known) {
     retries = 0;
     return;
   }
@@ -136,7 +138,7 @@ function keepConnected() {
 }
 function reconnectNow() {
   retries = 0;
-  if (device && !isConnected()) open(device, true).catch(keepConnected);
+  if (device && !isConnected() && state.known) open(device, true).catch(keepConnected);
 }
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reconnectNow());
@@ -161,6 +163,45 @@ function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> 
   });
 }
 
+const NO_ANSWER = 'The printer did not answer. Is it switched on and near this tablet?';
+
+/** Chrome connects only to a printer it has heard lately: "Bluetooth Device is no longer in range". */
+const notHeard = (err: unknown) => err instanceof Error && err.name === 'NetworkError' && /range/i.test(err.message);
+
+/** Listens up to `ms` for the printer's Bluetooth signal, so Chrome can connect to it again. */
+async function hear(d: BtDevice, ms: number): Promise<boolean> {
+  if (!d.watchAdvertisements) return false;
+  const stop = new AbortController();
+  let heard = () => {};
+  try {
+    return await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), ms);
+      heard = () => (clearTimeout(timer), resolve(true));
+      d.addEventListener('advertisementreceived', heard);
+      d.watchAdvertisements!({ signal: stop.signal }).catch(() => (clearTimeout(timer), resolve(false)));
+    });
+  } finally {
+    d.removeEventListener('advertisementreceived', heard);
+    stop.abort();
+  }
+}
+
+async function connectGatt(d: BtDevice, timeoutMs: number): Promise<BtServer> {
+  if (!d.gatt) throw new Error('This device is not a Bluetooth printer.');
+  try {
+    return await withTimeout(d.gatt.connect(), timeoutMs, NO_ANSWER);
+  } catch (err) {
+    if (!notHeard(err)) throw err;
+    if (!d.watchAdvertisements) {
+      // This Chrome cannot listen for it: a tap on the printer button (Chrome's list) finds it.
+      setState({ known: false });
+      throw new Error('Chrome lost the printer. Tap "Tap to connect printer" at the top.');
+    }
+    if (!(await hear(d, timeoutMs))) throw new Error(NO_ANSWER);
+    return withTimeout(d.gatt.connect(), timeoutMs, NO_ANSWER);
+  }
+}
+
 /**
  * Connects to `device` and finds where print data is written. `quiet`: a background retry – the
  * button keeps saying "Printer off" instead of flickering "Connecting…" and errors.
@@ -171,8 +212,7 @@ function open(d: BtDevice, quiet = false, timeoutMs = 15_000): Promise<BtCharact
   const attempt = (async () => {
     if (!quiet) setState({ status: 'connecting', error: '' });
     try {
-      if (!d.gatt) throw new Error('This device is not a Bluetooth printer.');
-      const server = await withTimeout(d.gatt.connect(), timeoutMs,'The printer did not answer. Is it switched on and near this tablet?');
+      const server = await connectGatt(d, timeoutMs);
       for (const service of await server.getPrimaryServices().catch(() => [] as BtService[])) {
         const found = (await service.getCharacteristics()).find((c) => c.properties.writeWithoutResponse || c.properties.write);
         if (found) {
@@ -262,13 +302,22 @@ export async function reconnectSavedPrinter() {
 
 /** "Connect": the printer chosen before, now switched on or back in range. Call it from a tap. */
 export async function connectAgain(paper: PaperWidth) {
-  if (!device) await reconnectSavedPrinter();
-  if (!device) return choosePrinter(paper, true);
+  // Chrome's list (filtered to this printer) also makes Chrome look for it, so it is found.
+  if (!device || !state.known) return choosePrinter(paper, true);
   retries = 0;
   await open(device).catch((err: unknown) => {
     keepConnected();
     throw err;
   });
+}
+
+/**
+ * Can this Chrome bring the printer back by itself after a refresh or after it was out of range?
+ * It needs getDevices and watchAdvertisements (Chrome flags on some versions); otherwise one tap.
+ */
+export function reconnectsAlone() {
+  const proto = (window as Window & { BluetoothDevice?: { prototype: object } }).BluetoothDevice?.prototype;
+  return !!bluetooth()?.getDevices && !!proto && 'watchAdvertisements' in proto;
 }
 
 /** True when bills should go to the Bluetooth printer instead of the print popup. */

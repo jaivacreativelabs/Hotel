@@ -12,6 +12,7 @@ import {
   getPrinterState,
   printTest,
   reconnectSavedPrinter,
+  reconnectsAlone,
   setPaper,
   subscribePrinter,
 } from '../services/btPrinter';
@@ -131,6 +132,13 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
         <p className="field-hint" style={{ margin: 0 }}>
           Switch the printer on and turn on Bluetooth (and Location) on this tablet, then tap Choose printer and pick it from the list.
         </p>
+        {!reconnectsAlone() && (
+          <p className="field-hint" style={{ margin: 0 }}>
+            After a refresh, or when the printer was out of range, this Chrome needs one tap on the printer button. To have it
+            reconnect by itself, open <b>chrome://flags</b>, enable <b>Use the new permissions backend for Web Bluetooth</b> and{' '}
+            <b>Experimental Web Platform features</b>, then tap Relaunch.
+          </p>
+        )}
       </div>
     </Modal>
   );
