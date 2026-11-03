@@ -67,7 +67,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/analytics', label: 'Analytics', icon: ChartColumn },
   { to: '/admin/daily-report', label: 'Daily Report', icon: Mail },
   { to: '/admin/audit', label: 'Audit Log', icon: History },
-  { to: '/admin/demo-logins', label: 'Demo Logins', icon: MonitorPlay },
+  { to: '/admin/demo-logins', label: 'Quick Logins', icon: MonitorPlay },
 ];
 
 function SyncIndicator() {

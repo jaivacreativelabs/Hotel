@@ -77,12 +77,12 @@ export function DemoLoginsPage() {
 
   return (
     <div className="page">
-      <PageHeader title="Demo Logins" subtitle="Choose which accounts get a one-tap sign-in button on the login page" />
+      <PageHeader title="Quick Logins" subtitle="Choose which accounts get a one-tap sign-in button on the login page" />
       <div className={superShown ? 'alert alert-danger' : 'alert alert-warning'} style={{ marginBottom: 16 }}>
         <TriangleAlert />
         <span>
           Anyone who opens the website can use these buttons – no password needed.
-          {superShown && ' A Super Admin button gives full control of every restaurant and branch.'} Switch them off when the demo is over; it
+          {superShown && ' A Super Admin button gives full control of every restaurant and branch.'} Switch a button off when it is no longer needed; it
           takes effect immediately.
         </span>
       </div>

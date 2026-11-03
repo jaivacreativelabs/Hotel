@@ -89,7 +89,7 @@ export function LoginPage() {
           </button>
           {(demos.data?.length ?? 0) > 0 && (
             <div className="demo-logins">
-              <div className="demo-logins-title">Demo – tap to sign in</div>
+              <div className="demo-logins-title">Quick login</div>
               <div className="demo-logins-buttons">
                 {demos.data!.map((d) => (
                   <button key={d.id} type="button" className="demo-login" disabled={busy !== null} onClick={() => void run(d.id, () => demoLogin(d.id))}>

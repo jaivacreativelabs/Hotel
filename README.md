@@ -184,7 +184,7 @@ because Vercel has no persistent disk.
    | `CRON_SECRET` | long random secret; Vercel Cron sends it to `/api/v1/cron/daily-report` |
 
    Demo sign-in buttons on the login page need no variables: the Super Admin switches them on per
-   account under **Demo Logins** (stored in MongoDB, no passwords involved). Anyone who opens the
+   account under **Quick Logins** (stored in MongoDB, no passwords involved). Anyone who opens the
    site can use a button while it is on, so switch them off after the demo – it applies instantly.
 
 3. **MongoDB Atlas → Network Access → Add IP Address → Allow access from anywhere (`0.0.0.0/0`)** –
