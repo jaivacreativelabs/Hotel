@@ -19,7 +19,7 @@ function baseMatch(q: AnalyticsQuery) {
   const days = (Date.parse(q.to) - Date.parse(q.from)) / 86_400_000 + 1;
   if (days > MAX_RANGE_DAYS) throw badRequest('Choose a range of at most two years');
   const { start, end } = dayRange(q.from, q.to, env.APP_TIMEZONE);
-  const match: Record<string, unknown> = { finalizedAt: { $gte: start, $lt: end } };
+  const match: Record<string, unknown> = { finalizedAt: { $gte: start, $lt: end }, deleted: null };
   if (q.restaurantId) match.restaurantId = toObjectId(q.restaurantId, 'restaurant');
   if (q.branchId) match.branchId = toObjectId(q.branchId, 'branch');
   return match;

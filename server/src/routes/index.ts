@@ -210,6 +210,7 @@ export function createApiRouter(): Router {
   txRouter.put('/:id', ops.editTransaction);
   txRouter.post('/:id/void', ops.voidTransaction);
   txRouter.post('/:id/refund', ops.refundTransaction);
+  txRouter.delete('/:id', ops.deleteTransaction);
   api.use('/transactions', txRouter);
 
   // ---- Expenses (role-filtered in the service; adding one needs the branch) ----

@@ -1,6 +1,6 @@
 /** Mongo documents → API DTOs (see shared/src/types.ts). */
 import type { Types } from 'mongoose';
-import { BILL_EDIT_WINDOW_MINUTES } from '@rb/shared';
+import { BILL_DELETE_WINDOW_MINUTES, BILL_EDIT_WINDOW_MINUTES } from '@rb/shared';
 import type {
   AuditLogDTO,
   BranchDTO,
@@ -275,7 +275,15 @@ export function toTransactionDTO(t: WithId<Transaction>): TransactionDTO {
     editedAt: iso(t.editedAt),
     editedByName: t.editedByName ?? '',
     editableUntil: editableUntil(t),
+    deletableUntil: deletableUntil(t),
   };
+}
+
+/** End of the Restaurant Admin delete window (any status, manual sales too), or null once over. */
+export function deletableUntil(t: Pick<Transaction, 'finalizedAt'>, now = Date.now()): string | null {
+  if (!t.finalizedAt) return null;
+  const until = new Date(t.finalizedAt).getTime() + BILL_DELETE_WINDOW_MINUTES * 60_000;
+  return until > now ? new Date(until).toISOString() : null;
 }
 
 /** End of the edit window for a paid bill, or null when it can no longer be edited. */

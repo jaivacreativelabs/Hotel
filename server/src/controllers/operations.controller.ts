@@ -16,6 +16,7 @@ import {
   tableUpdateSchema,
   transactionEditSchema,
   transactionQuerySchema,
+  transactionDeleteSchema,
   transactionStatusChangeSchema,
 } from '@rb/shared';
 import { env } from '../config/env.js';
@@ -141,6 +142,11 @@ export const voidTransaction = async (req: Request, res: Response) => {
 export const refundTransaction = async (req: Request, res: Response) => {
   const { reason } = parse(transactionStatusChangeSchema, req.body);
   res.json({ data: await transactions.changeTransactionStatus(currentUser(req), id(req), 'REFUNDED', reason) });
+};
+export const deleteTransaction = async (req: Request, res: Response) => {
+  const { reason } = parse(transactionDeleteSchema, req.body ?? {});
+  await transactions.deleteTransaction(currentUser(req), id(req), reason);
+  res.status(204).end();
 };
 
 // Expenses

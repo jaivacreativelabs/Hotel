@@ -79,6 +79,9 @@ export const LIMITS = {
 /** A generated (paid) bill can be corrected for this long; every edit keeps the old version. */
 export const BILL_EDIT_WINDOW_MINUTES = 30;
 
+/** Restaurant Admins can delete a bill for this long after billing; the Super Admin any time. */
+export const BILL_DELETE_WINDOW_MINUTES = 30;
+
 /** What a branch spends money on (shown in the Expenses page and the daily report). */
 export const EXPENSE_CATEGORIES = ['GROCERIES', 'VEGETABLES', 'MILK', 'SNACKS', 'GAS', 'SALARY', 'RENT', 'ELECTRICITY', 'MAINTENANCE', 'OTHER'] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];

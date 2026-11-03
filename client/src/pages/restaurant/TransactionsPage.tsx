@@ -1,6 +1,6 @@
 import { ORDER_TYPE_LABEL, ownBranchName, PAYMENT_METHODS, placeName, TRANSACTION_STATUSES, type PaymentMethod, type TransactionDTO, type TransactionStatus } from '@rb/shared';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Undo2, UtensilsCrossed } from 'lucide-react';
+import { Ban, Calendar, ChevronDown, Download, FileText, Pencil, Printer, ShoppingBag, SquareArrowOutUpRight, Trash2, Undo2, UtensilsCrossed } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBadges, TableBadge, TxStatusBadge } from '../../components/badges';
 import { FoodImage } from '../../components/FoodImage';
@@ -57,6 +57,47 @@ export function DateRangePicker({ from, to, active, onApply }: { from?: string; 
   );
 }
 
+type BillAction = 'void' | 'refund' | 'delete';
+
+/** Restaurant Admins may delete a bill within BILL_DELETE_WINDOW_MINUTES; the Super Admin any time. */
+function useDeleteAccess(tx: TransactionDTO): { canDelete: boolean; minutesLeft: number; anyTime: boolean } {
+  const { user } = useAuth();
+  const anyTime = user?.role === 'SUPER_ADMIN';
+  const minutesLeft = useEditMinutesLeft(anyTime ? null : tx.deletableUntil);
+  return { canDelete: anyTime || minutesLeft > 0, minutesLeft, anyTime };
+}
+
+function DeleteBillModal({ tx, onClose, onDone }: { tx: TransactionDTO; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api.delete(`/transactions/${tx.id}`, { body: { reason: reason.trim() }, branchId: null });
+      onDone();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={`Delete bill #${tx.billNumber}?`} onClose={onClose}>
+      <p className="muted">
+        The bill ({formatMoney(tx.grandTotal)}) is removed from Transactions, reports and analytics. It cannot be brought back here. This action is logged.
+      </p>
+      <Field label="Reason (optional)" error={error}>
+        {(id) => <textarea id={id} className="textarea" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder="e.g. Billed by mistake" />}
+      </Field>
+      <div className="modal-actions">
+        <CancelButton onClick={onClose} disabled={busy} />
+        <ConfirmButton onClick={submit} busy={busy} label="Delete bill" className="btn-danger" />
+      </div>
+    </Modal>
+  );
+}
+
 function StatusChangeModal({ tx, kind, onClose, onDone }: { tx: TransactionDTO; kind: 'void' | 'refund'; onClose: () => void; onDone: (t: TransactionDTO) => void }) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -99,15 +140,14 @@ function BillDetails({
 }: {
   tx: TransactionDTO;
   onClose: () => void;
-  onChanged: (t: TransactionDTO) => void;
+  onChanged: () => void;
   onEdit: () => void;
   showBranch: boolean;
 }) {
-  const [change, setChange] = useState<'void' | 'refund' | null>(null);
+  const [change, setChange] = useState<BillAction | null>(null);
   const taxShares = itemTaxShares(tx.taxes, tx.items);
   const toast = useToast();
-  const { user } = useAuth();
-  const anyTime = user?.role === 'SUPER_ADMIN';
+  const { canDelete, minutesLeft: deleteMinutesLeft, anyTime } = useDeleteAccess(tx);
   const minutesLeft = useEditMinutesLeft(tx.status === 'COMPLETED' && !anyTime ? tx.editableUntil : null);
   return (
     <SidePanel
@@ -123,14 +163,23 @@ function BillDetails({
           <button className="btn btn-primary btn-lg btn-block" onClick={() => printReceipt(tx)}>
             <Printer /> Print Bill Again
           </button>
-          {tx.status === 'COMPLETED' && (
+          {(tx.status === 'COMPLETED' || canDelete) && (
             <div className="row" style={{ justifyContent: 'center', gap: 20 }}>
-              <button className="link-btn danger" onClick={() => setChange('void')}>
-                <Ban size={15} /> Void bill
-              </button>
-              <button className="link-btn danger" onClick={() => setChange('refund')}>
-                <Undo2 size={15} /> Refund
-              </button>
+              {tx.status === 'COMPLETED' && (
+                <>
+                  <button className="link-btn danger" onClick={() => setChange('void')}>
+                    <Ban size={15} /> Void bill
+                  </button>
+                  <button className="link-btn danger" onClick={() => setChange('refund')}>
+                    <Undo2 size={15} /> Refund
+                  </button>
+                </>
+              )}
+              {canDelete && (
+                <button className="link-btn danger" onClick={() => setChange('delete')}>
+                  <Trash2 size={15} /> {anyTime ? 'Delete bill' : `Delete (${deleteMinutesLeft} min left)`}
+                </button>
+              )}
             </div>
           )}
         </>
@@ -234,7 +283,18 @@ function BillDetails({
         <span>Total Amount</span>
         <strong>{formatMoney(tx.grandTotal)}</strong>
       </div>
-      {change && (
+      {change === 'delete' ? (
+        <DeleteBillModal
+          tx={tx}
+          onClose={() => setChange(null)}
+          onDone={() => {
+            setChange(null);
+            toast.success(`Bill #${tx.billNumber} deleted`);
+            onClose();
+            onChanged();
+          }}
+        />
+      ) : change ? (
         <StatusChangeModal
           tx={tx}
           kind={change}
@@ -242,10 +302,10 @@ function BillDetails({
           onDone={(t) => {
             setChange(null);
             toast.success(`Bill #${t.billNumber} ${t.status === 'VOIDED' ? 'voided' : 'refunded'}`);
-            onChanged(t);
+            onChanged();
           }}
         />
-      )}
+      ) : null}
     </SidePanel>
   );
 }
@@ -285,10 +345,9 @@ function TxCard({
   showBranch: boolean;
   onOpen: () => void;
   onEdit: () => void;
-  onChange: (kind: 'void' | 'refund') => void;
+  onChange: (kind: BillAction) => void;
 }) {
-  const { user } = useAuth();
-  const anyTime = user?.role === 'SUPER_ADMIN';
+  const { canDelete, minutesLeft: deleteMinutesLeft, anyTime } = useDeleteAccess(tx);
   const completed = tx.status === 'COMPLETED';
   const minutesLeft = useEditMinutesLeft(completed && !anyTime ? tx.editableUntil : null);
   const canEdit = completed && !tx.manual && (anyTime || minutesLeft > 0);
@@ -372,6 +431,17 @@ function TxCard({
             </button>
           </>
         )}
+        {canDelete && (
+          <button
+            type="button"
+            className="icon-btn danger"
+            onClick={() => onChange('delete')}
+            aria-label={`Delete bill #${tx.billNumber}`}
+            title={anyTime ? 'Delete bill' : `Delete bill (${deleteMinutesLeft} min left)`}
+          >
+            <Trash2 />
+          </button>
+        )}
       </footer>
     </article>
   );
@@ -401,7 +471,7 @@ export function TransactionsView({
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TransactionDTO | null>(null);
-  const [change, setChange] = useState<{ tx: TransactionDTO; kind: 'void' | 'refund' } | null>(null);
+  const [change, setChange] = useState<{ tx: TransactionDTO; kind: BillAction } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const range = preset === 'custom' && custom ? custom : presetRange(preset);
@@ -556,7 +626,18 @@ export function TransactionsView({
           onChanged={() => void queryClient.invalidateQueries({ queryKey: ['transactions'] })}
         />
       )}
-      {change && (
+      {change?.kind === 'delete' ? (
+        <DeleteBillModal
+          tx={change.tx}
+          onClose={() => setChange(null)}
+          onDone={() => {
+            setChange(null);
+            toast.success(`Bill #${change.tx.billNumber} deleted`);
+            if (selectedId === change.tx.id) setSelectedId(null);
+            void queryClient.invalidateQueries({ queryKey: ['transactions'] });
+          }}
+        />
+      ) : change ? (
         <StatusChangeModal
           tx={change.tx}
           kind={change.kind}
@@ -567,7 +648,7 @@ export function TransactionsView({
             void queryClient.invalidateQueries({ queryKey: ['transactions'] });
           }}
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -346,6 +346,8 @@ export interface TransactionDTO {
   editedByName: string;
   /** Until when the bill can still be edited; null when no longer editable. */
   editableUntil: string | null;
+  /** End of the Restaurant Admin delete window; null once over (the Super Admin can delete any time). */
+  deletableUntil: string | null;
 }
 
 /** Money a branch spent (groceries, gas, salary …). */

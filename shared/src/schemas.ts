@@ -334,6 +334,10 @@ export const transactionStatusChangeSchema = z.strictObject({
   reason: z.string().trim().min(3, 'Give a reason').max(200),
 });
 
+export const transactionDeleteSchema = z.strictObject({
+  reason: z.string().trim().max(200).default(''),
+});
+
 // ---------- Expenses ----------
 /** Adding or correcting an expense. The branch comes from the request's branch scope. */
 export const expenseSchema = z.strictObject({

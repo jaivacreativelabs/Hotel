@@ -103,8 +103,8 @@ export async function buildDailyReport(date: string, asOf = new Date(), branchId
     branches: (Bucket & { _id: Types.ObjectId })[];
     excluded: Bucket[];
   }>([
-    // Real bills only: generated demo bills (isDemo) never reach the report.
-    { $match: { finalizedAt: { $gte: start, $lt: end }, isDemo: { $ne: true }, ...onlyBranch } },
+    // Real bills only: generated demo bills (isDemo) and deleted bills never reach the report.
+    { $match: { finalizedAt: { $gte: start, $lt: end }, isDemo: { $ne: true }, deleted: null, ...onlyBranch } },
     {
       $facet: {
         summary: [paid, { $group: { _id: null, ...sum, tax: { $sum: '$taxTotal' } } }],

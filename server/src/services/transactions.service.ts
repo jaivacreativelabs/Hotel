@@ -1,5 +1,6 @@
 import type { Types } from 'mongoose';
 import {
+  BILL_DELETE_WINDOW_MINUTES,
   BILL_EDIT_WINDOW_MINUTES,
   calculateBill,
   ORDER_TYPE_LABEL,
@@ -15,7 +16,7 @@ import { BranchModel, RestaurantModel, TransactionModel, type Transaction } from
 import { dayRange, formatDateTime } from '../utils/dates.js';
 import { toCsv, paiseToDecimal } from '../utils/csv.js';
 import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
-import { editableUntil, restaurantSettings, toTransactionDTO } from '../utils/serialize.js';
+import { deletableUntil, editableUntil, restaurantSettings, toTransactionDTO } from '../utils/serialize.js';
 import { priceLines } from './bills.service.js';
 import { resolvePayments } from '../utils/payments.js';
 import { escapeRegex, toObjectId } from '../utils/validate.js';
@@ -28,7 +29,7 @@ type TransactionLean = Transaction & { _id: Types.ObjectId };
  * may see. Restaurant Admins never get results outside their assigned branches.
  */
 export function transactionFilter(user: AuthUser, q: Partial<TransactionQuery>): Record<string, unknown> {
-  const filter: Record<string, unknown> = {};
+  const filter: Record<string, unknown> = { deleted: null };
   if (user.role !== 'SUPER_ADMIN') {
     if (q.branchId) {
       const id = toObjectId(q.branchId, 'branch');
@@ -76,7 +77,7 @@ export async function listTransactions(
 
 async function getAccessible(user: AuthUser, id: string) {
   const tx = await TransactionModel.findById(toObjectId(id, 'transaction')).lean<TransactionLean>();
-  if (!tx) throw notFound('Transaction');
+  if (!tx || tx.deleted) throw notFound('Transaction');
   if (user.role !== 'SUPER_ADMIN' && !user.branchIds.some((b) => b.equals(tx.branchId))) {
     throw notFound('Transaction');
   }
@@ -179,7 +180,7 @@ export async function editTransaction(user: AuthUser, id: string, input: Transac
 
   const updated = await TransactionModel.findOneAndUpdate(
     // Bills made before editing existed have no editCount field; `null` matches those too.
-    { _id: tx._id, status: 'COMPLETED', editCount: tx.editCount ? tx.editCount : { $in: [0, null] } },
+    { _id: tx._id, status: 'COMPLETED', deleted: null, editCount: tx.editCount ? tx.editCount : { $in: [0, null] } },
     {
       $set: {
         items: lines.map((l, i) => ({
@@ -254,7 +255,7 @@ export async function changeTransactionStatus(
 ): Promise<TransactionDTO> {
   const tx = await getAccessible(user, id);
   const updated = await TransactionModel.findOneAndUpdate(
-    { _id: tx._id, status: 'COMPLETED' },
+    { _id: tx._id, status: 'COMPLETED', deleted: null },
     {
       $set: {
         status: next,
@@ -275,4 +276,37 @@ export async function changeTransactionStatus(
     meta: { reason, previousStatus: tx.status },
   });
   return toTransactionDTO(updated);
+}
+
+/**
+ * Deletes a bill: Restaurant Admins within BILL_DELETE_WINDOW_MINUTES of billing, the Super Admin
+ * any time. The bill is only marked deleted – it leaves history, reports and analytics, but stays
+ * in the database and the audit log keeps what it was.
+ */
+export async function deleteTransaction(user: AuthUser, id: string, reason: string): Promise<void> {
+  const tx = await getAccessible(user, id);
+  if (user.role !== 'SUPER_ADMIN' && !deletableUntil(tx)) {
+    throw conflict(`Bills can be deleted only within ${BILL_DELETE_WINDOW_MINUTES} minutes of billing. Use Void or Refund instead, or ask your Super Admin.`, 'DELETE_WINDOW_CLOSED');
+  }
+  const updated = await TransactionModel.updateOne(
+    { _id: tx._id, deleted: null },
+    { $set: { deleted: { at: new Date(), by: user._id, byName: user.name, reason } } },
+  );
+  if (!updated.modifiedCount) throw notFound('Transaction');
+  await audit(user, {
+    action: 'TRANSACTION_DELETED',
+    entityType: 'Transaction',
+    entityId: tx._id,
+    restaurantId: tx.restaurantId,
+    branchId: tx.branchId,
+    summary: `Deleted bill ${tx.billNumber} (${tx.grandTotal} paise)${reason ? `: ${reason}` : ''}`,
+    meta: {
+      reason,
+      status: tx.status,
+      grandTotal: tx.grandTotal,
+      paymentMethod: tx.paymentMethod,
+      finalizedAt: tx.finalizedAt,
+      items: tx.items.map((i) => `${i.name} x${i.quantity}`),
+    },
+  });
 }

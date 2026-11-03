@@ -62,6 +62,14 @@ const transactionSchema = new Schema(
       ),
       default: null,
     },
+    /** Set when the bill is deleted: it leaves history, reports and analytics but stays in the DB. */
+    deleted: {
+      type: new Schema(
+        { at: Date, by: { type: Schema.Types.ObjectId, ref: 'User' }, byName: String, reason: String },
+        { _id: false },
+      ),
+      default: null,
+    },
     sourceDraftId: { type: Schema.Types.ObjectId, ref: 'Draft', required: true },
     idempotencyKey: { type: String, required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -111,7 +119,7 @@ transactionSchema.index({ isDemo: 1 }, { partialFilterExpression: { isDemo: true
 // ---- Immutability guard: completed bills are never rewritten silently. ----
 // Status changes (void/refund) are always allowed. Amounts/items may change only through the
 // controlled edit workflow, which passes { billEdit: true } and must also push a revision.
-const MUTABLE = new Set(['status', 'paymentStatus', 'statusChange', 'updatedAt']);
+const MUTABLE = new Set(['status', 'paymentStatus', 'statusChange', 'deleted', 'updatedAt']);
 
 function assertControlledEdit(update: Record<string, unknown> | null): void {
   const push = (update?.$push ?? {}) as Record<string, unknown>;

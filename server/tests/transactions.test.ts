@@ -196,3 +196,53 @@ describe('void / refund workflow', () => {
     expect((await TransactionModel.findById(bills[2].id).lean())?.status).toBe('COMPLETED');
   });
 });
+
+describe('deleting a bill', () => {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  const overview = async () =>
+    ok<{ summary: { totalSales: number; billCount: number } }>(await w.sa.get(`/api/v1/admin/analytics/overview?from=${today}&to=${today}&branchId=${w.branchA1}`)).summary;
+
+  it('lets the Restaurant Admin delete within 30 minutes: gone from history and analytics, kept in the DB and logged', async () => {
+    const target = bills[10];
+    const fresh = ok<{ deletableUntil: string | null }>(await w.adminA1.get(`/api/v1/transactions/${target.id}`));
+    expect(fresh.deletableUntil).not.toBeNull();
+    const before = await overview();
+    const total = (await w.adminA1.get('/api/v1/transactions?limit=1')).body.meta.total;
+
+    expect((await w.adminA1.delete(`/api/v1/transactions/${target.id}`).send({ reason: 'Billed by mistake' })).status).toBe(204);
+
+    expect((await w.adminA1.get(`/api/v1/transactions/${target.id}`)).status).toBe(404);
+    expect((await w.adminA1.get('/api/v1/transactions?limit=1')).body.meta.total).toBe(total - 1);
+    expect((await w.adminA1.get(`/api/v1/transactions?q=${target.billNumber}`)).body.data).toHaveLength(0);
+    const after = await overview();
+    expect(after).toMatchObject({ totalSales: before.totalSales - target.grandTotal, billCount: before.billCount - 1 });
+    const stored = await TransactionModel.findById(target.id).lean();
+    expect(stored?.deleted).toMatchObject({ reason: 'Billed by mistake' });
+    expect(await AuditLogModel.countDocuments({ action: 'TRANSACTION_DELETED', entityId: target.id })).toBe(1);
+    // Already gone: a second delete, a void or an edit find nothing.
+    expect((await w.adminA1.delete(`/api/v1/transactions/${target.id}`)).status).toBe(404);
+    expect((await w.adminA1.post(`/api/v1/transactions/${target.id}/void`, { reason: 'again' })).status).toBe(404);
+  });
+
+  it('deletes voided bills too, without a reason', async () => {
+    ok(await w.adminA1.post(`/api/v1/transactions/${bills[12].id}/void`, { reason: 'Duplicate' }));
+    expect((await w.adminA1.delete(`/api/v1/transactions/${bills[12].id}`)).status).toBe(204);
+    expect((await w.adminA1.get(`/api/v1/transactions/${bills[12].id}`)).status).toBe(404);
+  });
+
+  it('refuses the Restaurant Admin after 30 minutes; the Super Admin can delete any time', async () => {
+    const target = bills[11];
+    await TransactionModel.collection.updateOne({ _id: new Types.ObjectId(target.id) }, { $set: { finalizedAt: new Date(Date.now() - 31 * 60_000) } });
+    expect(ok<{ deletableUntil: string | null }>(await w.adminA1.get(`/api/v1/transactions/${target.id}`)).deletableUntil).toBeNull();
+    const res = await w.adminA1.delete(`/api/v1/transactions/${target.id}`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('DELETE_WINDOW_CLOSED');
+    expect((await w.sa.delete(`/api/v1/transactions/${target.id}`).send({ reason: 'Owner cleanup' })).status).toBe(204);
+    expect((await w.sa.get(`/api/v1/transactions/${target.id}`)).status).toBe(404);
+  });
+
+  it('other branches cannot delete', async () => {
+    expect((await w.adminA2.delete(`/api/v1/transactions/${bills[13].id}`)).status).toBe(404);
+    expect((await TransactionModel.findById(bills[13].id).lean())?.deleted).toBeNull();
+  });
+});
