@@ -118,3 +118,19 @@ describe('other expenses', () => {
     expect(e.note).toBe('Plumber');
   });
 });
+
+describe('Super Admin expenses', () => {
+  it('adds an expense to any restaurant, which then counts there', async () => {
+    w.sa.useBranch(w.branchB1);
+    try {
+      const e = ok<Expense>(await w.sa.post('/api/v1/expenses', { ...gas(), note: 'Paid by owner' }), 201);
+      expect([e.branchId, e.amount, e.note]).toEqual([w.branchB1, 120000, 'Paid by owner']);
+      const list = ok<ExpenseList>(await w.adminB1.get('/api/v1/expenses'));
+      expect(list.expenses.map((x) => x.id)).toContain(e.id);
+    } finally {
+      w.sa.branchId = null;
+    }
+    // Without a restaurant the server asks for one.
+    expect((await w.sa.post('/api/v1/expenses', gas())).body.error.code).toBe('BRANCH_REQUIRED');
+  });
+});

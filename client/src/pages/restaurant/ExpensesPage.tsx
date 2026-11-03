@@ -76,20 +76,33 @@ function CategoryLabel({ category }: { category: ExpenseCategory }) {
   );
 }
 
-/** Add a new expense (`expense` empty) or correct an existing one. */
+/** A restaurant (branch) the Super Admin can add an expense to. */
+export interface ExpensePlace {
+  id: string;
+  label: string;
+}
+
+/**
+ * Add a new expense (`expense` empty) or correct an existing one. With `places` (Super Admin) a
+ * new expense can go to any restaurant; `branchId` is then only the pre-selected one.
+ */
 function ExpenseForm({
   expense,
   branchId,
+  places,
   onClose,
   onSaved,
 }: {
   expense: ExpenseDTO | null;
   branchId: string | null;
+  places?: ExpensePlace[];
   onClose: () => void;
   onSaved: (e: ExpenseDTO) => void;
 }) {
   const toast = useToast();
   const today = isoDay(new Date());
+  const choosePlace = !expense && !!places?.length;
+  const [placeId, setPlaceId] = useState(branchId ?? (places?.length === 1 ? places[0].id : ''));
   const [amount, setAmount] = useState(expense ? paiseToRupeesInput(expense.amount) : '');
   const [category, setCategory] = useState<ExpenseCategory | null>(expense?.category ?? null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(expense?.paymentMethod ?? 'CASH');
@@ -101,6 +114,7 @@ function ExpenseForm({
   const save = async () => {
     const paise = parseRupeesToPaise(amount);
     const next: Record<string, string> = {};
+    if (choosePlace && !placeId) next.place = 'Choose the restaurant that spent the money';
     if (!paise) next.amount = 'Enter an amount like 450 or 120.50';
     else if (paise > MAX_EXPENSE_PAISE) next.amount = 'Amount is too high';
     if (!category) next.category = 'Choose what the money was spent on';
@@ -114,7 +128,7 @@ function ExpenseForm({
       onSaved(
         expense
           ? await api.put<ExpenseDTO>(`/expenses/${expense.id}`, body, { branchId: null })
-          : await api.post<ExpenseDTO>('/expenses', body, { branchId }),
+          : await api.post<ExpenseDTO>('/expenses', body, { branchId: choosePlace ? placeId : branchId }),
       );
     } catch (err) {
       toast.error(err);
@@ -132,6 +146,20 @@ function ExpenseForm({
           void save();
         }}
       >
+        {choosePlace && (
+          <Field label="Restaurant" error={errors.place}>
+            {(id) => (
+              <select id={id} className="select" value={placeId} onChange={(e) => setPlaceId(e.target.value)}>
+                <option value="">Select restaurant</option>
+                {places!.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        )}
         <Field label="Amount" error={errors.amount}>
           {(id) => (
             <div className="input-prefix input-prefix-xl">
@@ -198,17 +226,19 @@ function ExpenseForm({
 }
 
 /**
- * Expense list with totals. `addBranchId` is the branch new expenses go to (none: adding is off,
- * e.g. the Super Admin has not picked a branch). `scopeFilters` adds the Super Admin's selectors.
+ * Expense list with totals. `addBranchId` is the branch new expenses go to; `addPlaces` lets the
+ * Super Admin pick any restaurant in the form instead. `scopeFilters` adds the Super Admin's selectors.
  */
 export function ExpensesView({
   scope,
   addBranchId,
+  addPlaces,
   scopeFilters,
   showBranch = false,
 }: {
   scope: { restaurantId?: string; branchId?: string };
   addBranchId: string | null;
+  addPlaces?: ExpensePlace[];
   scopeFilters?: ReactNode;
   showBranch?: boolean;
 }) {
@@ -225,6 +255,7 @@ export function ExpensesView({
   const [form, setForm] = useState<{ expense: ExpenseDTO | null } | null>(null);
   const [deleting, setDeleting] = useState<ExpenseDTO | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const canAdd = !!addBranchId || !!addPlaces?.length;
 
   const range = preset === 'custom' && custom ? custom : presetRange(preset);
   const query = useMemo(() => ({ ...scope, q, from: range.from, to: range.to, category, page, limit: 20 }), [scope, q, range.from, range.to, category, page]);
@@ -293,8 +324,8 @@ export function ExpensesView({
           <button
             className="btn btn-primary btn-lg"
             onClick={() => setForm({ expense: null })}
-            disabled={!addBranchId}
-            title={addBranchId ? undefined : 'Choose a restaurant first'}
+            disabled={!canAdd}
+            title={canAdd ? undefined : 'Choose a restaurant first'}
           >
             <Plus /> Add Expense
           </button>
@@ -356,7 +387,7 @@ export function ExpensesView({
           <Empty title="Could not load expenses">{(list.error as Error).message}</Empty>
         ) : data!.expenses.length === 0 ? (
           <Empty icon={<Wallet />} title="No expenses found">
-            {addBranchId ? 'Tap “Add Expense” to record money spent.' : 'Try another date range or restaurant.'}
+            {canAdd ? 'Tap “Add Expense” to record money spent.' : 'Try another date range or restaurant.'}
           </Empty>
         ) : (
           <>
@@ -428,6 +459,7 @@ export function ExpensesView({
         <ExpenseForm
           expense={form.expense}
           branchId={addBranchId}
+          places={addPlaces}
           onClose={() => setForm(null)}
           onSaved={(e) => {
             toast.success(`${EXPENSE_CATEGORY_LABEL[e.category]} expense of ${formatMoney(e.amount)} ${form.expense ? 'updated' : 'added'}`);
