@@ -21,6 +21,19 @@ html {
 html.no-zoom {
   touch-action: pan-x pan-y;
 }
+/* Touch tablets (viewport.js): text box text is 16px on the screen. iPad Safari zooms in to a
+   text box with smaller text when it is tapped, or when Safari puts the cursor back in it on
+   coming back from another app – and stays zoomed. */
+html.touch-inputs input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+html.touch-inputs textarea,
+html.touch-inputs select {
+  font-size: var(--touch-input-font);
+}
+/* The bigger text would cut a filter's fixed-width label short ("All payment m…"). */
+html.touch-inputs .select-sm {
+  width: auto !important;
+  max-width: 100%;
+}
 body {
   margin: 0;
   font-family: var(--font-family);

@@ -1,4 +1,4 @@
-/* global screen, document, window, setTimeout, clearTimeout */
+/* global screen, document, window, navigator, setTimeout, clearTimeout */
 (function () {
   var root = document.documentElement;
   // The app is exactly as tall as the visible screen (app.css uses --app-height). Safari's
@@ -32,6 +32,7 @@
   // amount…), whose text is under 16px on screen, and zooms in to it; printing zooms too.
   var scale = 0;
   var nudge = 0;
+  var touch = (navigator.maxTouchPoints || 0) > 0 || 'ontouchend' in document;
   /** force: apply it again even when the scale has not changed, which zooms Safari back out. */
   var lockScale = function (force) {
     if (!meta) return;
@@ -43,6 +44,13 @@
     if (!(next > 0.3 && next < 3)) return;
     if (next === scale && !force) return;
     scale = next;
+    // Touch screens: text boxes get text of 16px on the screen (16px ÷ scale on the page), like
+    // other websites. Safari zooms in to any text box whose text looks smaller than that,
+    // whatever the viewport says (app.css, html.touch-inputs).
+    if (touch) {
+      root.style.setProperty('--touch-input-font', Math.max(16, Math.ceil((16 / scale) * 10) / 10) + 'px');
+      root.classList.add('touch-inputs');
+    }
     // Safari ignores the same text set again, so a forced lock differs by a hair (0.01%).
     nudge = force && !nudge ? 0.0001 : 0;
     var s = (scale + nudge).toFixed(4);
