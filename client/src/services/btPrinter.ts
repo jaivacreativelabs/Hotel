@@ -68,6 +68,8 @@ export interface PrinterState {
    * Chrome cannot hand the printer back (no getDevices): one tap on the printer button then.
    */
   known: boolean;
+  /** The last few connects, drops and errors with their time, newest first (for a screenshot). */
+  history: string[];
 }
 
 interface Saved {
@@ -93,12 +95,18 @@ function writeSaved(s: Saved | null) {
 }
 
 const saved = readSaved();
-let state: PrinterState = { status: saved ? 'disconnected' : 'none', name: saved?.name ?? '', paper: saved?.paper ?? 58, error: '', known: false };
+let state: PrinterState = { status: saved ? 'disconnected' : 'none', name: saved?.name ?? '', paper: saved?.paper ?? 58, error: '', known: false, history: [] };
 const listeners = new Set<() => void>();
 function setState(patch: Partial<PrinterState>) {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
 }
+const timeFmt = new Intl.DateTimeFormat('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function note(text: string) {
+  if (state.history[0]?.endsWith(` ${text}`)) return; // the same failure again and again: once
+  setState({ history: [`${timeFmt.format(new Date())} ${text}`, ...state.history].slice(0, 8) });
+}
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 export const getPrinterState = () => state;
 export function subscribePrinter(l: () => void) {
   listeners.add(l);
@@ -112,8 +120,9 @@ let connecting: Promise<BtCharacteristic> | null = null;
 const isConnected = () => !!(channel && device?.gatt?.connected);
 
 // While the printer is away (switched off, asleep, out of range) the page keeps trying to
-// reconnect, quietly and less often as time goes on, so the next bill prints with no popup.
-const RETRY_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+// reconnect, quietly, so the next bill prints with no popup. Each try also listens for the
+// printer up to 15 s, so it is found within seconds of being back.
+const RETRY_MS = [1_000, 3_000, 5_000];
 let retries = 0;
 let retryTimer: ReturnType<typeof setTimeout> | undefined;
 function keepConnected() {
@@ -149,6 +158,7 @@ const onDisconnected = () => {
   channel = null;
   if (!device) return;
   setState({ status: 'disconnected' });
+  note('Connection lost');
   retries = 0;
   keepConnected();
 };
@@ -186,20 +196,42 @@ async function hear(d: BtDevice, ms: number): Promise<boolean> {
   }
 }
 
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function connectGatt(d: BtDevice, timeoutMs: number): Promise<BtServer> {
-  if (!d.gatt) throw new Error('This device is not a Bluetooth printer.');
-  try {
-    return await withTimeout(d.gatt.connect(), timeoutMs, NO_ANSWER);
-  } catch (err) {
-    if (!notHeard(err)) throw err;
-    if (!d.watchAdvertisements) {
-      // This Chrome cannot listen for it: a tap on the printer button (Chrome's list) finds it.
-      setState({ known: false });
-      throw new Error('Chrome lost the printer. Tap "Tap to connect printer" at the top.');
+  const gatt = d.gatt;
+  if (!gatt) throw new Error('This device is not a Bluetooth printer.');
+  // Android's Bluetooth often fails a connect for no reason ("GATT operation failed") and
+  // succeeds a moment later, so a failed connect is tried once more straight away.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await withTimeout(gatt.connect(), timeoutMs, NO_ANSWER);
+    } catch (err) {
+      if (notHeard(err)) {
+        if (!d.watchAdvertisements) {
+          // This Chrome cannot listen for it: a tap on the printer button (Chrome's list) finds it.
+          setState({ known: false });
+          throw new Error('Chrome lost the printer. Tap "Tap to connect printer" at the top.');
+        }
+        if (!(await hear(d, timeoutMs))) throw new Error(NO_ANSWER);
+      } else if (message(err) === NO_ANSWER) {
+        throw err;
+      } else await pause(600);
+      if (attempt > 0) throw err;
     }
-    if (!(await hear(d, timeoutMs))) throw new Error(NO_ANSWER);
-    return withTimeout(d.gatt.connect(), timeoutMs, NO_ANSWER);
   }
+}
+
+/** The printer's data channel; the service list sometimes comes back empty right after connecting. */
+async function findChannel(server: BtServer): Promise<BtCharacteristic | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    for (const service of await server.getPrimaryServices().catch(() => [] as BtService[])) {
+      const found = (await service.getCharacteristics().catch(() => [] as BtCharacteristic[])).find((c) => c.properties.writeWithoutResponse || c.properties.write);
+      if (found) return found;
+    }
+    await pause(500);
+  }
+  return null;
 }
 
 /**
@@ -213,19 +245,19 @@ function open(d: BtDevice, quiet = false, timeoutMs = 15_000): Promise<BtCharact
     if (!quiet) setState({ status: 'connecting', error: '' });
     try {
       const server = await connectGatt(d, timeoutMs);
-      for (const service of await server.getPrimaryServices().catch(() => [] as BtService[])) {
-        const found = (await service.getCharacteristics()).find((c) => c.properties.writeWithoutResponse || c.properties.write);
-        if (found) {
-          channel = found;
-          setState({ status: 'connected', error: '' });
-          return found;
-        }
+      const found = await findChannel(server);
+      if (found) {
+        channel = found;
+        setState({ status: 'connected', error: '' });
+        note('Connected');
+        return found;
       }
       server.disconnect();
       throw new Error('This printer cannot be used from the browser (it has no Bluetooth LE print service).');
     } catch (err) {
       if (quiet) setState({ status: 'disconnected' });
-      else setState({ status: 'disconnected', error: err instanceof Error ? err.message : String(err) });
+      else setState({ status: 'disconnected', error: message(err) });
+      note(`Could not connect: ${message(err)}`);
       throw err;
     }
   })();
@@ -370,17 +402,24 @@ function send(bytes: Uint8Array): Promise<void> {
     for (let attempt = 0; ; attempt++) {
       let sent = 0;
       try {
-        const c = await open(device, false, 8_000);
+        // Also caps the wait when a quiet background reconnect is already under way.
+        const c = await withTimeout(open(device, false, 8_000), 10_000, NO_ANSWER);
         const fast = c.properties.writeWithoutResponse;
         for (; sent < bytes.length; sent += CHUNK) {
           const part = bytes.slice(sent, sent + CHUNK);
-          await (fast ? c.writeValueWithoutResponse(part) : c.writeValueWithResponse(part));
+          // A quick write is not answered, so a connection that died without Chrome noticing
+          // would swallow the bill. The last packet waits for the printer's answer: no answer,
+          // and the bill goes to the popup instead.
+          const last = sent + CHUNK >= bytes.length;
+          if (fast && !(last && c.properties.write)) await c.writeValueWithoutResponse(part);
+          else await withTimeout(c.writeValueWithResponse(part), 5_000, NO_ANSWER);
         }
         return;
       } catch (err) {
         channel = null;
         if (attempt > 0 || sent > 0 || !wasConnected) {
-          setState({ status: device?.gatt?.connected ? 'connected' : 'disconnected', error: err instanceof Error ? err.message : String(err) });
+          setState({ status: device?.gatt?.connected ? 'connected' : 'disconnected', error: message(err) });
+          note(`Bill not printed: ${message(err)}`);
           keepConnected();
           throw err;
         }

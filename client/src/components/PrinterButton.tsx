@@ -129,6 +129,16 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
             Stop using this printer
           </button>
         )}
+        {state.history.length > 0 && (
+          <details className="printer-history">
+            <summary>Recent printer events</summary>
+            <ul>
+              {state.history.map((h, i) => (
+                <li key={i}>{h}</li>
+              ))}
+            </ul>
+          </details>
+        )}
         <p className="field-hint" style={{ margin: 0 }}>
           Switch the printer on and turn on Bluetooth (and Location) on this tablet, then tap Choose printer and pick it from the list.
         </p>

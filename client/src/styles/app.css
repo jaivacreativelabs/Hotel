@@ -339,6 +339,17 @@ html.app-open body {
 .printer-status.connected > svg {
   color: var(--color-success);
 }
+.printer-history {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.printer-history summary {
+  cursor: pointer;
+}
+.printer-history ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
 .user-menu {
   position: relative;
   margin-left: auto;
