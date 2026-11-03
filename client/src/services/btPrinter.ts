@@ -70,6 +70,8 @@ export interface PrinterState {
   known: boolean;
   /** The last few connects, drops and errors with their time, newest first (for a screenshot). */
   history: string[];
+  /** Bills go to the RawBT app (Android), which keeps the printer connected – not to Chrome's Bluetooth. */
+  rawbt: boolean;
 }
 
 interface Saved {
@@ -94,8 +96,27 @@ function writeSaved(s: Saved | null) {
   }
 }
 
+const RAWBT_KEY = 'rb-printer-rawbt';
+function readRawbt(): PaperWidth | null {
+  try {
+    const v = localStorage.getItem(RAWBT_KEY);
+    return v === '80' ? 80 : v === '58' ? 58 : null;
+  } catch {
+    return null;
+  }
+}
+
 const saved = readSaved();
-let state: PrinterState = { status: saved ? 'disconnected' : 'none', name: saved?.name ?? '', paper: saved?.paper ?? 58, error: '', known: false, history: [] };
+const rawbtPaper = readRawbt();
+let state: PrinterState = {
+  status: saved ? 'disconnected' : 'none',
+  name: saved?.name ?? '',
+  paper: rawbtPaper ?? saved?.paper ?? 58,
+  error: '',
+  known: false,
+  history: [],
+  rawbt: rawbtPaper !== null,
+};
 const listeners = new Set<() => void>();
 function setState(patch: Partial<PrinterState>) {
   state = { ...state, ...patch };
@@ -302,7 +323,40 @@ export async function choosePrinter(paper: PaperWidth, onlySaved = false): Promi
 export function setPaper(paper: PaperWidth) {
   const s = readSaved();
   if (s) writeSaved({ ...s, paper });
+  if (state.rawbt) writeRawbt(paper);
   setState({ paper });
+}
+
+function writeRawbt(paper: PaperWidth | null) {
+  try {
+    if (paper) localStorage.setItem(RAWBT_KEY, String(paper));
+    else localStorage.removeItem(RAWBT_KEY);
+  } catch {
+    // private mode: chosen again next time
+  }
+}
+
+/**
+ * Bills go to the RawBT app instead of Chrome's Bluetooth. RawBT (Android, Play Store) keeps the
+ * printer connected by itself, so a printer that slept or went out of range is no problem. The
+ * printer allows one connection at a time, so Chrome lets go of it first.
+ */
+export async function setRawbtMode(on: boolean) {
+  if (on) {
+    await forgetPrinter();
+    writeRawbt(state.paper);
+    setState({ rawbt: true });
+  } else {
+    writeRawbt(null);
+    setState({ rawbt: false });
+  }
+}
+
+/** Hands the bill's printer commands to RawBT (opens the Play Store when it is not installed). */
+function sendToRawbt(bytes: Uint8Array) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  window.location.href = `intent:base64,${btoa(bin)}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
 }
 
 /** Stops using the printer on this device (bills print with the popup again). */
@@ -312,7 +366,8 @@ export async function forgetPrinter() {
   channel = null;
   clearTimeout(retryTimer);
   writeSaved(null);
-  setState({ status: 'none', name: '', error: '', known: false });
+  writeRawbt(null);
+  setState({ status: 'none', name: '', error: '', known: false, rawbt: false });
   if (d) {
     d.removeEventListener('gattserverdisconnected', onDisconnected);
     d.gatt?.disconnect();
@@ -353,7 +408,7 @@ export function reconnectsAlone() {
 }
 
 /** True when bills should go to the Bluetooth printer instead of the print popup. */
-export const hasPrinter = () => device !== null;
+export const hasPrinter = () => state.rawbt || device !== null;
 
 const logos = new Map<string, Promise<Raster | null>>();
 /** The restaurant logo as printer dots, about 18 mm wide (made once per logo). */
@@ -434,12 +489,16 @@ function send(bytes: Uint8Array): Promise<void> {
 export async function printBill(t: TransactionDTO): Promise<void> {
   const logo = t.restaurantSnapshot.logoUrl ? await logoRaster(t.restaurantSnapshot.logoUrl) : null;
   const fits = logo && logo.widthBytes * 8 <= PAPER_DOTS[state.paper] ? logo : null;
-  await send(receiptCommands(t, PAPER_COLUMNS[state.paper], fits));
+  const bytes = receiptCommands(t, PAPER_COLUMNS[state.paper], fits);
+  if (state.rawbt) return sendToRawbt(bytes);
+  await send(bytes);
 }
 
 /** A short test slip, to check the printer and the paper size. */
-export function printTest(): Promise<void> {
+export async function printTest(): Promise<void> {
   const cols = PAPER_COLUMNS[state.paper];
   const text = ['', 'Printer connected', `Paper: ${state.paper} mm`, '-'.repeat(cols), '1234567890'.repeat(5).slice(0, cols), '-'.repeat(cols), '', '', '', ''].join('\n');
-  return send(Uint8Array.from([0x1b, 0x40, ...Array.from(text, (c) => c.charCodeAt(0))]));
+  const bytes = Uint8Array.from([0x1b, 0x40, ...Array.from(text, (c) => c.charCodeAt(0))]);
+  if (state.rawbt) return sendToRawbt(bytes);
+  return send(bytes);
 }

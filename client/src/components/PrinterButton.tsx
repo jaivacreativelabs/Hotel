@@ -14,6 +14,7 @@ import {
   reconnectSavedPrinter,
   reconnectsAlone,
   setPaper,
+  setRawbtMode,
   subscribePrinter,
 } from '../services/btPrinter';
 import { useToast } from '../store/toast';
@@ -33,12 +34,12 @@ export function PrinterButton() {
   if (!bluetoothSupported()) return null;
   // After a reload Chrome may hand the printer back only from a tap: then the button itself is
   // that tap, and Chrome's list shows just this printer.
-  const needsTap = state.status === 'disconnected' && !state.known;
+  const needsTap = !state.rawbt && state.status === 'disconnected' && !state.known;
   return (
     <>
       <button
         type="button"
-        className={cx('printer-pill', state.status)}
+        className={cx('printer-pill', state.rawbt ? 'connected' : state.status)}
         onClick={() => {
           if (!needsTap) return setOpen(true);
           connectAgain(state.paper).then(
@@ -46,10 +47,10 @@ export function PrinterButton() {
             (err: unknown) => (err instanceof Error && err.name === 'NotFoundError' ? setOpen(true) : toast.error(err)),
           );
         }}
-        title={state.status === 'connected' ? `Bills print on ${state.name}` : 'Bluetooth bill printer'}
+        title={state.rawbt ? 'Bills print through the RawBT app' : state.status === 'connected' ? `Bills print on ${state.name}` : 'Bluetooth bill printer'}
       >
         <Printer size={16} />
-        <span className="printer-text">{needsTap ? 'Tap to connect printer' : STATUS_TEXT[state.status]}</span>
+        <span className="printer-text">{state.rawbt ? 'Printer (RawBT)' : needsTap ? 'Tap to connect printer' : STATUS_TEXT[state.status]}</span>
       </button>
       {open && <PrinterModal onClose={() => setOpen(false)} />}
     </>
@@ -74,9 +75,66 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
   };
   const working = busy || state.status === 'connecting';
 
+  const modePicker = (
+    <div className="field">
+      <span className="field-label">Print using</span>
+      <div className="pay-methods order-types" role="radiogroup" aria-label="Print using">
+        <button type="button" role="radio" aria-checked={state.rawbt} className={cx('pay-btn', state.rawbt && 'active')} disabled={busy} onClick={() => !state.rawbt && void run(() => setRawbtMode(true))}>
+          RawBT app
+        </button>
+        <button type="button" role="radio" aria-checked={!state.rawbt} className={cx('pay-btn', !state.rawbt && 'active')} disabled={busy} onClick={() => state.rawbt && void run(() => setRawbtMode(false))}>
+          Chrome Bluetooth
+        </button>
+      </div>
+      <span className="field-hint">RawBT keeps the printer connected by itself – the steadiest choice.</span>
+    </div>
+  );
+
+  const paperPicker = (
+    <div className="field">
+      <span className="field-label">Paper roll</span>
+      <div className="pay-methods order-types" role="radiogroup" aria-label="Paper roll width">
+        {([58, 80] as PaperWidth[]).map((w) => (
+          <button key={w} type="button" role="radio" aria-checked={state.paper === w} className={cx('pay-btn', state.paper === w && 'active')} onClick={() => setPaper(w)}>
+            {w} mm
+          </button>
+        ))}
+      </div>
+      <span className="field-hint">Not sure? 58 mm prints on both sizes.</span>
+    </div>
+  );
+
+  if (state.rawbt) {
+    return (
+      <Modal title="Bill printer" onClose={onClose} width={460}>
+        <div className="stack" style={{ gap: 18 }}>
+          {modePicker}
+          <div className="printer-status connected">
+            <Printer />
+            <div>
+              <b>RawBT app</b>
+              <div className="muted">Bills go to RawBT, which prints them on its printer – no popup.</div>
+            </div>
+          </div>
+          {paperPicker}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void run(printTest)}>
+              Test print
+            </button>
+          </div>
+          <p className="field-hint" style={{ margin: 0 }}>
+            One-time setup: install <b>RawBT</b> from the Play Store, open it, choose this printer there (Bluetooth) and do its test
+            print. Then tap Test print here. Without RawBT the Play Store opens.
+          </p>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal title="Bill printer" onClose={onClose} width={460}>
       <div className="stack" style={{ gap: 18 }}>
+        {modePicker}
         <div className={cx('printer-status', state.status)}>
           <Printer />
           <div>
@@ -96,17 +154,7 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="field">
-          <span className="field-label">Paper roll</span>
-          <div className="pay-methods order-types" role="radiogroup" aria-label="Paper roll width">
-            {([58, 80] as PaperWidth[]).map((w) => (
-              <button key={w} type="button" role="radio" aria-checked={state.paper === w} className={cx('pay-btn', state.paper === w && 'active')} onClick={() => setPaper(w)}>
-                {w} mm
-              </button>
-            ))}
-          </div>
-          <span className="field-hint">Not sure? 58 mm prints on both sizes.</span>
-        </div>
+        {paperPicker}
 
         <div className="modal-actions">
           {state.status === 'connected' ? (
