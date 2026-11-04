@@ -88,10 +88,10 @@ export function AnalyticsPage() {
           <div className="stat-grid cols-3">
             <div className="card stat">
               <div className="stat-label">
-                <Scale /> Net Sales
+                <IndianRupee /> Total Sales
               </div>
-              <div className={`stat-value ${o.summary.netSales < 0 ? 'danger-text' : 'success-text'}`}>{formatMoney(o.summary.netSales)}</div>
-              <div className="stat-foot">sales − expenses</div>
+              <div className="stat-value">{formatMoney(o.summary.totalSales)}</div>
+              <div className="stat-foot">incl. {formatMoney(o.summary.taxTotal)} tax</div>
             </div>
             <div className="card stat">
               <div className="stat-label">
@@ -104,10 +104,10 @@ export function AnalyticsPage() {
             </div>
             <div className="card stat">
               <div className="stat-label">
-                <IndianRupee /> Total Sales
+                <Scale /> Net Sales
               </div>
-              <div className="stat-value">{formatMoney(o.summary.totalSales)}</div>
-              <div className="stat-foot">incl. {formatMoney(o.summary.taxTotal)} tax</div>
+              <div className={`stat-value ${o.summary.netSales < 0 ? 'danger-text' : 'success-text'}`}>{formatMoney(o.summary.netSales)}</div>
+              <div className="stat-foot">sales − expenses</div>
             </div>
             <div className="card stat">
               <div className="stat-label">
