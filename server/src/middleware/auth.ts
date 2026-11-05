@@ -30,6 +30,29 @@ declare module 'express-serve-static-core' {
 interface SessionClaims {
   sub: string;
   tv: number;
+  /** issued at (seconds), added by jsonwebtoken */
+  iat?: number;
+}
+
+/**
+ * A session lasts SESSION_TTL_HOURS from its last use, not from sign-in: a counter tablet signed
+ * in in the morning was signed out mid-service in the evening. While in use the cookie is renewed
+ * (at most once every RENEW_AFTER_S), so only a device left unused is signed out.
+ */
+const RENEW_AFTER_S = 15 * 60;
+
+/**
+ * Who a session cookie belongs to (account + sign-in generation), or null when it is not ours.
+ * Unlike the cookie text it stays the same when the cookie is renewed.
+ */
+export function sessionOwner(token: unknown): string | null {
+  if (typeof token !== 'string' || !token) return null;
+  try {
+    const c = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'], ignoreExpiration: true }) as unknown as SessionClaims;
+    return `${c.sub}.${c.tv}`;
+  } catch {
+    return null;
+  }
 }
 
 export function issueSession(res: Response, user: Pick<AuthUser, '_id' | 'tokenVersion'>): void {
@@ -75,6 +98,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   if (user.role === 'WAITER' && !WAITER_ROUTES.some((r) => req.baseUrl.endsWith(r))) {
     throw forbidden('Waiter logins can only open the Waiter board');
   }
+  if (!claims.iat || Date.now() / 1000 - claims.iat > RENEW_AFTER_S) issueSession(res, user);
   req.user = user;
   next();
 }

@@ -26,7 +26,7 @@ import {
   UtensilsCrossed,
   X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChangeCalculator } from '../../components/ChangeCalculator';
 import { DiscountEditor } from '../../components/DiscountEditor';
@@ -39,6 +39,7 @@ import { useDraftSync } from '../../hooks/useDraftSync';
 import { useRootClass } from '../../hooks/useRootClass';
 import { KitchenSendButton, useSendToKitchen } from '../../components/KitchenSend';
 import { api, ApiError, apiSync, errorMessage } from '../../services/api';
+import { holdUpdates } from '../../services/appUpdate';
 import { counterDraftQuery, useCategories, useMenuItems } from '../../services/queries';
 import { useAuth } from '../../store/auth';
 import type { DraftSyncState, LocalBill } from '../../store/draftSync';
@@ -223,6 +224,11 @@ export function BillingView({
   };
 
   const hasItems = (local?.items.length ?? 0) > 0;
+  // A new app version waits until this bill is generated or cleared (payment choice etc. would go).
+  useEffect(() => {
+    holdUpdates('bill', hasItems);
+    return () => holdUpdates('bill', false);
+  }, [hasItems]);
   const itemCount = local?.items.reduce((a, i) => a + i.quantity, 0) ?? 0;
   const hasUnavailable = local?.items.some((i) => i.unavailable) ?? false;
   const needOrderType = askOrderType && !orderType;
