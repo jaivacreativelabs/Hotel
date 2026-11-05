@@ -124,6 +124,9 @@ export function BillingView({
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [manualSale, setManualSale] = useState(false);
+  // "Print bill" is ticked by default. Unticking skips printing for this bill only:
+  // the next bill (a new draft) starts ticked again.
+  const [noPrintFor, setNoPrintFor] = useState<string | null>(null);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
   const [billOpen, setBillOpen] = useState(false);
   useRootClass('has-bill-bar');
@@ -168,7 +171,10 @@ export function BillingView({
   };
   const billed = (current: DraftDTO, transaction: TransactionDTO) => {
     keyRef.current = null;
-    printReceipt(transaction); // no message: the print itself shows the bill was saved
+    // No message when printing: the print itself shows the bill was saved.
+    if (noPrintFor === current.id) toast.success(`Bill #${transaction.billNumber} saved`);
+    else printReceipt(transaction);
+    setNoPrintFor(null);
     void sync!.load();
     void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['tables'] });
@@ -365,6 +371,10 @@ export function BillingView({
               <div style={{ flex: 1 }}>
                 <DiscountEditor key={draft?.id} value={local?.discount ?? null} onApply={(d) => mutate((b) => ({ ...b, discount: d }))} />
               </div>
+              <label className="check bill-print-check" title="Untick to save this bill without printing">
+                <input type="checkbox" checked={noPrintFor !== draft?.id} disabled={busy} onChange={(e) => setNoPrintFor(e.target.checked ? null : (draft?.id ?? null))} />
+                Print bill
+              </label>
               {hasItems && (
                 <button className="link-btn danger" onClick={() => setConfirmClear(true)}>
                   Clear

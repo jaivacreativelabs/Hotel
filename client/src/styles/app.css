@@ -1623,6 +1623,13 @@ html.app-open body {
   justify-content: space-between;
   color: var(--color-text-muted);
 }
+.bill-print-check {
+  padding: 0;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .bill-total {
   display: flex;
   align-items: baseline;
