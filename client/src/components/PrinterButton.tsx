@@ -146,9 +146,9 @@ function PrinterModal({ onClose }: { onClose: () => void }) {
                   ? 'Connecting…'
                   : state.status === 'disconnected'
                     ? state.known
-                      ? 'Not connected – it connects by itself when the printer is on and near. Until then bills open the print popup.'
-                      : 'Not connected – tap Connect. Until then bills open the print popup.'
-                    : 'Bills open the print popup.'}
+                      ? 'Not connected – it connects by itself when the printer is on and near. Until then bills are saved without printing.'
+                      : 'Not connected – tap Connect. Until then bills are saved without printing.'
+                    : 'Bills are saved without printing until a printer is connected.'}
             </div>
             {state.error && state.status !== 'connected' && <div className="field-error">{state.error}</div>}
           </div>

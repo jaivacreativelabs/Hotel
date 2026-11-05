@@ -180,6 +180,16 @@ export function printReceipt(t: TransactionDTO) {
 }
 
 /**
+ * Generate Bill's print: only on the connected printer, never the print popup (user's wish).
+ * With no printer, or when it cannot be reached, `notPrinted` is called instead – the bill is
+ * saved and can be printed again from Transactions.
+ */
+export function printOnPrinter(t: TransactionDTO, notPrinted: () => void) {
+  if (hasPrinter()) printBill(t).catch(notPrinted);
+  else notPrinted();
+}
+
+/**
  * The receipt is put into this page and printed at once, and on paper the page shows only the
  * receipt; the logo is normally ready because the sidebar already shows it. The receipt stays
  * (hidden on screen) a minute after printing, as Safari may still be reading the page for its

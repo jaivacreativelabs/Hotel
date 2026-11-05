@@ -24,7 +24,7 @@ import { useSearchParams } from 'react-router-dom';
 import { TableIcon } from '../../components/badges';
 import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodImage } from '../../components/FoodImage';
-import { PaymentModal, printReceipt } from '../../components/PaymentButtons';
+import { PaymentModal, printOnPrinter } from '../../components/PaymentButtons';
 import { TableIllustration } from '../../components/TableIllustration';
 import { CancelButton, ConfirmButton, ConfirmDialog, Empty, Field, Loading, PageHeader, SidePanel, Spinner, Stepper } from '../../components/ui';
 import { api, ApiError, apiSync, errorMessage } from '../../services/api';
@@ -553,7 +553,9 @@ function TableDetail({
         generateNow(group.draftId, payment) ??
         (await withLatestDraft(group.draftId, (d) => api.post<{ transaction: TransactionDTO }>(`/bills/${d.id}/finalize`, finalize(d, payment))));
       setPaying(null);
-      printReceipt(res.transaction); // no message: the print itself shows the bill was saved
+      // No message when it prints: the print itself shows the bill was saved. Never the popup.
+      const tx = res.transaction;
+      printOnPrinter(tx, () => toast.error(`Bill #${tx.billNumber} saved, not printed – printer not connected`));
       if (group.draftId === activeDraftId) onExitOrder();
       void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     } catch (err) {

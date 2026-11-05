@@ -33,7 +33,7 @@ import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodImage } from '../../components/FoodImage';
 import { ManualSaleModal } from '../../components/ManualSale';
 import { addItemToBill, FoodGrid, setBillQuantity } from '../../components/FoodGrid';
-import { PaymentButtons, paymentFields, printReceipt, SplitPayment, type PaymentChoice } from '../../components/PaymentButtons';
+import { PaymentButtons, paymentFields, printOnPrinter, SplitPayment, type PaymentChoice } from '../../components/PaymentButtons';
 import { ConfirmDialog, Empty, Loading, Spinner } from '../../components/ui';
 import { useDraftSync } from '../../hooks/useDraftSync';
 import { useRootClass } from '../../hooks/useRootClass';
@@ -173,7 +173,7 @@ export function BillingView({
     keyRef.current = null;
     // No message when printing: the print itself shows the bill was saved.
     if (noPrintFor === current.id) toast.success(`Bill #${transaction.billNumber} saved`);
-    else printReceipt(transaction);
+    else printOnPrinter(transaction, () => toast.error(`Bill #${transaction.billNumber} saved, not printed – printer not connected`));
     setNoPrintFor(null);
     void sync!.load();
     void queryClient.invalidateQueries({ queryKey: ['transactions'] });
