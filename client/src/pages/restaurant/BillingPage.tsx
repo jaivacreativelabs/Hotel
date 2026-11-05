@@ -124,9 +124,6 @@ export function BillingView({
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [manualSale, setManualSale] = useState(false);
-  // "Print bill" is ticked by default. Unticking skips printing for this bill only:
-  // the next bill (a new draft) starts ticked again.
-  const [noPrintFor, setNoPrintFor] = useState<string | null>(null);
   // Phones: the bill is a full-screen sheet opened from the bottom "View Bill" bar.
   const [billOpen, setBillOpen] = useState(false);
   useRootClass('has-bill-bar');
@@ -171,10 +168,8 @@ export function BillingView({
   };
   const billed = (current: DraftDTO, transaction: TransactionDTO) => {
     keyRef.current = null;
-    // No message when printing: the print itself shows the bill was saved.
-    if (noPrintFor === current.id) toast.success(`Bill #${transaction.billNumber} saved`);
-    else printOnPrinter(transaction, () => toast.error(`Bill #${transaction.billNumber} saved, not printed – printer not connected`));
-    setNoPrintFor(null);
+    // No message when it prints: the print itself shows the bill was saved. Never the popup.
+    printOnPrinter(transaction, () => toast.error(`Bill #${transaction.billNumber} saved, not printed – printer not connected`));
     void sync!.load();
     void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['tables'] });
@@ -410,17 +405,9 @@ export function BillingView({
           {payment === 'SPLIT' && hasItems && editable && <SplitPayment key={draft?.id} total={totals?.grandTotal ?? 0} onChange={setSplitParts} />}
           {activeBranch!.kitchenDisplay && editable && hasItems && <KitchenSendButton pending={toKitchen} sending={kitchen.sending} onSend={() => void sendToKitchen()} />}
           <PaymentButtons value={payment} onChange={setPayment} disabled={!editable || busy} allowSplit />
-          <div className="bill-generate-row">
-            <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needSplit || needOrderType || busy || hasUnavailable}>
-              {busy ? <Spinner /> : <FileText />} Generate Bill
-            </button>
-            {editable && (
-              <label className="check bill-print-check" title="Untick to save this bill without printing">
-                <input type="checkbox" checked={noPrintFor !== draft?.id} disabled={busy} onChange={(e) => setNoPrintFor(e.target.checked ? null : (draft?.id ?? null))} />
-                Print bill
-              </label>
-            )}
-          </div>
+          <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needSplit || needOrderType || busy || hasUnavailable}>
+            {busy ? <Spinner /> : <FileText />} Generate Bill
+          </button>
           {/* The hint's line is always kept, so Cash / UPI / Card and Generate Bill never jump when it shows or hides. */}
           {editable && (
             <span className="field-hint" style={{ textAlign: 'center', visibility: hasItems && hint ? 'visible' : 'hidden' }} aria-hidden={!(hasItems && hint)}>
