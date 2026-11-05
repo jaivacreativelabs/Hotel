@@ -11,7 +11,10 @@ import { loadStoredImage } from './services/storage.service.js';
 export function createApp(): express.Express {
   const app = express();
   app.disable('x-powered-by');
-  if (env.TRUST_PROXY) app.set('trust proxy', env.TRUST_PROXY);
+  // Vercel always puts one proxy in front, even when a TRUST_PROXY of 0 / blank is set there
+  // (live logs showed "'trust proxy' setting is false"): every visitor then looked like the proxy.
+  const proxyHops = env.TRUST_PROXY || (process.env.VERCEL ? 1 : 0);
+  if (proxyHops) app.set('trust proxy', proxyHops);
 
   app.use(
     helmet({
