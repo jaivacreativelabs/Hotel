@@ -1624,6 +1624,7 @@ html.app-open body {
   color: var(--color-text-muted);
 }
 .bill-print-check {
+  align-self: center;
   padding: 0;
   gap: 6px;
   font-size: var(--font-size-sm);
