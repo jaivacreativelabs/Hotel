@@ -410,15 +410,17 @@ export function BillingView({
           {payment === 'SPLIT' && hasItems && editable && <SplitPayment key={draft?.id} total={totals?.grandTotal ?? 0} onChange={setSplitParts} />}
           {activeBranch!.kitchenDisplay && editable && hasItems && <KitchenSendButton pending={toKitchen} sending={kitchen.sending} onSend={() => void sendToKitchen()} />}
           <PaymentButtons value={payment} onChange={setPayment} disabled={!editable || busy} allowSplit />
-          <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needSplit || needOrderType || busy || hasUnavailable}>
-            {busy ? <Spinner /> : <FileText />} Generate Bill
-          </button>
-          {editable && (
-            <label className="check bill-print-check" title="Untick to save this bill without printing">
-              <input type="checkbox" checked={noPrintFor !== draft?.id} disabled={busy} onChange={(e) => setNoPrintFor(e.target.checked ? null : (draft?.id ?? null))} />
-              Print bill
-            </label>
-          )}
+          <div className="bill-generate-row">
+            <button className="btn btn-primary btn-lg btn-block" onClick={generate} disabled={!editable || !hasItems || !payment || needSplit || needOrderType || busy || hasUnavailable}>
+              {busy ? <Spinner /> : <FileText />} Generate Bill
+            </button>
+            {editable && (
+              <label className="check bill-print-check" title="Untick to save this bill without printing">
+                <input type="checkbox" checked={noPrintFor !== draft?.id} disabled={busy} onChange={(e) => setNoPrintFor(e.target.checked ? null : (draft?.id ?? null))} />
+                Print bill
+              </label>
+            )}
+          </div>
           {/* The hint's line is always kept, so Cash / UPI / Card and Generate Bill never jump when it shows or hides. */}
           {editable && (
             <span className="field-hint" style={{ textAlign: 'center', visibility: hasItems && hint ? 'visible' : 'hidden' }} aria-hidden={!(hasItems && hint)}>

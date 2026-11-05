@@ -1623,8 +1623,17 @@ html.app-open body {
   justify-content: space-between;
   color: var(--color-text-muted);
 }
+.bill-generate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bill-generate-row .btn {
+  flex: 1;
+  min-width: 0;
+}
 .bill-print-check {
-  align-self: center;
+  flex-shrink: 0;
   padding: 0;
   gap: 6px;
   font-size: var(--font-size-sm);
