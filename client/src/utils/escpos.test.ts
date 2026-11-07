@@ -1,6 +1,6 @@
 import type { TransactionDTO } from '@rb/shared';
 import { describe, expect, it } from 'vitest';
-import { receiptCommands, toAscii, toRaster, twoColumns, wrap } from './escpos';
+import { receiptCommands, toAscii, twoColumns, wrap } from './escpos';
 
 const item = (n: number, name: string, unitPrice: number, quantity: number) => ({
   menuItemId: `m${n}`,
@@ -101,19 +101,13 @@ describe('receiptCommands', () => {
     expect(printedLines(receiptCommands(bill({ status: 'VOIDED' }), 32)).join('\n')).toContain('*** VOIDED ***');
   });
 
-  it('sends the logo as a raster image', () => {
-    const logo = { widthBytes: 2, height: 3, data: new Uint8Array(6).fill(0xff) };
-    const bytes = [...receiptCommands(bill(), 32, logo)];
-    const at = bytes.findIndex((b, i) => b === 0x1d && bytes[i + 1] === 0x76);
-    expect(bytes.slice(at, at + 8 + 6)).toEqual([0x1d, 0x76, 0x30, 0, 2, 0, 3, 0, ...Array(6).fill(0xff)]);
-  });
-});
-
-describe('toRaster', () => {
-  it('turns black pixels into set bits and white into clear ones', () => {
-    const grey = Float32Array.from([0, 255, 0, 255, 255, 255, 255, 255, 0]);
-    const r = toRaster(grey, 9, 1);
-    expect(r.widthBytes).toBe(2);
-    expect([...r.data]).toEqual([0b10100000, 0b10000000]);
+  it('prints no logo, no "@ price" line and a normal-size total', () => {
+    const withLogo = bill({ restaurantSnapshot: { ...bill().restaurantSnapshot, logoUrl: '/logo.png' } });
+    const bytes = [...receiptCommands(withLogo, 32)];
+    expect(bytes.some((b, i) => b === 0x1d && bytes[i + 1] === 0x76)).toBe(false);
+    expect(printedLines(Uint8Array.from(bytes)).some((l) => l.trim().startsWith('@'))).toBe(false);
+    const total = bytes.findIndex((_, i) => String.fromCharCode(...bytes.slice(i, i + 5)) === 'TOTAL');
+    const sizes = bytes.slice(0, total).flatMap((b, i, a) => (b === 0x1d && a[i + 1] === 0x21 ? [a[i + 2]] : []));
+    expect(sizes.at(-1)).toBe(0);
   });
 });

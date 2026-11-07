@@ -13,7 +13,6 @@ export const RECEIPT_WIDTH_MM = 48;
 // side, so a receipt centred on it came out as blank paper.
 export const RECEIPT_CSS = `
 .receipt { box-sizing: border-box; width: ${RECEIPT_WIDTH_MM}mm; margin: 0 auto; padding: 2mm 1mm; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: bold; color: #000; line-height: 1.3; }
-.receipt .logo { display: block; width: 18mm; height: 18mm; margin: 0 auto 4px; border-radius: 50%; object-fit: cover; }
 .receipt h1 { font-size: 15px; text-align: center; margin: 0; font-family: inherit; }
 .receipt .c { text-align: center; }
 .receipt .rule { border-top: 1px dashed #000; margin: 5px 0; }
@@ -31,14 +30,11 @@ export function receiptPageCss(heightPx: number) {
   return `@page { size: ${RECEIPT_WIDTH_MM}mm ${heightMm}mm; margin: 0; }`;
 }
 
-/** `onLogoDone` fires once the logo has loaded or failed, so printing never misses it. */
-export function Receipt({ t, onLogoDone }: { t: TransactionDTO; onLogoDone: () => void }) {
+/** The bill as printed: text only, no logo. */
+export function Receipt({ t }: { t: TransactionDTO }) {
   const taxShares = itemTaxShares(t.taxes, t.items);
   return (
     <div className="receipt">
-      {t.restaurantSnapshot.logoUrl && (
-        <img className="logo" src={t.restaurantSnapshot.logoUrl} alt="" onLoad={onLogoDone} onError={onLogoDone} />
-      )}
       <h1>{t.restaurantSnapshot.name}</h1>
       {ownBranchName(t.restaurantSnapshot.name, t.branchSnapshot.name) && <div className="c">{t.branchSnapshot.name}</div>}
       {t.branchSnapshot.address && <div className="c">{t.branchSnapshot.address}</div>}
@@ -88,8 +84,12 @@ export function Receipt({ t, onLogoDone }: { t: TransactionDTO; onLogoDone: () =
             <tr key={i.menuItemId}>
               <td>
                 {i.name}
-                <br />@ {formatMoney(i.unitPrice)}
-                {itemTaxText(i) && (t.pricesIncludeTax ? ` (incl. ${itemTaxText(i)})` : ` + ${itemTaxText(i)}`)}
+                {itemTaxText(i) && (
+                  <>
+                    <br />
+                    {t.pricesIncludeTax ? `(incl. ${itemTaxText(i)})` : `+ ${itemTaxText(i)}`}
+                  </>
+                )}
               </td>
               <td className="r">{i.quantity}</td>
               <td className="r">{formatMoney(i.lineTotal + (t.pricesIncludeTax ? 0 : taxShares[n]))}</td>

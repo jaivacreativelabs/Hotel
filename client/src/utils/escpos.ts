@@ -8,15 +8,6 @@ import { formatDateTime, formatMoney, itemTaxShares, itemTaxText, PAYMENT_LABEL,
 /** Roll width → characters per line (the printer's standard font): 58 mm prints 32, 80 mm 48. */
 export type PaperWidth = 58 | 80;
 export const PAPER_COLUMNS: Record<PaperWidth, number> = { 58: 32, 80: 48 };
-/** …and dots per line, for the logo. */
-export const PAPER_DOTS: Record<PaperWidth, number> = { 58: 384, 80: 576 };
-
-/** A 1-bit picture: rows of `widthBytes` bytes, a set bit is a black dot (leftmost = high bit). */
-export interface Raster {
-  widthBytes: number;
-  height: number;
-  data: Uint8Array;
-}
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -78,7 +69,7 @@ export function twoColumns(left: string, right: string, width: number): string[]
 const money = (paise: number) => toAscii(formatMoney(paise)).replace('Rs.', '');
 
 /** The bill as printer commands, for a roll `columns` characters wide. */
-export function receiptCommands(t: TransactionDTO, columns: number, logo?: Raster | null): Uint8Array {
+export function receiptCommands(t: TransactionDTO, columns: number): Uint8Array {
   const out: number[] = [...INIT];
   const text = (s: string) => {
     for (const c of toAscii(s)) out.push(c.charCodeAt(0));
@@ -88,12 +79,8 @@ export function receiptCommands(t: TransactionDTO, columns: number, logo?: Raste
   const centred = (s: string) => lines(wrap(toAscii(s), columns));
   const rule = () => text('-'.repeat(columns));
 
+  // No logo: the bill is text only.
   out.push(...align(1));
-  if (logo) {
-    out.push(GS, 0x76, 0x30, 0, logo.widthBytes & 0xff, logo.widthBytes >> 8, logo.height & 0xff, logo.height >> 8);
-    for (const b of logo.data) out.push(b);
-    out.push(0x0a);
-  }
   out.push(...bold(true), ...size(0x01));
   centred(t.restaurantSnapshot.name);
   out.push(...size(0));
@@ -131,17 +118,19 @@ export function receiptCommands(t: TransactionDTO, columns: number, logo?: Raste
     const name = wrap(toAscii(i.name), itemW - 1);
     text(row(name[0], String(i.quantity), money(i.lineTotal + (t.pricesIncludeTax ? 0 : taxShares[n]))));
     lines(name.slice(1));
+    // No "@ price" line; an item with tax still says so.
     const tax = itemTaxText(i);
-    lines(wrap(toAscii(`@ ${money(i.unitPrice)}${tax ? (t.pricesIncludeTax ? ` (incl. ${tax})` : ` + ${tax}`) : ''}`), columns));
+    if (tax) lines(wrap(toAscii(t.pricesIncludeTax ? `(incl. ${tax})` : `+ ${tax}`), itemW - 1));
   });
 
   rule();
   // Taxes are inside each item's amount, so the subtotal includes them too.
   lines(twoColumns('Subtotal', money(t.subtotal + (t.pricesIncludeTax ? 0 : t.taxTotal)), columns));
   if (t.discount && t.discount.amount > 0) lines(twoColumns('Discount', `-${money(t.discount.amount)}`, columns));
-  out.push(...bold(true), ...size(0x01));
+  // Bold at the normal size: double height alone stretched the letters tall and thin.
+  out.push(...bold(true));
   lines(twoColumns('TOTAL', `Rs.${money(t.grandTotal)}`, columns));
-  out.push(...size(0), ...bold(false));
+  out.push(...bold(false));
   if (t.payments.length > 1) t.payments.forEach((p) => lines(twoColumns(`Paid by ${PAYMENT_LABEL[p.method]}`, money(p.amount), columns)));
   else lines(twoColumns('Paid by', PAYMENT_LABEL[t.paymentMethod], columns));
   rule();
@@ -151,29 +140,4 @@ export function receiptCommands(t: TransactionDTO, columns: number, logo?: Raste
   }
   out.push(...align(0), ...FEED_AND_CUT);
   return Uint8Array.from(out);
-}
-
-/**
- * Greyscale pixels (0 black … 255 white, row by row) → a 1-bit picture. Error diffusion
- * (Floyd–Steinberg) keeps light colours as a dot pattern instead of dropping them to white.
- */
-export function toRaster(grey: Float32Array, width: number, height: number): Raster {
-  const widthBytes = Math.ceil(width / 8);
-  const data = new Uint8Array(widthBytes * height);
-  const px = Float32Array.from(grey);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = y * width + x;
-      const black = px[i] < 128;
-      if (black) data[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7);
-      const err = px[i] - (black ? 0 : 255);
-      if (x + 1 < width) px[i + 1] += (err * 7) / 16;
-      if (y + 1 < height) {
-        if (x > 0) px[i + width - 1] += (err * 3) / 16;
-        px[i + width] += (err * 5) / 16;
-        if (x + 1 < width) px[i + width + 1] += err / 16;
-      }
-    }
-  }
-  return { widthBytes, height, data };
 }

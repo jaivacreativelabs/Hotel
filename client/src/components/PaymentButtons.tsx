@@ -191,7 +191,7 @@ export function printOnPrinter(t: TransactionDTO, notPrinted: () => void) {
 
 /**
  * The receipt is put into this page and printed at once, and on paper the page shows only the
- * receipt; the logo is normally ready because the sidebar already shows it. The receipt stays
+ * receipt. The receipt stays
  * (hidden on screen) a minute after printing, as Safari may still be reading the page for its
  * print preview.
  */
@@ -206,7 +206,7 @@ function printInPage(t: TransactionDTO) {
       root.render(
         <>
           <style>{IN_PAGE_CSS + pageCss}</style>
-          <Receipt t={t} onLogoDone={() => undefined} />
+          <Receipt t={t} />
         </>,
       ),
     );

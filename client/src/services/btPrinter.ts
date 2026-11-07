@@ -7,7 +7,7 @@
  * connects again on its own after a reload or when the printer was switched off and on.
  */
 import type { TransactionDTO } from '@rb/shared';
-import { PAPER_COLUMNS, PAPER_DOTS, receiptCommands, toRaster, type PaperWidth, type Raster } from '../utils/escpos';
+import { PAPER_COLUMNS, receiptCommands, type PaperWidth } from '../utils/escpos';
 
 // The few Web Bluetooth types used here (TypeScript's DOM types do not have them).
 interface BtCharacteristic {
@@ -410,40 +410,6 @@ export function reconnectsAlone() {
 /** True when bills should go to the Bluetooth printer instead of the print popup. */
 export const hasPrinter = () => state.rawbt || device !== null;
 
-const logos = new Map<string, Promise<Raster | null>>();
-/** The restaurant logo as printer dots, about 18 mm wide (made once per logo). */
-function logoRaster(url: string): Promise<Raster | null> {
-  let p = logos.get(url);
-  if (!p) {
-    p = new Promise<Raster | null>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const w = 144;
-          const h = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * w));
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d')!;
-          ctx.fillStyle = '#fff';
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          const rgba = ctx.getImageData(0, 0, w, h).data;
-          const grey = new Float32Array(w * h);
-          for (let i = 0; i < grey.length; i++) grey[i] = 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
-          resolve(toRaster(grey, w, h));
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = url;
-    });
-    logos.set(url, p);
-  }
-  return p;
-}
-
 let queue: Promise<unknown> = Promise.resolve();
 
 /** Sends bytes to the printer, one bill at a time. */
@@ -487,9 +453,7 @@ function send(bytes: Uint8Array): Promise<void> {
 
 /** Prints a bill on the Bluetooth printer. */
 export async function printBill(t: TransactionDTO): Promise<void> {
-  const logo = t.restaurantSnapshot.logoUrl ? await logoRaster(t.restaurantSnapshot.logoUrl) : null;
-  const fits = logo && logo.widthBytes * 8 <= PAPER_DOTS[state.paper] ? logo : null;
-  const bytes = receiptCommands(t, PAPER_COLUMNS[state.paper], fits);
+  const bytes = receiptCommands(t, PAPER_COLUMNS[state.paper]);
   if (state.rawbt) return sendToRawbt(bytes);
   await send(bytes);
 }
