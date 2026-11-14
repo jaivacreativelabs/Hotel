@@ -1,6 +1,6 @@
 import { mainPaymentMethod, parseRupeesToPaise, PAYMENT_METHODS, type PaymentMethod, type PaymentPart, type TransactionDTO } from '@rb/shared';
 import { Split } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { hasPrinter, printBill } from '../services/btPrinter';
@@ -107,11 +107,14 @@ export function SplitPayment({ total, initial, onChange }: { total: number; init
 export function PaymentModal({
   title,
   amount,
+  children,
   onConfirm,
   onClose,
 }: {
   title: string;
   amount: number;
+  /** shown under the total, e.g. the bill's discount */
+  children?: ReactNode;
   onConfirm: (payment: { paymentMethod: PaymentMethod; payments?: PaymentPart[] }) => Promise<void>;
   onClose: () => void;
 }) {
@@ -124,6 +127,7 @@ export function PaymentModal({
         <span>Total</span>
         <strong>{formatMoney(amount)}</strong>
       </div>
+      {children}
       <PaymentButtons value={method} onChange={setMethod} disabled={busy} allowSplit />
       {method === 'CASH' && <ChangeCalculator total={amount} />}
       {method === 'SPLIT' && <SplitPayment total={amount} onChange={setParts} />}

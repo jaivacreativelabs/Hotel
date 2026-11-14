@@ -2,6 +2,7 @@ import { BILL_EDIT_WINDOW_MINUTES, calculateBill, placeName, type PaymentPart, t
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronUp, Clock, Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { DiscountEditor } from '../../components/DiscountEditor';
 import { FoodGrid, addItemToBill, setBillQuantity } from '../../components/FoodGrid';
 import { FoodImage } from '../../components/FoodImage';
 import { useRootClass } from '../../hooks/useRootClass';
@@ -75,7 +76,9 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
   const qtyById = useMemo(() => new Map(bill.items.map((i) => [i.menuItemId, i.quantity])), [bill.items]);
   const count = bill.items.reduce((a, i) => a + i.quantity, 0);
   const paid = payment !== 'SPLIT' || splitParts ? paymentFields(payment, splitParts) : null;
+  const discountKey = (d: LocalBill['discount']) => (d ? `${d.type}:${d.value}` : '');
   const changed =
+    discountKey(bill.discount) !== discountKey(toLocalBill(tx).discount) ||
     JSON.stringify(paid?.payments ?? [{ method: paid?.paymentMethod, amount: totals.grandTotal }]) !== JSON.stringify(tx.payments) ||
     bill.items.length !== tx.items.length ||
     bill.items.some((l, i) => l.menuItemId !== tx.items[i].menuItemId || l.quantity !== tx.items[i].quantity);
@@ -89,6 +92,7 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
           editCount: tx.editCount,
           items: bill.items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
           ...paid!,
+          discount: bill.discount,
           ...(reason.trim() && { reason: reason.trim() }),
         },
         { branchId: null },
@@ -176,6 +180,12 @@ export function BillEditor({ tx, search, onCancel, onSaved }: { tx: TransactionD
                 </button>
               </div>
             ))}
+          </div>
+        )}
+        {bill.items.length > 0 && (
+          <div className="group-discount">
+            <DiscountEditor value={bill.discount} onApply={(d) => setBill((b) => ({ ...b, discount: d }))} />
+            {totals.discountAmount > 0 && <span className="group-discount-amount num">Discount − {formatMoney(totals.discountAmount)}</span>}
           </div>
         )}
         <div className="total-box num">

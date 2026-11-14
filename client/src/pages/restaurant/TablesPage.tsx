@@ -295,9 +295,36 @@ function OrderingMenu({
 function GroupDiscount({ draftId, sync, discount, amount }: { draftId: string; sync: DraftSync; discount: DiscountInput | null; amount: number }) {
   return (
     <div className="group-discount">
-      <DiscountEditor key={draftId} value={discount} onApply={(d) => sync.update((b) => ({ ...b, discount: d }))} />
+      {/* Keyed on the discount too, so one applied on the card or in Generate bill shows in both. */}
+      <DiscountEditor key={`${draftId}:${discount ? `${discount.type}:${discount.value}` : ''}`} value={discount} onApply={(d) => sync.update((b) => ({ ...b, discount: d }))} />
       {amount > 0 && <span className="group-discount-amount num">Discount − {formatMoney(amount)}</span>}
     </div>
+  );
+}
+
+/** Generate bill for a group, with "Add discount" so a discount can be given right before payment. */
+function GroupPaymentModal({
+  group,
+  branchId,
+  title,
+  onConfirm,
+  onClose,
+}: {
+  group: TableGroupSummaryDTO;
+  branchId: string;
+  title: string;
+  onConfirm: (payment: { paymentMethod: PaymentMethod; payments?: PaymentPart[] }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const { activeBranch } = useAuth();
+  const { sync, state } = useDraftSync(group.draftId, branchId);
+  const local = state.local;
+  const settings = activeBranch!.restaurant.settings;
+  const totals = useMemo(() => (local ? calculateBill(local.items, settings, local.discount) : null), [local, settings]);
+  return (
+    <PaymentModal title={title} amount={totals?.grandTotal ?? group.grandTotal} onClose={onClose} onConfirm={onConfirm}>
+      {sync && local && local.items.length > 0 && <GroupDiscount draftId={group.draftId} sync={sync} discount={local.discount} amount={totals?.discountAmount ?? 0} />}
+    </PaymentModal>
   );
 }
 
@@ -729,9 +756,10 @@ function TableDetail({
         />
       )}
       {paying && (
-        <PaymentModal
+        <GroupPaymentModal
+          group={paying}
+          branchId={branchId}
           title={`Generate bill · ${table.label} ${paying.groupName}`}
-          amount={paying.grandTotal}
           onClose={() => setPaying(null)}
           onConfirm={(m) => generate(paying, m)}
         />

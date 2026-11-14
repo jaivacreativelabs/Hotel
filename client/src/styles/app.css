@@ -1746,6 +1746,15 @@ html.app-open body {
   gap: 8px;
   align-items: center;
 }
+/* % / ₹ picker: a slim arrow and padding so the symbol shows in full in its narrow column
+   (on touch screens its text is bigger, and width:auto would let it overflow the column). */
+.discount-row .select,
+html.touch-inputs .discount-row .select-sm {
+  width: 100% !important;
+  padding: 0 24px 0 10px;
+  background-position: right 6px center;
+  background-size: 16px;
+}
 
 /* ============ Tables page ============ */
 .tables-grid {
