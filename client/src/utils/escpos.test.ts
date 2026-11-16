@@ -1,6 +1,6 @@
 import type { TransactionDTO } from '@rb/shared';
 import { describe, expect, it } from 'vitest';
-import { receiptCommands, toAscii, twoColumns, wrap } from './escpos';
+import { billCommands, kotCommands, receiptCommands, toAscii, twoColumns, wrap } from './escpos';
 
 const item = (n: number, name: string, unitPrice: number, quantity: number) => ({
   menuItemId: `m${n}`,
@@ -109,5 +109,33 @@ describe('receiptCommands', () => {
     const total = bytes.findIndex((_, i) => String.fromCharCode(...bytes.slice(i, i + 5)) === 'TOTAL');
     const sizes = bytes.slice(0, total).flatMap((b, i, a) => (b === 0x1d && a[i + 1] === 0x21 ? [a[i + 2]] : []));
     expect(sizes.at(-1)).toBe(0);
+  });
+});
+
+describe('take-away KOT', () => {
+  it.each([32, 48])('lays the KOT out in %i columns: name on top, bill number, Sl.No | Item | Qty, total items', (cols) => {
+    const lines = printedLines(kotCommands(bill(), cols));
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(cols);
+    const text = lines.join('\n');
+    expect(lines[0].trim()).toBe('Idly Tiffin House');
+    expect(lines[1]).toMatch(/^ITH0230\s/);
+    expect(text).not.toContain('KOT');
+    expect(text).toMatch(/Sl\.No\s+Item Name\s+Qty/);
+    expect(text).toMatch(/^\s+1\s+Idly \(2 pcs\)\s+2$/m);
+    expect(text).toMatch(/Total Items :\s+3$/m);
+    expect(text).not.toMatch(/Rs\.|Customer|Table|Cashier/);
+  });
+
+  it('a take-away bill prints the bill and then the KOT, each cut on its own', () => {
+    const cut = [0x1b, 0x64, 4, 0x1d, 0x56, 0x42, 0];
+    const cuts = (b: Uint8Array) => [...b].filter((_, i) => cut.every((c, k) => b[i + k] === c)).length;
+    const bytes = billCommands(bill(), 32);
+    expect(cuts(bytes)).toBe(2);
+    expect(printedLines(bytes).join('\n')).toMatch(/Bill: ITH0230[\s\S]*Total Items :/);
+  });
+
+  it('a dine-in, voided or Add Sale bill prints only the bill', () => {
+    for (const t of [bill({ orderType: 'DINE_IN' }), bill({ status: 'VOIDED' }), bill({ manual: true })])
+      expect([...billCommands(t, 32)]).toEqual([...receiptCommands(t, 32)]);
   });
 });

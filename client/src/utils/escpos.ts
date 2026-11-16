@@ -68,6 +68,62 @@ export function twoColumns(left: string, right: string, width: number): string[]
 
 const money = (paise: number) => toAscii(formatMoney(paise)).replace('Rs.', '');
 
+/**
+ * A take-away bill prints twice: the usual bill, then a kitchen slip (KOT) – the restaurant's
+ * name on top, bill number and time, Sl.No | Item Name | Qty, Total Items. No prices, customer
+ * or table. Not for a voided/refunded bill or an Add Sale (no dishes).
+ */
+export const printsKot = (t: TransactionDTO) => t.orderType === 'TAKEAWAY' && !t.manual && t.status === 'COMPLETED';
+
+/** The kitchen slip (KOT) of a take-away bill as printer commands. */
+export function kotCommands(t: TransactionDTO, columns: number): Uint8Array {
+  const out: number[] = [...INIT];
+  const text = (s: string) => {
+    for (const c of toAscii(s)) out.push(c.charCodeAt(0));
+    out.push(0x0a);
+  };
+  const rule = () => text('-'.repeat(columns));
+
+  // The restaurant's name where a KOT would say "KOT"; the bill number, not a KOT number.
+  out.push(...align(1), ...bold(true), ...size(0x01));
+  wrap(toAscii(t.restaurantSnapshot.name), columns).forEach(text);
+  out.push(...size(0), ...bold(false), ...align(0));
+  twoColumns(toAscii(t.billNumber), formatDateTime(t.finalizedAt), columns).forEach(text);
+  rule();
+
+  const slW = 6;
+  const qtyW = 5;
+  const itemW = columns - slW - qtyW;
+  const row = (sl: string, item: string, qty: string) => sl.padEnd(slW) + item.padEnd(itemW) + qty.padStart(qtyW);
+  out.push(...bold(true));
+  text(row('Sl.No', 'Item Name', 'Qty'));
+  out.push(...bold(false));
+  rule();
+  t.items.forEach((i, n) => {
+    const name = wrap(toAscii(i.name), itemW - 1);
+    text(row(`  ${n + 1}`, name[0], String(i.quantity)));
+    name.slice(1).forEach((l) => text(row('', l, '')));
+  });
+  rule();
+  out.push(...bold(true));
+  text('Total Items :'.padStart(slW + itemW) + String(t.itemCount).padStart(qtyW));
+  out.push(...bold(false));
+  rule();
+  out.push(...FEED_AND_CUT);
+  return Uint8Array.from(out);
+}
+
+/** Everything one bill prints: the bill, and for a take-away bill its KOT after it. */
+export function billCommands(t: TransactionDTO, columns: number): Uint8Array {
+  const bill = receiptCommands(t, columns);
+  if (!printsKot(t)) return bill;
+  const kot = kotCommands(t, columns);
+  const all = new Uint8Array(bill.length + kot.length);
+  all.set(bill);
+  all.set(kot, bill.length);
+  return all;
+}
+
 /** The bill as printer commands, for a roll `columns` characters wide. */
 export function receiptCommands(t: TransactionDTO, columns: number): Uint8Array {
   const out: number[] = [...INIT];

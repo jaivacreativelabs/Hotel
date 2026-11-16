@@ -7,7 +7,7 @@
  * connects again on its own after a reload or when the printer was switched off and on.
  */
 import type { TransactionDTO } from '@rb/shared';
-import { PAPER_COLUMNS, receiptCommands, type PaperWidth } from '../utils/escpos';
+import { billCommands, PAPER_COLUMNS, type PaperWidth } from '../utils/escpos';
 
 // The few Web Bluetooth types used here (TypeScript's DOM types do not have them).
 interface BtCharacteristic {
@@ -451,9 +451,9 @@ function send(bytes: Uint8Array): Promise<void> {
   return job;
 }
 
-/** Prints a bill on the Bluetooth printer. */
+/** Prints a bill on the Bluetooth printer (a take-away bill is followed by its KOT). */
 export async function printBill(t: TransactionDTO): Promise<void> {
-  const bytes = receiptCommands(t, PAPER_COLUMNS[state.paper]);
+  const bytes = billCommands(t, PAPER_COLUMNS[state.paper]);
   if (state.rawbt) return sendToRawbt(bytes);
   await send(bytes);
 }

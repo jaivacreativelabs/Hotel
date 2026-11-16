@@ -7,7 +7,7 @@ import { hasPrinter, printBill } from '../services/btPrinter';
 import { cx, formatMoney, PAYMENT_LABEL } from '../utils/format';
 import { PAYMENT_ICON } from './badges';
 import { ChangeCalculator } from './ChangeCalculator';
-import { Receipt, RECEIPT_CSS, receiptPageCss } from './Receipt';
+import { PrintedBill, RECEIPT_CSS, receiptPageCss } from './Receipt';
 import { CancelButton, ConfirmButton, Modal } from './ui';
 
 /** A payment mode, or SPLIT for a bill paid partly one way and partly another. */
@@ -158,6 +158,8 @@ const IN_PAGE_CSS = `
 @media print {
   html, body { height: auto !important; background: #fff !important; }
   body > *:not(#${PRINT_ROOT_ID}) { display: none !important; }
+  /* Browser extensions add elements after <body>: on paper they made an extra blank page. */
+  html > *:not(head):not(body) { display: none !important; }
   #${PRINT_ROOT_ID} { display: block; }
 }
 ${RECEIPT_CSS}
@@ -210,16 +212,17 @@ function printInPage(t: TransactionDTO) {
       root.render(
         <>
           <style>{IN_PAGE_CSS + pageCss}</style>
-          <Receipt t={t} />
+          <PrintedBill t={t} />
         </>,
       ),
     );
   render('');
   // The paper is cut to the receipt's height: measure it laid out (unseen) on the screen.
+  // A take-away bill's KOT is a second page with its own height.
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0;visibility:hidden';
-  const height = el.offsetHeight;
+  const [bill, kot] = Array.from(el.querySelectorAll<HTMLElement>('.receipt'), (r) => r.offsetHeight);
   el.style.cssText = '';
-  render(receiptPageCss(height));
+  render(receiptPageCss(bill, kot));
   const current: NonNullable<typeof printing> = { root, el };
   printing = current;
   window.addEventListener(

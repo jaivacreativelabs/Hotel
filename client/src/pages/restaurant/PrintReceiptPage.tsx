@@ -3,7 +3,7 @@ import type { TransactionDTO } from '@rb/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Receipt, RECEIPT_CSS } from '../../components/Receipt';
+import { PrintedBill, RECEIPT_CSS } from '../../components/Receipt';
 import { api, errorMessage } from '../../services/api';
 
 const css = `
@@ -36,7 +36,7 @@ export function PrintReceiptPage() {
   return (
     <>
       <style>{css}</style>
-      <Receipt t={t} />
+      <PrintedBill t={t} />
       <div className="print-actions">
         <button className="btn btn-primary" onClick={() => window.print()}>
           Print

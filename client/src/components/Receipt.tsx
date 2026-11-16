@@ -3,6 +3,7 @@
  * transaction – it only reads the stored, immutable bill.
  */
 import { ORDER_TYPE_LABEL, ownBranchName, type TransactionDTO } from '@rb/shared';
+import { printsKot } from '../utils/escpos';
 import { formatDateTime, formatMoney, itemTaxShares, itemTaxText, PAYMENT_LABEL, STATUS_LABEL } from '../utils/format';
 
 /** A 58 mm roll prints 48 mm wide, so a 48 mm receipt fits on both roll sizes. */
@@ -21,13 +22,36 @@ export const RECEIPT_CSS = `
 .receipt .r { text-align: right; white-space: nowrap; padding-left: 4px; }
 .receipt .total td { font-size: 14px; padding-top: 4px; }
 .receipt .stamp { border: 2px solid #000; text-align: center; padding: 2px; margin: 6px 0; }
-@media print { .receipt { margin: 0; } }
+.receipt .kot-head td { border-bottom: 1px dashed #000; padding-bottom: 3px; }
+.receipt-cut { width: ${RECEIPT_WIDTH_MM}mm; margin: 6mm auto; border-top: 1px dashed #000; }
+@media print {
+  .receipt { margin: 0; }
+  .receipt-cut { display: none; }
+  /* A take-away bill's KOT is a slip of its own: always a new page. */
+  .receipt.kot { break-before: page; page-break-before: always; }
+}
 `;
 
-/** The paper page for a receipt `heightPx` tall: just the receipt, no margins, no empty roll. */
-export function receiptPageCss(heightPx: number) {
-  const heightMm = Math.ceil((heightPx * 25.4) / 96) + 4;
-  return `@page { size: ${RECEIPT_WIDTH_MM}mm ${heightMm}mm; margin: 0; }`;
+const pageMm = (px: number) => Math.ceil((px * 25.4) / 96) + 4;
+const pageSize = (name: string, mm: number) => `@page${name} { size: ${RECEIPT_WIDTH_MM}mm ${mm}mm; margin: 0; }`;
+
+/**
+ * The paper pages for a receipt `billPx` tall (and its KOT, `kotPx`): just the receipt, no
+ * margins, no empty roll. With a KOT, the KOT is the ordinary page and the bill a named one:
+ * anything a browser extension adds after the page then stays on the KOT's page – the other way
+ * round, Chrome started a blank third page for it. A browser without named pages prints both
+ * at the taller one's height.
+ */
+export function receiptPageCss(billPx: number, kotPx?: number) {
+  const bill = pageMm(billPx);
+  if (!kotPx) return pageSize('', bill);
+  const kot = pageMm(kotPx);
+  return `${pageSize('', Math.max(bill, kot))}
+@supports (page: bill) {
+  ${pageSize('', kot)}
+  ${pageSize(' bill', bill)}
+  @media print { .receipt:not(.kot) { page: bill; } }
+}`;
 }
 
 /** The bill as printed: text only, no logo. */
@@ -133,5 +157,64 @@ export function Receipt({ t }: { t: TransactionDTO }) {
       <div className="rule" />
       {t.restaurantSnapshot.receiptFooter && <div className="c">{t.restaurantSnapshot.receiptFooter}</div>}
     </div>
+  );
+}
+
+/** A take-away bill's kitchen slip (KOT): same content as kotCommands in utils/escpos.ts. */
+export function Kot({ t }: { t: TransactionDTO }) {
+  return (
+    <div className="receipt kot">
+      <h1>{t.restaurantSnapshot.name}</h1>
+      <table>
+        <tbody>
+          <tr>
+            <td>{t.billNumber}</td>
+            <td className="r">{formatDateTime(t.finalizedAt)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="rule" />
+      <table>
+        <tbody>
+          <tr className="kot-head">
+            <td>Sl.No</td>
+            <td>Item Name</td>
+            <td className="r">Qty.</td>
+          </tr>
+          {t.items.map((i, n) => (
+            <tr key={i.menuItemId}>
+              <td>{n + 1}</td>
+              <td>{i.name}</td>
+              <td className="r">{i.quantity}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="rule" />
+      <table>
+        <tbody>
+          <tr className="total">
+            <td className="r">Total Items :</td>
+            <td className="r">{t.itemCount}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="rule" />
+    </div>
+  );
+}
+
+/** Everything one bill prints: the bill, and for a take-away bill its KOT below it. */
+export function PrintedBill({ t }: { t: TransactionDTO }) {
+  return (
+    <>
+      <Receipt t={t} />
+      {printsKot(t) && (
+        <>
+          <div className="receipt-cut" />
+          <Kot t={t} />
+        </>
+      )}
+    </>
   );
 }
